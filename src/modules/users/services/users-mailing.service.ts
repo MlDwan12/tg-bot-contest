@@ -14,6 +14,8 @@ import { UserMailingType } from 'src/shared/enums/user/user-mailing-type.enum';
 import { ContestsService } from '../../contests/services/contests.service';
 import { Logger } from 'nestjs-pino';
 import { ContestPublication } from 'src/modules/contests/entities';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class UsersMailingService {
@@ -22,6 +24,8 @@ export class UsersMailingService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(ContestParticipation)
     private readonly participationRepository: Repository<ContestParticipation>,
+    @InjectQueue('user-mailing')
+    private readonly mailingQueue: Queue,
     private readonly telegramService: TelegramService,
     private readonly contestsService: ContestsService,
     private readonly logger: Logger,
@@ -30,12 +34,7 @@ export class UsersMailingService {
   async sendMailing(
     dto: SendUsersMailingDto,
     image?: Express.Multer.File,
-  ): Promise<{
-    total: number;
-    success: number;
-    failed: number;
-    errors: Array<{ userId: number; telegramId: string; error: string }>;
-  }> {
+  ): Promise<{ jobId: string; enqueuedCount: number }> {
     this.logger.log(
       `Запуск рассылки: type=${dto.type}, userId=${dto.userId ?? '-'}, groupId=${dto.groupId ?? '-'}, contestId=${dto.contestId ?? '-'}, hasButton=${!!dto.buttonText}, hasImage=${!!image}`,
     );
@@ -45,6 +44,7 @@ export class UsersMailingService {
     await this.notifyAdminsAboutMailingStart(dto, image);
 
     const users = await this.getRecipients(dto);
+
     const publication = dto.contestId
       ? await this.contestsService.getPublicationByContestId(dto.contestId)
       : undefined;
@@ -52,111 +52,124 @@ export class UsersMailingService {
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
 
     const imagePath = image ? `/uploads/mailings/${image.filename}` : undefined;
+    const finalButtonUrl = this.resolveButtonUrl(dto, publication);
+    const jobId = `mailing-${Date.now()}`;
 
-    if (imagePath) {
-      this.logger.log(`Будет отправлено сообщение с медиа: ${imagePath}`);
-    }
-
-    let success = 0;
-    let failed = 0;
-    const errors: Array<{ userId: number; telegramId: string; error: string }> =
-      [];
-
-    try {
-      const finalButtonUrl = this.resolveButtonUrl(dto, publication);
-
-      this.logger.log(
-        `Финальная ссылка кнопки: ${finalButtonUrl ?? 'кнопка отсутствует'}`,
-      );
-
-      for (const user of users) {
-        if (!user.telegramId) {
-          failed++;
-          errors.push({
+    await this.mailingQueue.addBulk(
+      users
+        .filter((user) => !!user.telegramId)
+        .map((user) => ({
+          name: 'send-message',
+          data: {
+            jobId,
+            telegramId: user.telegramId,
             userId: user.id,
-            telegramId: '',
-            error: 'User has no telegramId',
-          });
-
-          this.logger.warn(
-            `Пропуск пользователя userId=${user.id}: отсутствует telegramId`,
-          );
-          continue;
-        }
-
-        try {
-          this.logger.log(
-            `Отправка сообщения пользователю userId=${user.id}, telegramId=${user.telegramId}`,
-          );
-
-          const result = await this.telegramService.sendMailingMessage({
-            chatId: user.telegramId,
             text: dto.text || publication?.payload?.text,
             imagePath: imagePath || publication?.payload?.photoUrl,
             buttonText: dto.buttonText || publication?.payload?.buttonText,
             buttonUrl: finalButtonUrl,
-          });
-
-          success++;
-
-          this.logger.log(
-            `Сообщение отправлено userId=${user.id}, telegramId=${user.telegramId}, messageId=${result.messageId}`,
-          );
-        } catch (error: any) {
-          failed++;
-          const errorMessage = error?.message ?? 'Unknown error';
-
-          errors.push({
-            userId: user.id,
-            telegramId: user.telegramId,
-            error: errorMessage,
-          });
-
-          this.logger.error(
-            `Ошибка отправки userId=${user.id}, telegramId=${user.telegramId}: ${errorMessage}`,
-            error?.stack,
-          );
-        }
-      }
-
-      const result = {
-        total: users.length,
-        success,
-        failed,
-        errors,
-      };
-
-      this.logger.log(
-        `Рассылка завершена: total=${result.total}, success=${result.success}, failed=${result.failed}`,
-      );
-
-      await this.notifyAdminsAboutMailingFinish(dto, result, image);
-
-      return result;
-    } catch (error: any) {
-      this.logger.error(
-        `Критическая ошибка при выполнении рассылки: ${error?.message ?? 'Unknown error'}`,
-        error?.stack,
-      );
-
-      const result = {
-        total: users.length,
-        success,
-        failed,
-        errors: [
-          ...errors,
-          {
-            userId: 0,
-            telegramId: '',
-            error: error?.message ?? 'Unknown error',
           },
-        ],
-      };
+        })),
+    );
 
-      await this.notifyAdminsAboutMailingFinish(dto, result, image, error);
+    // let success = 0;
+    // let failed = 0;
+    // const errors: Array<{ userId: number; telegramId: string; error: string }> =
+    //   [];
 
-      throw error;
-    }
+    //   this.logger.log(
+    //     `Финальная ссылка кнопки: ${finalButtonUrl ?? 'кнопка отсутствует'}`,
+    //   );
+
+    //   for (const user of users) {
+    //     if (!user.telegramId) {
+    //       failed++;
+    //       errors.push({
+    //         userId: user.id,
+    //         telegramId: '',
+    //         error: 'User has no telegramId',
+    //       });
+
+    //       this.logger.warn(
+    //         `Пропуск пользователя userId=${user.id}: отсутствует telegramId`,
+    //       );
+    //       continue;
+    //     }
+
+    //     try {
+    //       this.logger.log(
+    //         `Отправка сообщения пользователю userId=${user.id}, telegramId=${user.telegramId}`,
+    //       );
+
+    //       const result = await this.telegramService.sendMailingMessage({
+    //         chatId: user.telegramId,
+    //         text: dto.text || publication?.payload?.text,
+    //         imagePath: imagePath || publication?.payload?.photoUrl,
+    //         buttonText: dto.buttonText || publication?.payload?.buttonText,
+    //         buttonUrl: finalButtonUrl,
+    //       });
+
+    //       success++;
+
+    //       this.logger.log(
+    //         `Сообщение отправлено userId=${user.id}, telegramId=${user.telegramId}, messageId=${result.messageId}`,
+    //       );
+    //     } catch (error: any) {
+    //       failed++;
+    //       const errorMessage = error?.message ?? 'Unknown error';
+
+    //       errors.push({
+    //         userId: user.id,
+    //         telegramId: user.telegramId,
+    //         error: errorMessage,
+    //       });
+
+    //       this.logger.error(
+    //         `Ошибка отправки userId=${user.id}, telegramId=${user.telegramId}: ${errorMessage}`,
+    //         error?.stack,
+    //       );
+    //     }
+    //   }
+
+    //   const result = {
+    //     total: users.length,
+    //     success,
+    //     failed,
+    //     errors,
+    //   };
+
+    this.logger.log(
+      `Рассылка поставлена в очередь: jobId=${jobId}, count=${users.length}`,
+    );
+
+    return { jobId, enqueuedCount: users.length };
+
+    // await this.notifyAdminsAboutMailingFinish(dto, result, image);
+    // return result;
+    // } catch (error: any) {
+    //   this.logger.error(
+    //     `Критическая ошибка при выполнении рассылки: ${error?.message ?? 'Unknown error'}`,
+    //     error?.stack,
+    //   );
+
+    //   const result = {
+    //     total: users.length,
+    //     success,
+    //     failed,
+    //     errors: [
+    //       ...errors,
+    //       {
+    //         userId: 0,
+    //         telegramId: '',
+    //         error: error?.message ?? 'Unknown error',
+    //       },
+    //     ],
+    //   };
+
+    //   await this.notifyAdminsAboutMailingFinish(dto, result, image, error);
+
+    //   throw error;
+    // }
   }
 
   private validateButton(dto: SendUsersMailingDto): void {

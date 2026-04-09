@@ -23,9 +23,10 @@ export class ContestReadRepository implements IContestReadRepository {
     private readonly pubRepo: Repository<ContestPublication>,
   ) {}
   findPublicationById(id: number): Promise<ContestPublication | null> {
-    console.log(id);
-
-    throw new Error('Method not implemented.');
+    return this.pubRepo.findOne({
+      where: { id },
+      relations: { channel: true },
+    });
   }
 
   findPublicationByContestId(
@@ -64,22 +65,6 @@ export class ContestReadRepository implements IContestReadRepository {
     });
   }
 
-  countParticipants(contestId: number): Promise<number> {
-    console.log(contestId);
-
-    throw new Error('Method not implemented.');
-  }
-  findParticipantUserIds(contestId: number): Promise<number[]> {
-    console.log(contestId);
-
-    throw new Error('Method not implemented.');
-  }
-  findParticipations(contestId: number): Promise<ContestParticipation[]> {
-    console.log(contestId);
-
-    throw new Error('Method not implemented.');
-  }
-
   findById(id: number): Promise<Contest | null> {
     return this.repo.findOne({
       where: { id },
@@ -89,6 +74,7 @@ export class ContestReadRepository implements IContestReadRepository {
   findByParams(params: FindOptionsWhere<Contest>): Promise<Contest | null> {
     return this.repo.findOne({
       where: params,
+      relations: ['requiredChannels'],
     });
   }
 
@@ -236,10 +222,6 @@ export class ContestReadRepository implements IContestReadRepository {
       qb.andWhere('p.contestId = :id', { id: contestIdOrIds });
       // либо: qb.andWhere('p.contest_id = :id', { id: contestIdOrIds })
     }
-
-    const [sql, params] = qb.getQueryAndParameters();
-    console.log('SQL:', sql);
-    console.log('PARAMS:', params);
 
     const rows = await qb.orderBy('p.id', 'ASC').getRawMany<{ id: number }>();
     return rows.map((r) => Number(r.id));

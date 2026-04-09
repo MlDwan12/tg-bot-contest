@@ -60,6 +60,15 @@ import { QueuesMonitoringModule } from './monitoring/queues-monitoring.module';
           removeOnFail: 10000,
         },
       },
+      {
+        name: 'user-mailing',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: true,
+          removeOnFail: 10000,
+        },
+      },
     ),
     QueuesMonitoringModule,
   ],

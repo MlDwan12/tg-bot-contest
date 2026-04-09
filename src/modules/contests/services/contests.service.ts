@@ -65,6 +65,7 @@ export class ContestsService {
     private readonly configService: ConfigService,
     private readonly contestWinnerService: ContestWinnerService,
     private readonly contestsParticipateService: ContestsParticipateService,
+    private readonly usersService: UsersService,
   ) {}
 
   // async createContest(
@@ -419,7 +420,6 @@ export class ContestsService {
           )
         : null;
 
-    let orderedWinners: User[] = [];
     // let publishGroupIds: number[] = [];
     // let requiredGroupIds: number[] = [];
 
@@ -496,10 +496,29 @@ export class ContestsService {
     // }
 
     if (dto.winners !== undefined) {
+      const resolved = await Promise.all(
+        dto.winners.map((winnerId) =>
+          this.usersService.findByTelegramId(winnerId.toString()),
+        ),
+      );
+
+      const orderedWinners = resolved.filter(
+        (user): user is User => user !== null,
+      );
+
       await this.contestWinnerService.saveResolvedWinners(
         contestId,
         orderedWinners,
         nextPrizePlaces,
+      );
+
+      await this.contestWriteRepo.replaceWinners(
+        contestId,
+        orderedWinners.map((winner, index) => ({
+          contestId,
+          userId: winner.id,
+          place: index + 1,
+        })),
       );
     }
 
@@ -514,17 +533,6 @@ export class ContestsService {
       imagePath,
       buttonText: dto.buttonText ?? contest.buttonText,
     });
-
-    if (dto.winners !== undefined) {
-      await this.contestWriteRepo.replaceWinners(
-        contestId,
-        orderedWinners.map((winner, index) => ({
-          contestId,
-          userId: winner.id,
-          place: index + 1,
-        })),
-      );
-    }
 
     if (publishChannels !== null) {
       await this.contestWriteRepo.setPublishChannels(
@@ -878,7 +886,7 @@ export class ContestsService {
 
     await this.contestWriteRepo.update(contest.id, {
       status: ContestStatus.COMPLETED,
-      buttonText: 'Узнать результаты',
+      buttonText: 'Конкурс завершён',
     });
 
     const updatedContest = await this.contestReadRepo.findByIdWithRelations(
@@ -982,6 +990,7 @@ export class ContestsService {
   }): Array<Partial<ContestPublication>> {
     const { contestId, channels, name, description, buttonText, imagePath } =
       params;
+    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
 
     return channels.map((channel) => {
       if (!channel.telegramId) {
@@ -1006,7 +1015,7 @@ export class ContestsService {
         payload: {
           text: `${name}\n\n${description || ''}`,
           buttonText: buttonText || 'Участвовать',
-          buttonUrl: `${process.env.MINI_APP_URL}?startapp=${channel.telegramId}_${contestId}`,
+          buttonUrl: `${miniAppUrl}?startapp=${channel.telegramId}_${contestId}`,
           photoUrl: imagePath,
         },
       };

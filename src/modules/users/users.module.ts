@@ -9,12 +9,15 @@ import { ContestParticipation } from '../contests/entities';
 import { BotModule } from '../bot/bot.module';
 import { UsersMailingService } from './services/users-mailing.service';
 import { ContestsModule } from '../contests/contests.module';
+import { MailingProcessor } from './jobs/mailing.processor';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, ContestParticipation]),
     BotModule,
     ContestsModule,
+    BullModule.registerQueue({ name: 'user-mailing' }),
   ],
   controllers: [UsersController],
   providers: [
@@ -24,6 +27,7 @@ import { ContestsModule } from '../contests/contests.module';
     UserWriteRepository,
     UserReadRepository,
     UsersMailingService,
+    MailingProcessor,
   ],
   exports: [UsersService, AdminService, TelegramUserService],
 })

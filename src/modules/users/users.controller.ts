@@ -111,16 +111,11 @@ export class UsersController {
   async sendBroadcast(
     @Body() dto: SendUsersMailingDto,
     @UploadedFile() image?: Express.Multer.File,
-  ): Promise<{
-    total: number;
-    success: number;
-    failed: number;
-    errors: Array<{ userId: number; telegramId: string; error: string }>;
-  }> {
+  ): Promise<{ jobId: string; enqueuedCount: number }> {
     this.logger.debug(`Началась рассылка ${dto.type}`, {
       dto,
       hasImage: !!image,
     });
-    return this.usersMailingService.sendMailing(dto, image);
+    return await this.usersMailingService.sendMailing(dto, image);
   }
 }

@@ -51,16 +51,16 @@ export interface IContestReadRepository {
   /**
    * Кол-во участников конкурса.
    */
-  countParticipants(contestId: number): Promise<number>;
+  // countParticipants(contestId: number): Promise<number>;
 
   /**
    * Вернуть id пользователей-участников (MVP способ выбрать победителей).
    * Для high-load позже оптимизируем.
    */
-  findParticipantUserIds(contestId: number): Promise<number[]>;
+  // findParticipantUserIds(contestId: number): Promise<number[]>;
 
   /**
    * Получить участия (если надо для winner selection/аналитики).
    */
-  findParticipations(contestId: number): Promise<ContestParticipation[]>;
+  // findParticipations(contestId: number): Promise<ContestParticipation[]>;
 }

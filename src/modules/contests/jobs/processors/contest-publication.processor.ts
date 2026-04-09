@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import Bottleneck from 'bottleneck';
@@ -219,17 +220,13 @@ export class ContestPublicationProcessor extends WorkerHost {
         );
         return;
       }
-
       try {
         await telegramLimiter.schedule(() =>
           this.telegramService.updateContestMessageButton({
             chatId: String(pub.chatId),
             messageId,
             buttonText: 'Конкурс завершён',
-            // можешь:
-            // 1) убрать кнопку вообще -> buttonUrl: undefined
-            // 2) или вести на результаты:
-            buttonUrl: `${process.env.MINI_APP_URL}?contest=${pub.contestId}&tab=results`,
+            buttonUrl: `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`,
           }),
         );
 
@@ -242,7 +239,6 @@ export class ContestPublicationProcessor extends WorkerHost {
       } catch (e: any) {
         const meta = formatTelegramError(e);
 
-        // 400/403 — перманентно, просто отмечаем ошибку и не ретраим
         if (meta.code === 400 || meta.code === 403) {
           this.logger.warn(
             { ...jobMeta(job), publicationId, tg: meta.text },

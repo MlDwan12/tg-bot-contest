@@ -3,6 +3,8 @@ import {
   Inject,
   ConflictException,
   NotFoundException,
+  ForbiddenException,
+  forwardRef,
 } from '@nestjs/common';
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
@@ -22,6 +24,8 @@ import { ContestParticipation } from '../entities';
 import { ContestStatus } from 'src/shared/enums/contest';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { ContestWinnerService } from '.';
+import { TelegramService } from 'src/modules/bot/bot.service';
 
 @Injectable()
 export class ContestsParticipateService {
@@ -42,6 +46,9 @@ export class ContestsParticipateService {
     private readonly contestCountersQueue: Queue,
 
     private readonly userTgService: TelegramUserService,
+    @Inject(forwardRef(() => TelegramService))
+    private readonly telegramService: TelegramService,
+    private readonly contestWinnerService: ContestWinnerService,
     private readonly logger: Logger,
   ) {}
 
@@ -59,22 +66,66 @@ export class ContestsParticipateService {
 
     const contest = await this.contestReadRepo.findByParams({
       id: contestId,
-      status: ContestStatus.ACTIVE,
     });
 
-    if (!contest) {
+    if (
+      !contest ||
+      contest?.status === ContestStatus.CANCELLED ||
+      contest?.status === ContestStatus.DRAFT
+    ) {
+      throw new NotFoundException('Конкурс не найден');
+    }
+
+    if (contest.status === ContestStatus.COMPLETED) {
+      const winners =
+        await this.contestWinnerService.getContestWinners(contestId);
+
+      const w = winners.map((w) => ({
+        place: w.place,
+        telegramId: w.user?.telegramId ?? null,
+        userId: w.userId,
+        username: w.user?.username ?? null,
+      }));
+
+      return w;
+    }
+
+    if (contest.status !== ContestStatus.ACTIVE) {
       throw new NotFoundException('Конкурс не найден или завершен');
     }
 
-    const existingParticipation =
-      await this.contestParticipationReadRepo.findOneByParam({
-        userId: user.id,
-        contestId: contest.id,
-        groupId: tgData.groupId,
-      });
+    const requiredChannels = contest.requiredChannels ?? [];
 
-    if (existingParticipation) {
-      throw new ConflictException('Вы уже участвуете в этом конкурсе');
+    if (requiredChannels.length > 0) {
+      const channelIds = requiredChannels
+        .map((c) => c.telegramId)
+        .filter((id): id is number => id != null);
+
+      if (channelIds.length > 0) {
+        const { passed, missingChannels } =
+          await this.telegramService.checkUserInChannels(
+            tgData.telegramId,
+            channelIds,
+          );
+
+        if (!passed) {
+          const usernames = requiredChannels
+            .filter(
+              (c) =>
+                c.telegramId != null && missingChannels.includes(c.telegramId),
+            )
+            .map((c) =>
+              c.telegramUsername
+                ? `@${c.telegramUsername}`
+                : `id:${c.telegramId}`,
+            )
+            .join(', ');
+
+          throw new ForbiddenException(
+            `Необходимо подписаться на обязательные каналы: ${usernames}`,
+          );
+        }
+      }
     }
 
     try {
@@ -110,12 +161,19 @@ export class ContestsParticipateService {
 
       return participation;
     } catch (error) {
+      if (error?.code === '23505') {
+        const existing = await this.contestParticipationReadRepo.findOneByParam(
+          {
+            userId: user.id,
+            contestId: contest.id,
+            groupId: tgData.groupId,
+          },
+        );
+        if (existing) return existing; // ← тоже 200
+      }
+
       this.logger.error(
-        {
-          err: error,
-          contestId,
-          tgData,
-        },
+        { err: error, contestId, tgData },
         'Ошибка при участии в конкурсе',
       );
       throw error;

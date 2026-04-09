@@ -15,7 +15,11 @@ import {
 } from '@nestjs/common';
 import { Contest } from './entities';
 import { Logger } from 'nestjs-pino';
-import { ContestsParticipateService, ContestsService } from './services';
+import {
+  ContestsParticipateService,
+  ContestsService,
+  ContestWinnerService,
+} from './services';
 import { CreateContestDto, UpdateContestDto } from './dto';
 import { UserId } from 'src/common/decorators';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -30,6 +34,7 @@ export class ContestsController {
   constructor(
     private readonly contestsService: ContestsService,
     private readonly contestsParticipateService: ContestsParticipateService,
+    private readonly contestWinnerService: ContestWinnerService,
     private readonly logger: Logger,
   ) {}
 

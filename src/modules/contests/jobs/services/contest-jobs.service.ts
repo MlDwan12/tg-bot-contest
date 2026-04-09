@@ -23,20 +23,59 @@ export class ContestJobsService implements OnModuleInit {
 
   async scheduleContest(contestId: number, startDate: Date, endDate: Date) {
     const now = Date.now();
-    const startDelay = Math.max(0, startDate.getTime() - now);
-    const endDelay = Math.max(0, endDate.getTime() - now);
+    // const startDelay = Math.max(0, startDate.getTime() - now);
+    // const endDelay = Math.max(0, endDate.getTime() - now);
 
-    await this.schedulerQueue.add(
-      'publishContest',
-      { contestId },
-      { jobId: `contest:${contestId}:publish`, delay: startDelay },
-    );
+    const publishJobId = `contest:${contestId}:publish`;
+    const finishJobId = `contest:${contestId}:finish`;
 
-    await this.finishQueue.add(
-      'finishContest',
-      { contestId },
-      { jobId: `contest:${contestId}:finish`, delay: endDelay },
-    );
+    const existingPublishJob = await this.schedulerQueue.getJob(publishJobId);
+    if (existingPublishJob) {
+      await existingPublishJob.remove();
+    }
+
+    const existingFinishJob = await this.finishQueue.getJob(finishJobId);
+    if (existingFinishJob) {
+      await existingFinishJob.remove();
+    }
+
+    if (startDate.getTime() > now) {
+      await this.schedulerQueue.add(
+        'publishContest',
+        { contestId },
+        {
+          jobId: publishJobId,
+          delay: startDate.getTime() - now,
+          removeOnComplete: true,
+          removeOnFail: 1000,
+        },
+      );
+    }
+
+    if (endDate.getTime() > now) {
+      await this.finishQueue.add(
+        'finishContest',
+        { contestId },
+        {
+          jobId: finishJobId,
+          delay: endDate.getTime() - now,
+          removeOnComplete: true,
+          removeOnFail: 1000,
+        },
+      );
+    }
+
+    // await this.schedulerQueue.add(
+    //   'publishContest',
+    //   { contestId },
+    //   { jobId: `contest:${contestId}:publish`, delay: startDelay },
+    // );
+
+    // await this.finishQueue.add(
+    //   'finishContest',
+    //   { contestId },
+    //   { jobId: `contest:${contestId}:finish`, delay: endDelay },
+    // );
   }
 
   private async startMaintenance() {

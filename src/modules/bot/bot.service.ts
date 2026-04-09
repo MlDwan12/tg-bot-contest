@@ -176,6 +176,7 @@ export class TelegramService {
       throw error;
     }
   }
+
   async updateContestMessageButton(dto: {
     chatId: string;
     messageId: number;
@@ -336,5 +337,31 @@ export class TelegramService {
         );
       }
     }
+  }
+
+  async checkUserInChannels(
+    telegramId: string,
+    channelTelegramIds: number[],
+  ): Promise<{ passed: boolean; missingChannels: number[] }> {
+    const missingChannels: number[] = [];
+
+    await Promise.all(
+      channelTelegramIds.map(async (channelId) => {
+        try {
+          const member = await this.bot.telegram.getChatMember(
+            channelId,
+            Number(telegramId),
+          );
+          const isSubscribed = ['member', 'administrator', 'creator'].includes(
+            member.status,
+          );
+          if (!isSubscribed) missingChannels.push(channelId);
+        } catch {
+          missingChannels.push(channelId);
+        }
+      }),
+    );
+
+    return { passed: missingChannels.length === 0, missingChannels };
   }
 }

@@ -96,7 +96,7 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestParticipationWriteRepository,
     ContestWinnerReadRepository,
     ContestWinnerWriteRepository,
-
+    ContestWinnerService,
     {
       provide: CONTEST_READ_REPOSITORY,
       useExisting: ContestReadRepository,

@@ -63,7 +63,16 @@ async function bootstrap() {
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  app.enableCors({ origin: true, credentials: true });
+  app.enableCors({
+    origin: [
+      'https://rollcu.ru',
+      'https://rollcu.online',
+      'https://www.rollcu.ru',
+      'https://www.rollcu.online',
+    ],
+    // origin: true,
+    credentials: true,
+  });
 
   app.enableShutdownHooks();
 

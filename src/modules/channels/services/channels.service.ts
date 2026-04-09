@@ -89,7 +89,7 @@ export class ChannelsService {
         isActive: true,
       });
 
-      return await this.writeRepo.create(channel);
+      return channel;
     } catch (error) {
       this.logger.error(
         {
