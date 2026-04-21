@@ -11,17 +11,29 @@ export class UpdateContestDto extends PartialType(CreateContestDto) {
 
   @IsOptional()
   @Transform(({ value }) => {
-    if (Array.isArray(value)) return value.map(Number);
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(Number);
+    }
 
     if (typeof value === 'string') {
       try {
-        return JSON.parse(value).map(Number);
+        const parsed = JSON.parse(value);
+
+        if (!Array.isArray(parsed)) {
+          return undefined;
+        }
+
+        return parsed.map(Number);
       } catch {
-        return [];
+        return undefined;
       }
     }
 
-    return [];
+    return undefined;
   })
   @IsArray()
   @IsInt({ each: true })

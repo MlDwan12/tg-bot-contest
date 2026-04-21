@@ -35,7 +35,7 @@ export class ChannelsService {
   ) {}
 
   async createChannel(data: {
-    telegramId?: number;
+    telegramId: number;
     telegramUsername?: string;
     name?: string;
     type?: ChannelType;
@@ -43,8 +43,10 @@ export class ChannelsService {
     try {
       this.logger.log({ data }, 'Create channel request');
 
-      if (!data.telegramId) {
-        throw new BadRequestException('telegramId is required');
+      if (!data.telegramId && !data.telegramUsername) {
+        throw new BadRequestException(
+          'telegramId or telegramUsername is required',
+        );
       }
 
       if (data.telegramId) {
@@ -56,6 +58,7 @@ export class ChannelsService {
           );
         }
       }
+      console.log(data.telegramId);
 
       const chatId =
         data.telegramId ??
@@ -80,6 +83,7 @@ export class ChannelsService {
           'Bot must be administrator in the channel/group',
         );
       }
+      console.log(tgCheck);
 
       const channel = await this.writeRepo.create({
         telegramId: tgCheck.chat?.id,
@@ -167,10 +171,8 @@ export class ChannelsService {
     params: FindOptionsWhere<Channel>,
   ): Promise<Channel[]> {
     this.logger.debug({ params }, 'Get channels by parameters request');
-    console.log(params);
 
     const a = await this.readRepo.findManyByParams(params);
-    console.log(a);
     return a;
   }
 

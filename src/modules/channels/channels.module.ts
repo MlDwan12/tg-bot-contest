@@ -9,9 +9,15 @@ import {
 } from 'src/shared/commons/constants';
 import { ChannelReadRepository, ChannelWriteRepository } from './repositories';
 import { BotModule } from '../bot/bot.module';
+import { AuthModule } from '../auth/auth.module';
+import { ChannelHealthService } from './services/health.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Channel]), forwardRef(() => BotModule)],
+  imports: [
+    TypeOrmModule.forFeature([Channel]),
+    forwardRef(() => BotModule),
+    forwardRef(() => AuthModule),
+  ],
   controllers: [ChannelsController],
   providers: [
     ChannelsService,
@@ -23,6 +29,7 @@ import { BotModule } from '../bot/bot.module';
       provide: CHANNEL_WRITE_REPOSITORY,
       useClass: ChannelWriteRepository,
     },
+    ChannelHealthService,
   ],
   exports: [ChannelsService],
 })

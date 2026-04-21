@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from './users.service';
 import { User } from '../entities';
@@ -11,16 +11,24 @@ export class AdminService {
 
   async createAdmin(dto: CreateUserAdmin): Promise<User> {
     const { login, password } = dto;
+
     const existing = await this.userService.findByLogin(login);
-    if (existing) throw new Error('Admin with this login already exists');
+    if (existing) {
+      throw new ConflictException('Admin with this login already exists');
+    }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    try {
+      const passwordHash = await bcrypt.hash(password, 10);
 
-    return this.userService.create({
-      login,
-      passwordHash,
-      role: UserRole.ADMIN,
-    });
+      return await this.userService.create({
+        login,
+        passwordHash,
+        role: UserRole.ADMIN,
+      });
+    } catch (error) {
+      console.error('createAdmin error:', error);
+      throw new InternalServerErrorException('Failed to create admin');
+    }
   }
 
   async findById(id: number): Promise<User | null> {

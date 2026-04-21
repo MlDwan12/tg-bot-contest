@@ -52,18 +52,16 @@ export class ContestJobsService implements OnModuleInit {
       );
     }
 
-    if (endDate.getTime() > now) {
-      await this.finishQueue.add(
-        'finishContest',
-        { contestId },
-        {
-          jobId: finishJobId,
-          delay: endDate.getTime() - now,
-          removeOnComplete: true,
-          removeOnFail: 1000,
-        },
-      );
-    }
+    await this.finishQueue.add(
+      'finishContest',
+      { contestId },
+      {
+        jobId: finishJobId,
+        delay: endDate.getTime() - now,
+        removeOnComplete: true,
+        removeOnFail: 1000,
+      },
+    );
 
     // await this.schedulerQueue.add(
     //   'publishContest',
@@ -157,5 +155,14 @@ export class ContestJobsService implements OnModuleInit {
     if (finishJob) {
       await finishJob.remove();
     }
+  }
+
+  async rescheduleContest(
+    contestId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<void> {
+    await this.removeContestJobs(contestId);
+    await this.scheduleContest(contestId, startDate, endDate);
   }
 }

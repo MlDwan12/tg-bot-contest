@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import { extname } from 'path';
+import { randomUUID } from 'crypto';
 import { CONTEST_UPLOADS_DIR } from 'src/shared/commons/constants/storage.constants';
 
 export const contestImageUploadOptions = {
@@ -12,7 +13,7 @@ export const contestImageUploadOptions = {
     },
     filename: (req, file, cb) => {
       const ext = extname(file.originalname).toLowerCase();
-      cb(null, `contest-${Date.now()}${ext}`);
+      cb(null, `contest-${Date.now()}-${randomUUID()}${ext}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },

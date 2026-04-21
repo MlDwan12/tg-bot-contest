@@ -50,7 +50,6 @@ export class UserReadRepository implements IUserReadRepository {
     const { skip, take, group, username } = params;
 
     const normalizedUserUsername = username?.replace('@', '').trim();
-    console.log(11111111);
 
     const baseQb = this.repo
       .createQueryBuilder('user')

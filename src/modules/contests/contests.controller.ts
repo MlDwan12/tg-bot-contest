@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -28,6 +27,7 @@ import { GetContestsQueryDto } from './dto/get-contests-query.dto';
 import { Paginated } from 'src/shared/commons/response/paginated.type';
 import { ContestShortInfoDto } from './dto/contest-short-info.dto';
 import { contestImageUploadOptions } from './commons/contest-image.interceptor';
+import { JwtAuthGuard } from '../auth/guards';
 
 @Controller('contest')
 export class ContestsController {
@@ -55,7 +55,7 @@ export class ContestsController {
   }
 
   @Post()
-  // @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('media', contestImageUploadOptions))
   create(
     @UserId()
@@ -64,10 +64,14 @@ export class ContestsController {
     @UploadedFile() image?: Express.Multer.File,
   ): Promise<Contest> {
     this.logger.log(`Создание конкурса пользователем id=${userId}`);
-    return this.contestsService.createContest({ ...dto, creatorId: 1 }, image);
+    return this.contestsService.createContest(
+      { ...dto, creatorId: userId },
+      image,
+    );
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('media', contestImageUploadOptions))
   updateContest(
     @Param('id', ParseIntPipe) id: number,
@@ -94,6 +98,7 @@ export class ContestsController {
   }
 
   @Patch(':id/complete')
+  @UseGuards(JwtAuthGuard)
   async completeContest(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<Contest> {
@@ -101,12 +106,14 @@ export class ContestsController {
   }
 
   @Patch(':id/cancel')
+  @UseGuards(JwtAuthGuard)
   async cancelContest(@Param('id', ParseIntPipe) id: number): Promise<Contest> {
     return this.contestsService.cancelContest(id);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) contestId: number): void {
-    this.contestsService.removeContest(contestId);
+  @UseGuards(JwtAuthGuard)
+  async remove(@Param('id', ParseIntPipe) contestId: number): Promise<void> {
+    await this.contestsService.removeContest(contestId);
   }
 }

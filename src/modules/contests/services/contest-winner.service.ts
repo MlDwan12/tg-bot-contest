@@ -50,8 +50,12 @@ export class ContestWinnerService {
         'Для конкурса должно быть указано корректное количество призовых мест',
       );
     }
+    const manual = contest.participants?.length
+      ? WinnerStrategy.MANUAL
+      : WinnerStrategy.RANDOM;
+    console.log(11111111111, manual);
 
-    switch (contest.winnerStrategy) {
+    switch (manual) {
       case WinnerStrategy.MANUAL:
         return this.resolveManualWinners(contest);
 
@@ -119,6 +123,36 @@ export class ContestWinnerService {
     return shuffledUsers.slice(0, contest.prizePlaces);
   }
 
+  // private async resolveManualWinners(contest: Contest): Promise<User[]> {
+  //   const winners = contest.winners?.length
+  //     ? contest.winners
+  //     : await this.contestWinnerReadRepo.findByContestId(contest.id);
+
+  //   if (!winners.length) {
+  //     throw new BadRequestException(
+  //       'Для manual-стратегии у конкурса должны быть заранее указаны победители',
+  //     );
+  //   }
+
+  //   this.validateWinnerRows(
+  //     winners.map((winner) => ({
+  //       userId: winner.userId,
+  //       place: winner.place,
+  //     })),
+  //     contest.prizePlaces,
+  //   );
+
+  //   return winners.map((winner) => {
+  //     if (!winner.user) {
+  //       throw new BadRequestException(
+  //         'У одного из победителей не загружен пользователь',
+  //       );
+  //     }
+
+  //     return winner.user;
+  //   });
+  // }
+
   private async resolveManualWinners(contest: Contest): Promise<User[]> {
     const winners = contest.winners?.length
       ? contest.winners
@@ -130,23 +164,38 @@ export class ContestWinnerService {
       );
     }
 
-    this.validateWinnerRows(
-      winners.map((winner) => ({
-        userId: winner.userId,
-        place: winner.place,
-      })),
-      contest.prizePlaces,
-    );
+    const normalized = winners.map((winner) => {
+      const user = winner.user;
 
-    return winners.map((winner) => {
-      if (!winner.user) {
+      if (!user) {
         throw new BadRequestException(
           'У одного из победителей не загружен пользователь',
         );
       }
 
-      return winner.user;
+      const userId = winner.userId ?? user.id;
+
+      if (!userId) {
+        throw new BadRequestException(
+          'У одного из победителей отсутствует userId',
+        );
+      }
+
+      return {
+        user,
+        row: {
+          userId,
+          place: winner.place,
+        },
+      };
     });
+
+    this.validateWinnerRows(
+      normalized.map((item) => item.row),
+      contest.prizePlaces,
+    );
+
+    return normalized.map((item) => item.user);
   }
 
   private toWinnerRows(contestId: number, users: User[]) {
@@ -175,9 +224,9 @@ export class ContestWinnerService {
     winners: Array<{ userId: number; place: number }>,
     prizePlaces: number,
   ): void {
-    if (winners.length > prizePlaces) {
+    if (winners.length !== prizePlaces) {
       throw new BadRequestException(
-        'Количество победителей не может быть больше prizePlaces',
+        'Количество победителей не соответствует количеству призовых мест',
       );
     }
 
@@ -191,20 +240,20 @@ export class ContestWinnerService {
       );
     }
 
-    const uniquePlaces = new Set(places);
-    if (uniquePlaces.size !== places.length) {
-      throw new BadRequestException('Места победителей должны быть уникальны');
-    }
+    // const uniquePlaces = new Set(places);
+    // if (uniquePlaces.size !== places.length) {
+    //   throw new BadRequestException('Места победителей должны быть уникальны');
+    // }
 
-    const invalidPlace = places.find(
-      (place) => place < 1 || place > prizePlaces,
-    );
+    // const invalidPlace = places.find(
+    //   (place) => place < 1 || place > prizePlaces,
+    // );
 
-    if (invalidPlace) {
-      throw new BadRequestException(
-        `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
-      );
-    }
+    // if (invalidPlace) {
+    //   throw new BadRequestException(
+    //     `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
+    //   );
+    // }
   }
 
   private shuffleArray<T>(items: T[]): T[] {

@@ -21,7 +21,7 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   telegramId: string;
 
   @Column({ nullable: true })

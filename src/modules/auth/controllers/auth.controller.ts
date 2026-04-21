@@ -6,11 +6,14 @@ import {
   HttpCode,
   HttpStatus,
   Get,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { LoginDto } from '../dto';
 import { AuthService } from '../services';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { JwtAuthGuard } from '../guards';
 
 @Controller('auth')
 export class AuthController {
@@ -28,11 +31,8 @@ export class AuthController {
       dto.username,
       dto.password,
     );
-    const { accessToken, refreshToken } = await this.authService.getTokens({
-      id: admin.id,
-      username: admin.username!,
-      role: admin.role,
-    });
+    const { accessToken, refreshToken } =
+      await this.authService.getTokens(admin);
 
     const isProd = this.configService.get('NODE_ENV') === 'production';
 
@@ -56,16 +56,15 @@ export class AuthController {
   @Get('logout')
   @HttpCode(HttpStatus.OK)
   logout(@Res({ passthrough: true }) res: Response) {
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict' as const,
-      path: '/',
-    };
-
-    res.clearCookie('accessToken', cookieOptions);
-    res.clearCookie('refreshToken', cookieOptions);
-
+    this.authService.clearAuthCookies(res);
     return { message: 'Вы успешно вышли из системы' };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me() {
+    return {
+      success: true,
+    };
   }
 }

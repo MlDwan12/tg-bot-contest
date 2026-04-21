@@ -85,6 +85,42 @@ export class ContestWriteRepository implements IContestWriteRepository {
     return (res.affected ?? 0) > 0;
   }
 
+  // async setPublishChannels(
+  //   contestId: number,
+  //   channelIds: number[],
+  // ): Promise<void> {
+  //   const contest = await this.contestRepo.findOne({
+  //     where: { id: contestId },
+  //     relations: { publishChannels: true },
+  //   });
+
+  //   if (!contest) throw new NotFoundException('Contest not found');
+
+  //   contest.publishChannels = await this.channelRepo.find({
+  //     where: { id: In(channelIds) },
+  //   });
+
+  //   await this.contestRepo.save(contest);
+  // }
+
+  // async setRequiredChannels(
+  //   contestId: number,
+  //   channelIds: number[],
+  // ): Promise<void> {
+  //   const contest = await this.contestRepo.findOne({
+  //     where: { id: contestId },
+  //     relations: { requiredChannels: true },
+  //   });
+
+  //   if (!contest) throw new NotFoundException('Contest not found');
+
+  //   contest.requiredChannels = await this.channelRepo.find({
+  //     where: { id: In(channelIds) },
+  //   });
+
+  //   await this.contestRepo.save(contest);
+  // }
+
   async setPublishChannels(
     contestId: number,
     channelIds: number[],
@@ -94,13 +130,22 @@ export class ContestWriteRepository implements IContestWriteRepository {
       relations: { publishChannels: true },
     });
 
-    if (!contest) throw new NotFoundException('Contest not found');
+    if (!contest) {
+      throw new NotFoundException('Contest not found');
+    }
 
-    contest.publishChannels = await this.channelRepo.find({
-      where: { id: In(channelIds) },
-    });
-    console.log(channelIds, contest.publishChannels);
+    const uniqueIds = [...new Set(channelIds)];
+    const channels = uniqueIds.length
+      ? await this.channelRepo.find({
+          where: { id: In(uniqueIds) },
+        })
+      : [];
 
+    if (channels.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more publish channels not found');
+    }
+
+    contest.publishChannels = channels;
     await this.contestRepo.save(contest);
   }
 
@@ -113,12 +158,22 @@ export class ContestWriteRepository implements IContestWriteRepository {
       relations: { requiredChannels: true },
     });
 
-    if (!contest) throw new NotFoundException('Contest not found');
+    if (!contest) {
+      throw new NotFoundException('Contest not found');
+    }
 
-    contest.requiredChannels = await this.channelRepo.find({
-      where: { id: In(channelIds) },
-    });
+    const uniqueIds = [...new Set(channelIds)];
+    const channels = uniqueIds.length
+      ? await this.channelRepo.find({
+          where: { id: In(uniqueIds) },
+        })
+      : [];
 
+    if (channels.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more required channels not found');
+    }
+
+    contest.requiredChannels = channels;
     await this.contestRepo.save(contest);
   }
 

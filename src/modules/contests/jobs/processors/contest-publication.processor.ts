@@ -43,9 +43,22 @@ export class ContestPublicationProcessor extends WorkerHost {
     private readonly logger: Logger,
   ) {
     super();
+    this.logger.log('ContestPublicationProcessor initialized');
   }
 
-  async process(job: Job<{ publicationId: number }>, token?: string) {
+  async process(
+    job: Job<{ publicationId: number; hasParticipants?: boolean }>,
+    token?: string,
+  ) {
+    this.logger.error(
+      {
+        queue: job.queueName,
+        jobId: job.id,
+        jobName: job.name,
+        data: job.data,
+      },
+      'ContestPublicationProcessor got job',
+    );
     if (job.name === 'sendPublication') {
       const { publicationId } = job.data;
 
@@ -77,6 +90,7 @@ export class ContestPublicationProcessor extends WorkerHost {
       );
 
       const payload = publication.payload;
+
       if (!payload?.text || !payload?.buttonUrl) {
         this.logger.error(
           { ...jobMeta(job), publicationId, payload },
@@ -181,7 +195,7 @@ export class ContestPublicationProcessor extends WorkerHost {
     }
 
     if (job.name === 'updateFinishedButton') {
-      const { publicationId } = job.data;
+      const { publicationId, hasParticipants } = job.data;
 
       this.logger.debug(
         { ...jobMeta(job), publicationId },
@@ -225,8 +239,10 @@ export class ContestPublicationProcessor extends WorkerHost {
           this.telegramService.updateContestMessageButton({
             chatId: String(pub.chatId),
             messageId,
-            buttonText: 'Конкурс завершён',
-            buttonUrl: `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`,
+            buttonText: hasParticipants ? 'Конкурс завершён' : undefined,
+            buttonUrl: hasParticipants
+              ? `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`
+              : undefined,
           }),
         );
 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { UsersService } from './services/users.service';
 import { UsersController } from './users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,13 +11,21 @@ import { UsersMailingService } from './services/users-mailing.service';
 import { ContestsModule } from '../contests/contests.module';
 import { MailingProcessor } from './jobs/mailing.processor';
 import { BullModule } from '@nestjs/bullmq';
+import { AuthModule } from '../auth/auth.module';
+import { MailingMessageEntity } from './entities/mailing-message.entity';
+import { MailingCleanupService } from './services/mailing-cleanup.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, ContestParticipation]),
+    TypeOrmModule.forFeature([
+      User,
+      ContestParticipation,
+      MailingMessageEntity,
+    ]),
     BotModule,
     ContestsModule,
     BullModule.registerQueue({ name: 'user-mailing' }),
+    forwardRef(() => AuthModule),
   ],
   controllers: [UsersController],
   providers: [
@@ -28,6 +36,7 @@ import { BullModule } from '@nestjs/bullmq';
     UserReadRepository,
     UsersMailingService,
     MailingProcessor,
+    MailingCleanupService,
   ],
   exports: [UsersService, AdminService, TelegramUserService],
 })

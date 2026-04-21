@@ -15,6 +15,7 @@ import { QueuesMonitoringModule } from './monitoring/queues-monitoring.module';
           password: config.get<string>('REDIS_PASSWORD') || undefined,
           db: config.get<number>('REDIS_DB', 0),
         },
+        prefix: config.get<string>('BULL_PREFIX', 'new-v-telegram-bot-dev'),
         defaultJobOptions: {
           attempts: 3, // попытки при ошибке
           backoff: { type: 'exponential', delay: 1000 },

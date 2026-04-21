@@ -56,7 +56,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new SentryFilter());
+  // app.useGlobalFilters(new SentryFilter());
   app.use(cookieParser());
 
   app.useGlobalInterceptors(new ResponseInterceptor());

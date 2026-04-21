@@ -4,7 +4,7 @@ export type CreateContest = {
   // Контент для Telegram
   name: string;
   description?: string;
-  postText?: string;
+  // postText?: string;
   buttonText?: string;
   buttonUrl?: string;
 

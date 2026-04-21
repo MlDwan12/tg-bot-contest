@@ -4,6 +4,7 @@ import { validationSchema } from './validation.schema';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppImports } from './modules';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -37,7 +38,12 @@ import { AppImports } from './modules';
           password: configService.get<string>('DATABASE_PASSWORD'),
           database: configService.get<string>('DATABASE_NAME'),
           schema: configService.get<string>('DATABASE_SCHEMA', 'public'),
-
+          extra: {
+            max: 40,
+            min: 5,
+            idleTimeoutMillis: 60000,
+            connectionTimeoutMillis: 1000,
+          },
           autoLoadEntities: true,
           synchronize: false,
 
@@ -52,6 +58,7 @@ import { AppImports } from './modules';
         };
       },
     }),
+    ScheduleModule.forRoot(),
     ...AppImports,
   ],
 })

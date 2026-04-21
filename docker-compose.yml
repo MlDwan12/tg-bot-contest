@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: tg_postgres
+    restart: always
+
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: tg_redis
+    restart: always
+
+  api:
+    build: .
+    container_name: tg_api
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - '3004:3004'
+    env_file:
+      - .env.docker
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+volumes:
+  postgres_data:

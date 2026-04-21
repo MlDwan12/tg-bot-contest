@@ -27,6 +27,7 @@ import { MAILING_UPLOADS_DIR } from 'src/shared/commons/constants/storage.consta
 import { JwtAuthGuard } from '../auth/guards';
 import * as fs from 'fs';
 import { Logger } from 'nestjs-pino';
+import { AfterMoscowTimeGuard } from './guard/time.guard';
 
 @Controller('users')
 export class UsersController {
@@ -39,6 +40,7 @@ export class UsersController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   async create(@Body() dto: CreateUserAdminDto): Promise<User> {
     const user = await this.usersAdminService.createAdmin(dto);
     return user;
@@ -52,6 +54,7 @@ export class UsersController {
   }
 
   @Get('admin/:id')
+  @UseGuards(JwtAuthGuard)
   async getAdminById(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<User | null> {
@@ -73,7 +76,7 @@ export class UsersController {
   }
 
   @Post('broadcast')
-  // @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AfterMoscowTimeGuard)
   @UseInterceptors(
     FileInterceptor('media', {
       storage: diskStorage({

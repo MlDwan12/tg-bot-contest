@@ -180,22 +180,33 @@ export class TelegramService {
   async updateContestMessageButton(dto: {
     chatId: string;
     messageId: number;
-    buttonText: string;
+    buttonText?: string;
     buttonUrl?: string; // если не передать — можно убрать клавиатуру
   }): Promise<void> {
-    const replyMarkup = dto.buttonUrl
-      ? {
-          inline_keyboard: [[{ text: dto.buttonText, url: dto.buttonUrl }]],
-        }
-      : undefined; // уберём клавиатуру полностью
+    // уберём клавиатуру полностью
 
     try {
-      await this.bot.telegram.editMessageReplyMarkup(
-        dto.chatId,
-        dto.messageId,
-        undefined,
-        replyMarkup,
-      );
+      if (!dto.buttonText || !dto.buttonUrl) {
+        await this.bot.telegram.editMessageReplyMarkup(
+          dto.chatId,
+          dto.messageId,
+          undefined,
+          { inline_keyboard: [] },
+        );
+      } else {
+        const replyMarkup = dto.buttonUrl
+          ? {
+              inline_keyboard: [[{ text: dto.buttonText, url: dto.buttonUrl }]],
+            }
+          : undefined;
+
+        await this.bot.telegram.editMessageReplyMarkup(
+          dto.chatId,
+          dto.messageId,
+          undefined,
+          replyMarkup,
+        );
+      }
     } catch (error: any) {
       const code = error?.response?.error_code;
 
@@ -213,7 +224,7 @@ export class TelegramService {
     imagePath?: string;
     buttonText?: string;
     buttonUrl?: string;
-  }): Promise<{ messageId: number }> {
+  }): Promise<{ messageId: number; chatId: string }> {
     this.logger.log(
       `sendMailingMessage: chatId=${dto.chatId}, hasMedia=${!!dto.imagePath}, hasButton=${!!dto.buttonText && !!dto.buttonUrl}`,
     );
@@ -261,7 +272,7 @@ export class TelegramService {
             `Фото отправлено успешно: chatId=${dto.chatId}, messageId=${msg.message_id}`,
           );
 
-          return { messageId: msg.message_id };
+          return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
         if (['.mp4', '.mov', '.webm'].includes(ext)) {
@@ -280,7 +291,7 @@ export class TelegramService {
             `Видео отправлено успешно: chatId=${dto.chatId}, messageId=${msg.message_id}`,
           );
 
-          return { messageId: msg.message_id };
+          return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
         this.logger.error(`Неподдерживаемый тип файла: ${ext}`);
@@ -301,7 +312,7 @@ export class TelegramService {
         `Сообщение отправлено: chatId=${dto.chatId}, messageId=${msg.message_id}`,
       );
 
-      return { messageId: msg.message_id };
+      return { messageId: msg.message_id, chatId: String(msg.chat.id) };
     } catch (error: any) {
       this.logger.error(
         `Ошибка при отправке в Telegram: chatId=${dto.chatId}, error=${error?.message}`,
@@ -363,5 +374,88 @@ export class TelegramService {
     );
 
     return { passed: missingChannels.length === 0, missingChannels };
+  }
+
+  async checkBotChannelPermissions(chatId: number): Promise<{
+    exists: boolean;
+    isAdmin: boolean;
+    canPost: boolean;
+    canEdit: boolean;
+    isChannel: boolean;
+    chat?: {
+      id: number;
+      title?: string;
+      username?: string;
+      type: string;
+    };
+  }> {
+    try {
+      const botInfo = await this.bot.telegram.getMe();
+
+      const [member, chat] = await Promise.all([
+        this.bot.telegram.getChatMember(chatId, botInfo.id),
+        this.bot.telegram.getChat(chatId),
+      ]);
+
+      const isAdmin =
+        member.status === 'administrator' || member.status === 'creator';
+
+      const title = 'title' in chat ? chat.title : undefined;
+      const username = 'username' in chat ? chat.username : undefined;
+      const isChannel = chat.type === 'channel';
+
+      let canPost = false;
+      let canEdit = false;
+
+      if (member.status === 'creator') {
+        canPost = true;
+        canEdit = true;
+      }
+
+      if (member.status === 'administrator') {
+        if (isChannel) {
+          canPost =
+            'can_post_messages' in member ? !!member.can_post_messages : false;
+          canEdit =
+            'can_edit_messages' in member ? !!member.can_edit_messages : false;
+        } else if (chat.type === 'supergroup' || chat.type === 'group') {
+          canPost = true;
+          canEdit = true;
+        }
+      }
+
+      return {
+        exists: true,
+        isAdmin,
+        canPost,
+        canEdit,
+        isChannel,
+        chat: {
+          id: chat.id,
+          title,
+          username,
+          type: chat.type,
+        },
+      };
+    } catch (error: any) {
+      if (
+        error?.response?.error_code === 403 ||
+        error?.response?.error_code === 400
+      ) {
+        return {
+          exists: false,
+          isAdmin: false,
+          canPost: false,
+          canEdit: false,
+          isChannel: false,
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  async deleteMessage(chatId: string, messageId: number): Promise<void> {
+    await this.bot.telegram.deleteMessage(Number(chatId), messageId);
   }
 }

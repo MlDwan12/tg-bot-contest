@@ -14,12 +14,26 @@ export class ContestPublishProcessor extends WorkerHost {
     private readonly logger: Logger,
   ) {
     super();
+    this.logger.log('ContestPublishProcessor initialized');
   }
 
   async process(job: Job<{ contestId: number }>) {
     if (job.name !== 'publishContest') return;
-
     const { contestId } = job.data;
+
+    const counts = await this.publicationQueue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused',
+    );
+
+    this.logger.debug(
+      { contestId, counts },
+      'publishContest: publication queue counts',
+    );
 
     this.logger.debug({ ...jobMeta(job), contestId }, 'publishContest: start');
 
@@ -41,12 +55,45 @@ export class ContestPublishProcessor extends WorkerHost {
 
       let added = 0;
       for (const publicationId of publicationIds) {
-        await this.publicationQueue.add(
+        const publicationJob = await this.publicationQueue.add(
           'sendPublication',
           { publicationId },
           { jobId: `publication:${publicationId}:send` },
         );
-        added++;
+
+        setTimeout(async () => {
+          const reloaded = await this.publicationQueue.getJob(
+            publicationJob.id!,
+          );
+
+          this.logger.error(
+            {
+              pid: process.pid,
+              publicationId,
+              jobId: reloaded?.id,
+              jobName: reloaded?.name,
+              state: reloaded ? await reloaded.getState() : null,
+              data: reloaded?.data,
+              attemptsMade: reloaded?.attemptsMade,
+              failedReason: reloaded?.failedReason,
+              returnvalue: reloaded?.returnvalue,
+              processedOn: reloaded?.processedOn,
+              finishedOn: reloaded?.finishedOn,
+            },
+            'publishContest: sendPublication final details',
+          );
+        }, 1000);
+
+        this.logger.debug(
+          {
+            publicationId,
+            publicationJobId: publicationJob.id,
+            publicationJobName: publicationJob.name,
+            publicationJobState: await publicationJob.getState(),
+            publicationJobData: publicationJob.data,
+          },
+          'publishContest: sendPublication enqueued',
+        );
       }
 
       this.logger.debug(

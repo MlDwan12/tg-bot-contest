@@ -40,6 +40,9 @@ import { User } from 'src/modules/users/entities';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestsParticipateService } from './contest-participate.service';
 import { Channel } from 'src/modules/channels/entities';
+import { fromZonedTime } from 'date-fns-tz';
+import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.helper';
+import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
 
 @Injectable()
 export class ContestsService {
@@ -74,76 +77,63 @@ export class ContestsService {
   // ): Promise<Contest> {
   //   this.logger.log(`В сервисе создания конкурса`);
 
-  //   if (dto.startDate >= dto.endDate) {
+  //   const startDate = fromZonedTime(dto.startDate, 'Europe/Moscow');
+  //   const endDate = fromZonedTime(dto.endDate, 'Europe/Moscow');
+
+  //   if (startDate >= endDate) {
   //     throw new BadRequestException('startDate must be before endDate');
   //   }
 
   //   try {
   //     const creator = await this.adminService.findById(dto.creatorId);
 
-  //     const publishChannels = dto.publishChannelIds?.length
-  //       ? await this.channelService.getChannelsByParameters({
-  //           telegramId: In(dto.publishChannelIds),
-  //         })
-  //       : [];
-
-  //     const requiredChannels = dto.requiredChannelIds?.length
-  //       ? await this.channelService.getChannelsByParameters({
-  //           telegramId: In(dto.requiredChannelIds),
-  //         })
-  //       : [];
-
   //     if (!creator) throw new NotFoundException('Creator not found');
 
-  //     const imagePath = image
-  //       ? `/uploads/contests/${image.filename}`
-  //       : undefined;
+  //     const publishChannels = await this.getChannelsByTelegramIds(
+  //       dto.publishChannelIds,
+  //       'Один или несколько каналов публикации не найдены',
+  //     );
+
+  //     const requiredChannels = await this.getChannelsByTelegramIds(
+  //       dto.requiredChannelIds,
+  //       'Один или несколько обязательных каналов не найдены',
+  //     );
+
+  //     await this.validateBotPermissionsForPublishChannels(publishChannels);
+
+  //     const imagePath = this.resolveContestImagePath(image);
 
   //     const contest = await this.contestWriteRepo.create({
   //       name: dto.name,
   //       description: dto.description,
   //       winnerStrategy: dto.winnerStrategy,
   //       prizePlaces: dto.prizePlaces,
-  //       startDate: new Date(dto.startDate),
-  //       endDate: new Date(dto.endDate),
+  //       startDate,
+  //       endDate,
   //       status: ContestStatus.PENDING,
   //       creatorId: dto.creatorId,
   //       imagePath,
   //       buttonText: dto.buttonText || 'Участвовать',
   //     });
-  //     console.log(publishChannels);
 
-  //     if (publishChannels.length) {
-  //       const publicationTasks = publishChannels.map((channel) => ({
-  //         contestId: contest.id,
-  //         channelId: channel.id,
-  //         chatId: channel.telegramId,
-  //         status: PublicationStatus.PENDING,
-  //         payload: {
-  //           text: dto.postText || `${dto.name}\n\n${dto.description || ''}`,
-  //           buttonText: dto.buttonText || 'Участвовать',
-  //           buttonUrl: `${process.env.MINI_APP_URL}?startapp=${channel.telegramId}_${contest.id}`,
-  //           photoUrl: imagePath,
-  //         },
-  //       }));
+  //     await this.contestWriteRepo.setPublishChannels(
+  //       contest.id,
+  //       publishChannels.map((channel) => channel.id),
+  //     );
 
-  //       await this.contestWriteRepo.createPublications(publicationTasks);
+  //     await this.contestWriteRepo.setRequiredChannels(
+  //       contest.id,
+  //       requiredChannels.map((channel) => channel.id),
+  //     );
 
-  //       if (dto.publishChannelIds?.length) {
-  //         await this.contestWriteRepo.setPublishChannels(
-  //           contest.id,
-  //           dto.publishChannelIds,
-  //         );
-  //       }
-  //     }
-  //     console.log(1231231231);
-
-  //     if (dto.requiredChannelIds?.length) {
-  //       await this.contestWriteRepo.setRequiredChannels(
-  //         contest.id,
-  //         dto.requiredChannelIds,
-  //       );
-  //     }
+  //     await this.recreatePendingPublications({
+  //       contestId: contest.id,
+  //       channels: publishChannels,
+  //       name: dto.name,
+  //       description: dto.description,
+  //       buttonText: dto.buttonText,
+  //       imagePath,
+  //     });
 
   //     await this.contestJobsService.scheduleContest(
   //       contest.id,
@@ -164,29 +154,39 @@ export class ContestsService {
     dto: CreateContest,
     image?: Express.Multer.File,
   ): Promise<Contest> {
-    this.logger.log(`В сервисе создания конкурса`);
+    this.logger.log('В сервисе создания конкурса');
 
-    if (dto.startDate >= dto.endDate) {
+    const startDate = fromZonedTime(dto.startDate, 'Europe/Moscow');
+    const endDate = fromZonedTime(dto.endDate, 'Europe/Moscow');
+    const now = new Date();
+
+    const buttonText = dto.buttonText?.trim() || 'Участвовать';
+
+    if (startDate >= endDate) {
+      await deleteUploadedContestImage(image);
       throw new BadRequestException('startDate must be before endDate');
+    }
+
+    if (startDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be in the future');
+    }
+
+    if (endDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('endDate must be in the future');
     }
 
     try {
       const creator = await this.adminService.findById(dto.creatorId);
 
-      if (!creator) throw new NotFoundException('Creator not found');
+      if (!creator) {
+        throw new NotFoundException('Creator not found');
+      }
 
-      // const publishChannels = dto.publishChannelIds?.length
-      //   ? await this.channelService.getChannelsByParameters({
-      //       telegramId: In(dto.publishChannelIds),
-      //     })
-      //   : [];
-
-      // const requiredChannels = dto.requiredChannelIds?.length
-      //   ? await this.channelService.getChannelsByParameters({
-      //       telegramId: In(dto.requiredChannelIds),
-      //     })
-      //   : [];
-
+      // ВАЖНО:
+      // Сейчас метод ищет по telegramId, хотя поля называются publishChannelIds.
+      // Либо переименуй DTO-поля, либо поменяй метод.
       const publishChannels = await this.getChannelsByTelegramIds(
         dto.publishChannelIds,
         'Один или несколько каналов публикации не найдены',
@@ -197,23 +197,21 @@ export class ContestsService {
         'Один или несколько обязательных каналов не найдены',
       );
 
+      await this.validateBotPermissionsForPublishChannels(publishChannels);
+
       const imagePath = this.resolveContestImagePath(image);
 
-      // const imagePath = image
-      //   ? `/uploads/contests/${image.filename}`
-      //   : undefined;
-
       const contest = await this.contestWriteRepo.create({
-        name: dto.name,
-        description: dto.description,
+        name: dto.name.trim(),
+        description: dto.description?.trim(),
         winnerStrategy: dto.winnerStrategy,
         prizePlaces: dto.prizePlaces,
-        startDate: new Date(dto.startDate),
-        endDate: new Date(dto.endDate),
+        startDate,
+        endDate,
         status: ContestStatus.PENDING,
         creatorId: dto.creatorId,
         imagePath,
-        buttonText: dto.buttonText || 'Участвовать',
+        buttonText,
       });
 
       await this.contestWriteRepo.setPublishChannels(
@@ -226,44 +224,12 @@ export class ContestsService {
         requiredChannels.map((channel) => channel.id),
       );
 
-      // if (publishChannels.length) {
-      //   await this.recreatePendingPublications({
-      //     contestId: contest.id,
-      //     channels: publishChannels,
-      //     name: dto.name,
-      //     description: dto.description,
-      //     postText: dto.postText,
-      //     buttonText: dto.buttonText,
-      //     imagePath,
-      //   });
-
-      //   await this.contestWriteRepo.setPublishChannels(
-      //     contest.id,
-      //     publishChannels.map((channel) => channel.id),
-      //   );
-      //   // await this.contestWriteRepo.createPublications(publicationTasks);
-
-      //   // if (dto.publishChannelIds?.length) {
-      //   //   await this.contestWriteRepo.setPublishChannels(
-      //   //     contest.id,
-      //   //     publishChannels.map((channel) => channel.id),
-      //   //   );
-      //   // }
-      // }
-
-      // if (requiredChannels.length) {
-      //   await this.contestWriteRepo.setRequiredChannels(
-      //     contest.id,
-      //     requiredChannels.map((channel) => channel.id),
-      //   );
-      // }
-
       await this.recreatePendingPublications({
         contestId: contest.id,
         channels: publishChannels,
-        name: dto.name,
-        description: dto.description,
-        buttonText: dto.buttonText,
+        name: dto.name.trim(),
+        description: dto.description?.trim(),
+        buttonText,
         imagePath,
       });
 
@@ -273,11 +239,30 @@ export class ContestsService {
         contest.endDate,
       );
 
-      return this.contestReadRepo.findByIdWithRelations(
+      const createdContest = await this.contestReadRepo.findByIdWithRelations(
         contest.id,
-      ) as Promise<Contest>;
+      );
+
+      if (!createdContest) {
+        throw new NotFoundException(
+          `Созданный конкурс id=${contest.id} не удалось прочитать`,
+        );
+      }
+
+      return createdContest;
     } catch (error) {
-      this.logger.error(`Ошибка при создании конкурса: ${error}`);
+      await deleteUploadedContestImage(image);
+
+      this.logger.error(
+        {
+          error,
+          creatorId: dto.creatorId,
+          publishChannelIds: dto.publishChannelIds,
+          requiredChannelIds: dto.requiredChannelIds,
+        },
+        'Ошибка при создании конкурса',
+      );
+
       throw error;
     }
   }
@@ -358,228 +343,577 @@ export class ContestsService {
     });
   }
 
+  // async updateContest(
+  //   contestId: number,
+  //   dto: UpdateContestDto,
+  //   image?: Express.Multer.File,
+  // ): Promise<Contest> {
+  //   ///TODO: типизировать нормально, а не any
+  //   const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
+
+  //   this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
+
+  //   if (!contest) {
+  //     throw new NotFoundException('Конкурс не найден');
+  //   }
+
+  //   const nextStartDate = dto.startDate
+  //     ? this.parseContestDate(dto.startDate)
+  //     : contest.startDate;
+
+  //   const nextEndDate = dto.endDate
+  //     ? this.parseContestDate(dto.endDate)
+  //     : contest.endDate;
+
+  //   if (nextStartDate >= nextEndDate) {
+  //     throw new BadRequestException('startDate must be before endDate');
+  //   }
+
+  //   if (
+  //     dto.publishChannelIds !== undefined &&
+  //     contest.status !== ContestStatus.PENDING
+  //   ) {
+  //     throw new BadRequestException(
+  //       'Нельзя менять каналы публикации после запуска конкурса',
+  //     );
+  //   }
+
+  //   const nextPrizePlaces: number = dto.prizePlaces ?? contest.prizePlaces;
+
+  //   // let imagePath = contest.imagePath;
+  //   const imagePath = this.resolveContestImagePath(image, contest.imagePath);
+
+  //   // if (image) {
+  //   //   if (!image.filename) {
+  //   //     throw new BadRequestException('Файл изображения загружен некорректно');
+  //   //   }
+
+  //   //   imagePath = `/uploads/contests/${image.filename}`;
+  //   // }
+
+  //   const publishChannels =
+  //     dto.publishChannelIds !== undefined
+  //       ? await this.getChannelsByTelegramIds(
+  //           dto.publishChannelIds,
+  //           'Один или несколько каналов публикации не найдены',
+  //         )
+  //       : null;
+
+  //   const requiredChannels =
+  //     dto.requiredChannelIds !== undefined
+  //       ? await this.getChannelsByTelegramIds(
+  //           dto.requiredChannelIds,
+  //           'Один или несколько обязательных каналов не найдены',
+  //         )
+  //       : null;
+
+  //   // let publishGroupIds: number[] = [];
+  //   // let requiredGroupIds: number[] = [];
+
+  //   // if (dto.publishChannelIds !== undefined) {
+  //   //   if (dto.publishChannelIds.length) {
+  //   //     const publishChannels =
+  //   //       await this.channelService.getChannelsByParameters({
+  //   //         telegramId: In(dto.publishChannelIds),
+  //   //       });
+
+  //   //     if (publishChannels.length !== dto.publishChannelIds.length) {
+  //   //       throw new NotFoundException(
+  //   //         'Один или несколько каналов публикации не найдены',
+  //   //       );
+  //   //     }
+
+  //   //     const publishChannelsMap = new Map(
+  //   //       publishChannels.map((channel) => [
+  //   //         String(channel.telegramId),
+  //   //         channel,
+  //   //       ]),
+  //   //     );
+
+  //   //     publishGroupIds = dto.publishChannelIds.map((telegramId) => {
+  //   //       const channel = publishChannelsMap.get(String(telegramId));
+
+  //   //       if (!channel) {
+  //   //         throw new NotFoundException(
+  //   //           `Канал публикации с telegramId ${telegramId} не найден`,
+  //   //         );
+  //   //       }
+
+  //   //       return channel.id;
+  //   //     });
+  //   //   } else {
+  //   //     publishGroupIds = [];
+  //   //   }
+  //   // }
+
+  //   // if (dto.requiredChannelIds !== undefined) {
+  //   //   if (dto.requiredChannelIds.length) {
+  //   //     const requiredChannels =
+  //   //       await this.channelService.getChannelsByParameters({
+  //   //         telegramId: In(dto.requiredChannelIds),
+  //   //       });
+
+  //   //     if (requiredChannels.length !== dto.requiredChannelIds.length) {
+  //   //       throw new NotFoundException(
+  //   //         'Один или несколько обязательных каналов не найдены',
+  //   //       );
+  //   //     }
+
+  //   //     const requiredChannelsMap = new Map(
+  //   //       requiredChannels.map((channel) => [
+  //   //         String(channel.telegramId),
+  //   //         channel,
+  //   //       ]),
+  //   //     );
+
+  //   //     requiredGroupIds = dto.requiredChannelIds.map((telegramId) => {
+  //   //       const channel = requiredChannelsMap.get(String(telegramId));
+
+  //   //       if (!channel) {
+  //   //         throw new NotFoundException(
+  //   //           `Обязательный канал с telegramId ${telegramId} не найден`,
+  //   //         );
+  //   //       }
+
+  //   //       return channel.id;
+  //   //     });
+  //   //   } else {
+  //   //     requiredGroupIds = [];
+  //   //   }
+  //   // }
+
+  //   if (dto.winners !== undefined) {
+  //     const resolved = await Promise.all(
+  //       dto.winners.map((winnerId) =>
+  //         this.usersService.findByTelegramId(winnerId.toString()),
+  //       ),
+  //     );
+
+  //     const orderedWinners = resolved.filter(
+  //       (user): user is User => user !== null,
+  //     );
+
+  //     await this.contestWinnerService.saveResolvedWinners(
+  //       contestId,
+  //       orderedWinners,
+  //       nextPrizePlaces,
+  //     );
+
+  //     await this.contestWriteRepo.replaceWinners(
+  //       contestId,
+  //       orderedWinners.map((winner, index) => ({
+  //         contestId,
+  //         userId: winner.id,
+  //         place: index + 1,
+  //       })),
+  //     );
+  //   }
+
+  //   await this.contestWriteRepo.update(contestId, {
+  //     name: dto.name ?? contest.name,
+  //     description: dto.description ?? contest.description,
+  //     winnerStrategy: dto.winnerStrategy ?? contest.winnerStrategy,
+  //     prizePlaces: nextPrizePlaces,
+  //     startDate: nextStartDate,
+  //     endDate: nextEndDate,
+  //     status: dto.status ?? contest.status,
+  //     imagePath,
+  //     buttonText: dto.buttonText ?? contest.buttonText,
+  //   });
+
+  //   if (publishChannels !== null) {
+  //     await this.contestWriteRepo.setPublishChannels(
+  //       contestId,
+  //       publishChannels.map((channel) => channel.id),
+  //     );
+
+  //     await this.recreatePendingPublications({
+  //       contestId,
+  //       channels: publishChannels,
+  //       name: dto.name ?? contest.name,
+  //       description: dto.description ?? contest.description,
+  //       buttonText: dto.buttonText ?? contest.buttonText,
+  //       imagePath,
+  //     });
+  //   }
+
+  //   if (requiredChannels !== null) {
+  //     await this.contestWriteRepo.setRequiredChannels(
+  //       contestId,
+  //       requiredChannels.map((channel) => channel.id),
+  //     );
+  //   }
+
+  //   const updatedContest =
+  //     await this.contestReadRepo.findByIdWithRelations(contestId);
+
+  //   if (!updatedContest) {
+  //     throw new NotFoundException('Конкурс не найден после обновления');
+  //   }
+
+  //   await this.syncPublishedPosts(updatedContest);
+
+  //   try {
+  //     await this.contestJobsService.scheduleContest(
+  //       updatedContest.id,
+  //       updatedContest.startDate,
+  //       updatedContest.endDate,
+  //     );
+  //   } catch (error) {
+  //     this.logger.error(
+  //       { err: error, contestId: updatedContest.id },
+  //       'Ошибка при пересоздании jobs конкурса',
+  //     );
+  //   }
+
+  //   return updatedContest;
+  // }
+
   async updateContest(
     contestId: number,
     dto: UpdateContestDto,
     image?: Express.Multer.File,
   ): Promise<Contest> {
-    ///TODO: типизировать нормально, а не any
     const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
 
     this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
 
     if (!contest) {
+      await deleteUploadedContestImage(image);
       throw new NotFoundException('Конкурс не найден');
     }
 
+    const oldImagePath = contest.imagePath;
+
     const nextStartDate = dto.startDate
-      ? new Date(dto.startDate)
+      ? this.parseContestDate(dto.startDate)
       : contest.startDate;
 
-    const nextEndDate = dto.endDate ? new Date(dto.endDate) : contest.endDate;
+    const nextEndDate = dto.endDate
+      ? this.parseContestDate(dto.endDate)
+      : contest.endDate;
 
     if (nextStartDate >= nextEndDate) {
+      await deleteUploadedContestImage(image);
       throw new BadRequestException('startDate must be before endDate');
     }
+
+    const datesChanged =
+      nextStartDate.getTime() !== new Date(contest.startDate).getTime() ||
+      nextEndDate.getTime() !== new Date(contest.endDate).getTime();
 
     if (
       dto.publishChannelIds !== undefined &&
       contest.status !== ContestStatus.PENDING
     ) {
+      await deleteUploadedContestImage(image);
       throw new BadRequestException(
         'Нельзя менять каналы публикации после запуска конкурса',
       );
     }
 
-    const nextPrizePlaces: number = dto.prizePlaces ?? contest.prizePlaces;
-
-    // let imagePath = contest.imagePath;
+    const nextPrizePlaces = dto.prizePlaces ?? contest.prizePlaces;
+    const nextWinnerStrategy = dto.winnerStrategy ?? contest.winnerStrategy;
     const imagePath = this.resolveContestImagePath(image, contest.imagePath);
 
-    // if (image) {
-    //   if (!image.filename) {
-    //     throw new BadRequestException('Файл изображения загружен некорректно');
-    //   }
-
-    //   imagePath = `/uploads/contests/${image.filename}`;
-    // }
-
-    const publishChannels =
-      dto.publishChannelIds !== undefined
-        ? await this.getChannelsByTelegramIds(
-            dto.publishChannelIds,
-            'Один или несколько каналов публикации не найдены',
-          )
-        : null;
-
-    const requiredChannels =
-      dto.requiredChannelIds !== undefined
-        ? await this.getChannelsByTelegramIds(
-            dto.requiredChannelIds,
-            'Один или несколько обязательных каналов не найдены',
-          )
-        : null;
-
-    // let publishGroupIds: number[] = [];
-    // let requiredGroupIds: number[] = [];
-
-    // if (dto.publishChannelIds !== undefined) {
-    //   if (dto.publishChannelIds.length) {
-    //     const publishChannels =
-    //       await this.channelService.getChannelsByParameters({
-    //         telegramId: In(dto.publishChannelIds),
-    //       });
-
-    //     if (publishChannels.length !== dto.publishChannelIds.length) {
-    //       throw new NotFoundException(
-    //         'Один или несколько каналов публикации не найдены',
-    //       );
-    //     }
-
-    //     const publishChannelsMap = new Map(
-    //       publishChannels.map((channel) => [
-    //         String(channel.telegramId),
-    //         channel,
-    //       ]),
-    //     );
-
-    //     publishGroupIds = dto.publishChannelIds.map((telegramId) => {
-    //       const channel = publishChannelsMap.get(String(telegramId));
-
-    //       if (!channel) {
-    //         throw new NotFoundException(
-    //           `Канал публикации с telegramId ${telegramId} не найден`,
-    //         );
-    //       }
-
-    //       return channel.id;
-    //     });
-    //   } else {
-    //     publishGroupIds = [];
-    //   }
-    // }
-
-    // if (dto.requiredChannelIds !== undefined) {
-    //   if (dto.requiredChannelIds.length) {
-    //     const requiredChannels =
-    //       await this.channelService.getChannelsByParameters({
-    //         telegramId: In(dto.requiredChannelIds),
-    //       });
-
-    //     if (requiredChannels.length !== dto.requiredChannelIds.length) {
-    //       throw new NotFoundException(
-    //         'Один или несколько обязательных каналов не найдены',
-    //       );
-    //     }
-
-    //     const requiredChannelsMap = new Map(
-    //       requiredChannels.map((channel) => [
-    //         String(channel.telegramId),
-    //         channel,
-    //       ]),
-    //     );
-
-    //     requiredGroupIds = dto.requiredChannelIds.map((telegramId) => {
-    //       const channel = requiredChannelsMap.get(String(telegramId));
-
-    //       if (!channel) {
-    //         throw new NotFoundException(
-    //           `Обязательный канал с telegramId ${telegramId} не найден`,
-    //         );
-    //       }
-
-    //       return channel.id;
-    //     });
-    //   } else {
-    //     requiredGroupIds = [];
-    //   }
-    // }
-
-    if (dto.winners !== undefined) {
-      const resolved = await Promise.all(
-        dto.winners.map((winnerId) =>
-          this.usersService.findByTelegramId(winnerId.toString()),
-        ),
-      );
-
-      const orderedWinners = resolved.filter(
-        (user): user is User => user !== null,
-      );
-
-      await this.contestWinnerService.saveResolvedWinners(
-        contestId,
-        orderedWinners,
-        nextPrizePlaces,
-      );
-
-      await this.contestWriteRepo.replaceWinners(
-        contestId,
-        orderedWinners.map((winner, index) => ({
-          contestId,
-          userId: winner.id,
-          place: index + 1,
-        })),
-      );
-    }
-
-    await this.contestWriteRepo.update(contestId, {
-      name: dto.name ?? contest.name,
-      description: dto.description ?? contest.description,
-      winnerStrategy: dto.winnerStrategy ?? contest.winnerStrategy,
-      prizePlaces: nextPrizePlaces,
-      startDate: nextStartDate,
-      endDate: nextEndDate,
-      status: dto.status ?? contest.status,
-      imagePath,
-      buttonText: dto.buttonText ?? contest.buttonText,
-    });
-
-    if (publishChannels !== null) {
-      await this.contestWriteRepo.setPublishChannels(
-        contestId,
-        publishChannels.map((channel) => channel.id),
-      );
-
-      await this.recreatePendingPublications({
-        contestId,
-        channels: publishChannels,
-        name: dto.name ?? contest.name,
-        description: dto.description ?? contest.description,
-        buttonText: dto.buttonText ?? contest.buttonText,
-        imagePath,
-      });
-    }
-
-    if (requiredChannels !== null) {
-      await this.contestWriteRepo.setRequiredChannels(
-        contestId,
-        requiredChannels.map((channel) => channel.id),
-      );
-    }
-
-    const updatedContest =
-      await this.contestReadRepo.findByIdWithRelations(contestId);
-
-    if (!updatedContest) {
-      throw new NotFoundException('Конкурс не найден после обновления');
-    }
-
-    await this.syncPublishedPosts(updatedContest);
-
+    const nextName = dto.name?.trim() || contest.name;
+    const nextDescription =
+      dto.description !== undefined
+        ? dto.description?.trim() || undefined
+        : contest.description;
+    const nextButtonText =
+      dto.buttonText !== undefined
+        ? dto.buttonText.trim() || 'Участвовать'
+        : contest.buttonText || 'Участвовать';
+    let contestUpdated = false;
     try {
-      await this.contestJobsService.scheduleContest(
-        updatedContest.id,
-        updatedContest.startDate,
-        updatedContest.endDate,
-      );
-    } catch (error) {
-      this.logger.error(
-        { err: error, contestId: updatedContest.id },
-        'Ошибка при пересоздании jobs конкурса',
-      );
-    }
+      const publishChannels =
+        dto.publishChannelIds !== undefined
+          ? await this.getChannelsByTelegramIds(
+              dto.publishChannelIds,
+              'Один или несколько каналов публикации не найдены',
+            )
+          : null;
 
-    return updatedContest;
+      const requiredChannels =
+        dto.requiredChannelIds !== undefined
+          ? await this.getChannelsByTelegramIds(
+              dto.requiredChannelIds,
+              'Один или несколько обязательных каналов не найдены',
+            )
+          : null;
+
+      // if (dto.winners !== undefined) {
+      //   const uniqueWinnerIds = [...new Set(dto.winners)];
+
+      //   if (uniqueWinnerIds.length !== dto.winners.length) {
+      //     throw new BadRequestException(
+      //       'Список победителей содержит дубликаты',
+      //     );
+      //   }
+
+      //   if (uniqueWinnerIds.length > nextPrizePlaces) {
+      //     throw new BadRequestException(
+      //       'Количество победителей не может быть больше prizePlaces',
+      //     );
+      //   }
+
+      //   const resolved = await Promise.all(
+      //     uniqueWinnerIds.map((winnerId) =>
+      //       this.usersService.findByTelegramId(winnerId.toString()),
+      //     ),
+      //   );
+
+      //   const notFoundWinnerIds = uniqueWinnerIds.filter(
+      //     (_, index) => !resolved[index],
+      //   );
+
+      //   if (notFoundWinnerIds.length) {
+      //     throw new NotFoundException(
+      //       `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+      //     );
+      //   }
+
+      //   const orderedWinners = resolved as User[];
+
+      //   await this.contestWinnerService.saveResolvedWinners(
+      //     contestId,
+      //     orderedWinners,
+      //     nextPrizePlaces,
+      //   );
+
+      //   await this.contestWriteRepo.replaceWinners(
+      //     contestId,
+      //     orderedWinners.map((winner, index) => ({
+      //       contestId,
+      //       userId: winner.id,
+      //       place: index + 1,
+      //     })),
+      //   );
+      // }
+      if (nextWinnerStrategy === WinnerStrategy.MANUAL) {
+        if (dto.winners !== undefined) {
+          const uniqueWinnerIds = [...new Set(dto.winners)];
+
+          if (uniqueWinnerIds.length !== dto.winners.length) {
+            throw new BadRequestException(
+              'Список победителей содержит дубликаты',
+            );
+          }
+
+          if (uniqueWinnerIds.length !== nextPrizePlaces) {
+            throw new BadRequestException(
+              'Количество победителей должно соответствовать количеству призовых мест',
+            );
+          }
+
+          const resolved = await Promise.all(
+            uniqueWinnerIds.map((winnerId) =>
+              this.usersService.findByTelegramId(winnerId.toString()),
+            ),
+          );
+
+          const notFoundWinnerIds = uniqueWinnerIds.filter(
+            (_, index) => !resolved[index],
+          );
+
+          if (notFoundWinnerIds.length) {
+            throw new NotFoundException(
+              `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+            );
+          }
+
+          const orderedWinners = resolved as User[];
+
+          await this.contestWriteRepo.replaceWinners(
+            contestId,
+            orderedWinners.map((winner, index) => ({
+              contestId,
+              userId: winner.id,
+              place: index + 1,
+            })),
+          );
+        }
+      } else {
+        await this.contestWriteRepo.replaceWinners(contestId, []);
+      }
+      // await this.contestWriteRepo.update(contestId, {
+      //   name: nextName,
+      //   description: nextDescription,
+      //   winnerStrategy: dto.winnerStrategy ?? contest.winnerStrategy,
+      //   prizePlaces: nextPrizePlaces,
+      //   startDate: nextStartDate,
+      //   endDate: nextEndDate,
+      //   status: dto.status ?? contest.status,
+      //   imagePath,
+      //   buttonText: nextButtonText,
+      // });
+
+      await this.contestWriteRepo.update(contestId, {
+        name: nextName,
+        description: nextDescription,
+        winnerStrategy: nextWinnerStrategy,
+        prizePlaces: nextPrizePlaces,
+        startDate: nextStartDate,
+        endDate: nextEndDate,
+        status: dto.status ?? contest.status,
+        imagePath,
+        buttonText: nextButtonText,
+      });
+      contestUpdated = true;
+
+      const actualPublishChannels =
+        publishChannels ?? contest.publishChannels ?? [];
+
+      if (publishChannels !== null) {
+        await this.contestWriteRepo.setPublishChannels(
+          contestId,
+          publishChannels.map((channel) => channel.id),
+        );
+      }
+
+      // if (shouldRefreshPendingPublications) {
+      //   await this.recreatePendingPublications({
+      //     contestId,
+      //     channels: actualPublishChannels,
+      //     name: nextName,
+      //     description: nextDescription,
+      //     buttonText: nextButtonText,
+      //     imagePath,
+      //   });
+      // }
+
+      // if (publishChannels !== null) {
+      //   await this.contestWriteRepo.setPublishChannels(
+      //     contestId,
+      //     publishChannels.map((channel) => channel.id),
+      //   );
+
+      //   await this.recreatePendingPublications({
+      //     contestId,
+      //     channels: publishChannels,
+      //     name: nextName,
+      //     description: nextDescription,
+      //     buttonText: nextButtonText,
+      //     imagePath,
+      //   });
+      // }
+
+      if (requiredChannels !== null) {
+        await this.contestWriteRepo.setRequiredChannels(
+          contestId,
+          requiredChannels.map((channel) => channel.id),
+        );
+      }
+
+      const updatedContest =
+        await this.contestReadRepo.findByIdWithRelations(contestId);
+
+      if (!updatedContest) {
+        throw new NotFoundException('Конкурс не найден после обновления');
+      }
+
+      if (datesChanged) {
+        try {
+          await this.contestJobsService.rescheduleContest(
+            updatedContest.id,
+            updatedContest.startDate,
+            updatedContest.endDate,
+          );
+        } catch (error) {
+          this.logger.error(
+            {
+              err: error,
+              contestId: updatedContest.id,
+              startDate: updatedContest.startDate,
+              endDate: updatedContest.endDate,
+              status: updatedContest.status,
+            },
+            'Ошибка при перепланировании jobs конкурса',
+          );
+          throw error;
+        }
+      }
+
+      try {
+        await this.syncPublishedPosts(updatedContest);
+      } catch (error) {
+        this.logger.error(
+          { err: error, contestId: updatedContest.id },
+          'Ошибка при синхронизации опубликованных постов',
+        );
+      }
+
+      const shouldRefreshPendingPublications =
+        contest.status === ContestStatus.PENDING &&
+        (dto.publishChannelIds !== undefined ||
+          dto.name !== undefined ||
+          dto.description !== undefined ||
+          dto.buttonText !== undefined ||
+          image !== undefined);
+
+      if (shouldRefreshPendingPublications) {
+        const channels =
+          publishChannels ??
+          (Array.isArray(updatedContest.publishChannels) &&
+          updatedContest.publishChannels.length
+            ? await this.getChannelsByTelegramIds(
+                updatedContest.publishChannels.map((channel) =>
+                  Number(channel.telegramId),
+                ),
+                'Один или несколько каналов публикации не найдены',
+              )
+            : []);
+
+        this.logger.debug(
+          {
+            contestId,
+            channelsCount: channels.length,
+            channels,
+            imagePath: updatedContest.imagePath,
+          },
+          'Before recreatePendingPublications',
+        );
+
+        try {
+          await this.recreatePendingPublications({
+            contestId,
+            channels,
+            name: updatedContest.name,
+            description: updatedContest.description,
+            buttonText: updatedContest.buttonText,
+            imagePath: updatedContest.imagePath,
+          });
+        } catch (error) {
+          this.logger.error(
+            {
+              err: error,
+              contestId,
+              channels,
+              imagePath: updatedContest.imagePath,
+            },
+            'Ошибка при пересоздании pending publications',
+          );
+          throw error;
+        }
+      }
+      if (image && oldImagePath && oldImagePath !== imagePath) {
+        await deleteContestImageByPath(oldImagePath);
+      }
+
+      return updatedContest;
+    } catch (error) {
+      if (!contestUpdated) {
+        await deleteUploadedContestImage(image);
+      }
+
+      this.logger.error(
+        { err: error, contestId, dto },
+        'Ошибка при обновлении конкурса',
+      );
+
+      throw error;
+    }
   }
 
   /**
@@ -611,15 +945,29 @@ export class ContestsService {
       await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
     if (!changed) return;
 
-    await this.contestWinnerService.resolveAndSaveWinners(contest);
+    const participants =
+      await this.contestParticipationReadRepo.findManyByContestId(contest.id);
+
+    const hasParticipants = participants.length > 0;
+
+    if (hasParticipants) {
+      await this.contestWinnerService.resolveAndSaveWinners(contest);
+    }
 
     const publicationIds =
       await this.getPublishedPublicationIdsForContest(contestId);
-
+    this.logger.warn(
+      {
+        contestId,
+        hasParticipants,
+        publicationIds,
+      },
+      'finishContestIdempotent: publications for finished button update',
+    );
     for (const publicationId of publicationIds) {
       await this.publicationQueue.add(
         'updateFinishedButton',
-        { publicationId },
+        { publicationId, hasParticipants },
         {
           jobId: `publication:${publicationId}:finish-button`,
         },
@@ -676,7 +1024,12 @@ export class ContestsService {
           chatId: String(publication.chatId),
           messageId: publication.telegramMessageId,
           text: `${contest.name}\n\n${contest.description || ''}`,
-          buttonText: contest.buttonText || 'Участвовать',
+          buttonText:
+            contest.status === ContestStatus.COMPLETED
+              ? 'Конкурс завершён'
+              : contest.participants.length > 0
+                ? `${contest.buttonText ?? 'Участвовать'} (${contest.participants.length})`
+                : (contest.buttonText ?? 'Участвовать'),
           buttonUrl: `${miniAppUrl}?startapp=${publication.chatId}_${contest.id}`,
           photoUrl,
         });
@@ -878,12 +1231,6 @@ export class ContestsService {
 
     await this.contestWinnerService.resolveAndSaveWinners(contest);
 
-    // await this.contestWinnerService.saveResolvedWinners(
-    //   contest.id,
-    //   winners,
-    //   contest.prizePlaces,
-    // );
-
     await this.contestWriteRepo.update(contest.id, {
       status: ContestStatus.COMPLETED,
       buttonText: 'Конкурс завершён',
@@ -946,6 +1293,39 @@ export class ContestsService {
     return updatedContest;
   }
 
+  // private async getChannelsByTelegramIds(
+  //   telegramIds?: number[],
+  //   errorMessage = 'Один или несколько каналов не найдены',
+  // ): Promise<Channel[]> {
+  //   if (!telegramIds?.length) {
+  //     return [];
+  //   }
+
+  //   const channels = await this.channelService.getChannelsByParameters({
+  //     telegramId: In(telegramIds),
+  //   });
+
+  //   if (channels.length !== telegramIds.length) {
+  //     throw new NotFoundException(errorMessage);
+  //   }
+
+  //   const channelsMap = new Map(
+  //     channels.map((channel) => [String(channel.telegramId), channel]),
+  //   );
+
+  //   return telegramIds.map((telegramId) => {
+  //     const channel = channelsMap.get(String(telegramId));
+
+  //     if (!channel) {
+  //       throw new NotFoundException(
+  //         `Канал с telegramId ${telegramId} не найден`,
+  //       );
+  //     }
+
+  //     return channel;
+  //   });
+  // }
+
   private async getChannelsByTelegramIds(
     telegramIds?: number[],
     errorMessage = 'Один или несколько каналов не найдены',
@@ -954,11 +1334,19 @@ export class ContestsService {
       return [];
     }
 
+    const uniqueTelegramIds = [...new Set(telegramIds)];
+
+    if (uniqueTelegramIds.length !== telegramIds.length) {
+      throw new BadRequestException(
+        'Список каналов содержит дублирующиеся telegramId',
+      );
+    }
+
     const channels = await this.channelService.getChannelsByParameters({
-      telegramId: In(telegramIds),
+      telegramId: In(uniqueTelegramIds),
     });
 
-    if (channels.length !== telegramIds.length) {
+    if (channels.length !== uniqueTelegramIds.length) {
       throw new NotFoundException(errorMessage);
     }
 
@@ -966,7 +1354,7 @@ export class ContestsService {
       channels.map((channel) => [String(channel.telegramId), channel]),
     );
 
-    return telegramIds.map((telegramId) => {
+    return uniqueTelegramIds.map((telegramId) => {
       const channel = channelsMap.get(String(telegramId));
 
       if (!channel) {
@@ -984,7 +1372,7 @@ export class ContestsService {
     channels: Channel[];
     name: string;
     description?: string;
-    postText?: string;
+    // postText?: string;
     buttonText?: string;
     imagePath?: string;
   }): Array<Partial<ContestPublication>> {
@@ -1151,6 +1539,60 @@ export class ContestsService {
           'Ошибка при обновлении кнопки счётчика участников',
         );
       }
+    }
+  }
+
+  private readonly APP_TIME_ZONE = 'Europe/Moscow';
+
+  private parseContestDate(date: string | Date): Date {
+    const source =
+      date instanceof Date
+        ? `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}`
+        : date;
+
+    return fromZonedTime(source, this.APP_TIME_ZONE);
+  }
+
+  private async validateBotPermissionsForPublishChannels(
+    channels: Channel[],
+  ): Promise<void> {
+    const errors: string[] = [];
+
+    for (const channel of channels) {
+      if (!channel.telegramId) {
+        errors.push(
+          `У канала "${channel.name ?? channel.id}" отсутствует telegramId`,
+        );
+        continue;
+      }
+
+      const check = await this.telegramService.checkBotChannelPermissions(
+        Number(channel.telegramId),
+      );
+
+      const channelLabel =
+        channel.name ?? channel.telegramUsername ?? channel.telegramId;
+
+      if (!check.exists) {
+        errors.push(`Бот не найден в канале "${channelLabel}"`);
+        continue;
+      }
+
+      if (!check.isAdmin) {
+        errors.push(`Бот не администратор канала "${channelLabel}"`);
+      }
+
+      if (!check.canPost) {
+        errors.push(`Нет права на публикацию в "${channelLabel}"`);
+      }
+
+      if (!check.canEdit) {
+        errors.push(`Нет права на редактирование в "${channelLabel}"`);
+      }
+    }
+
+    if (errors.length) {
+      throw new BadRequestException(errors.join('; '));
     }
   }
 }
