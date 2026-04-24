@@ -50,10 +50,10 @@ export class ContestWinnerService {
         'Для конкурса должно быть указано корректное количество призовых мест',
       );
     }
-    const manual = contest.participants?.length
+    const manual = contest.winners?.length
       ? WinnerStrategy.MANUAL
       : WinnerStrategy.RANDOM;
-    console.log(11111111111, manual);
+    console.log(11111111111, manual, contest.winners?.length);
 
     switch (manual) {
       case WinnerStrategy.MANUAL:

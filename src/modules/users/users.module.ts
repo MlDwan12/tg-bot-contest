@@ -14,6 +14,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { AuthModule } from '../auth/auth.module';
 import { MailingMessageEntity } from './entities/mailing-message.entity';
 import { MailingCleanupService } from './services/mailing-cleanup.service';
+import { MailingJobEntity } from './entities/mailing-jobs.entity';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { MailingCleanupService } from './services/mailing-cleanup.service';
       User,
       ContestParticipation,
       MailingMessageEntity,
+      MailingJobEntity,
     ]),
     BotModule,
     ContestsModule,

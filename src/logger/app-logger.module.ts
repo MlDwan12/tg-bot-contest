@@ -11,6 +11,10 @@ import { LoggerModule } from 'nestjs-pino';
       useFactory: (config: ConfigService) => {
         const isProd = config.get('NODE_ENV') === 'production';
         const pretty = config.get<boolean>('LOG_PRETTY', !isProd);
+        const redactFromEnv = config
+          .get<string>('LOG_REDACT')
+          ?.split(',')
+          .map((s) => s.trim());
 
         return {
           pinoHttp: {
@@ -26,12 +30,18 @@ import { LoggerModule } from 'nestjs-pino';
                 }
               : undefined,
 
-            redact: config.get<string>('LOG_REDACT')?.split(',') || [
-              'req.headers.authorization',
-              'req.headers.cookie',
-            ],
+            redact:
+              redactFromEnv ||
+              (isProd
+                ? [
+                    'req.headers.authorization',
+                    'req.headers.cookie',
+                    'req.body.password',
+                    'req.body.token',
+                  ]
+                : ['req.headers.authorization', 'req.headers.cookie']),
 
-            autoLogging: true, // логирует req/res автоматически
+            autoLogging: false, // true логирует req/res автоматически
             serializers: {
               req(req: IncomingMessage & { url?: string }) {
                 if (req.url) {

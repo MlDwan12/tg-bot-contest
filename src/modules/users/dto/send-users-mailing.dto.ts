@@ -66,9 +66,9 @@ export class SendUsersMailingDto {
   type: UserMailingType;
 
   // text обязателен, только если НЕ передан contestId
+  @IsOptional()
   @ValidateIf((o) => o.contestId === undefined)
   @IsString()
-  @IsNotEmpty()
   text?: string;
 
   // для USER userId обязателен
@@ -80,7 +80,6 @@ export class SendUsersMailingDto {
   // для GROUP groupId обязателен
   @ValidateIf((o) => o.type === UserMailingType.GROUP)
   @IsString()
-  @IsNotEmpty()
   groupId?: string;
 
   // contestId сам по себе опционален
@@ -94,7 +93,6 @@ export class SendUsersMailingDto {
   // - обязателен, если передан buttonUrl
   @ValidateIf((o) => o.contestId === undefined && o.buttonUrl !== undefined)
   @IsString()
-  @IsNotEmpty()
   buttonText?: string;
 
   // buttonUrl:
@@ -102,6 +100,5 @@ export class SendUsersMailingDto {
   // - обязателен, если передан buttonText
   @ValidateIf((o) => o.contestId === undefined && o.buttonText !== undefined)
   @IsUrl({ require_tld: false }, { message: 'buttonUrl must be a valid URL' })
-  @IsNotEmpty()
   buttonUrl?: string;
 }

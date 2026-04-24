@@ -16,6 +16,7 @@ import { Logger } from 'nestjs-pino';
 import { ContestPublication } from 'src/modules/contests/entities';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { MailingJobEntity } from '../entities/mailing-jobs.entity';
 
 @Injectable()
 export class UsersMailingService {
@@ -24,6 +25,8 @@ export class UsersMailingService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(ContestParticipation)
     private readonly participationRepository: Repository<ContestParticipation>,
+    @InjectRepository(MailingJobEntity)
+    private readonly mailingJobRepo: Repository<MailingJobEntity>,
     @InjectQueue('user-mailing')
     private readonly mailingQueue: Queue,
     private readonly telegramService: TelegramService,
@@ -41,8 +44,6 @@ export class UsersMailingService {
 
     this.validateButton(dto);
 
-    await this.notifyAdminsAboutMailingStart(dto, image);
-
     const users = await this.getRecipients(dto);
 
     const publication = dto.contestId
@@ -51,9 +52,43 @@ export class UsersMailingService {
 
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
 
+    await this.notifyAdminsAboutMailingStart(dto, image);
+
     const imagePath = image ? `/uploads/mailings/${image.filename}` : undefined;
     const finalButtonUrl = this.resolveButtonUrl(dto, publication);
+    const text = dto.text || publication?.payload?.text;
+    const finalImagePath = imagePath || publication?.payload?.photoUrl;
+    const buttonText = dto.buttonText || publication?.payload?.buttonText;
+
     const jobId = `mailing-${Date.now()}`;
+
+    const recipientsWithTelegram = users.filter((user) => !!user.telegramId);
+    const skippedCount = users.length - recipientsWithTelegram.length;
+
+    await this.mailingJobRepo.save({
+      id: jobId,
+      type: dto.type,
+      initiatorUserId: dto.userId ?? null,
+      contestId: dto.contestId ?? null,
+      groupId: dto.groupId ? String(dto.groupId) : null,
+      totalRecipients: users.length,
+      queuedCount: recipientsWithTelegram.length,
+      skippedCount,
+      sentCount: 0,
+      failedCount: 0,
+      deletedCount: 0,
+      deleteFailedCount: 0,
+      deleteAfter: this.getNextDayDeleteDate(),
+      deletedAt: null,
+      status: 'processing',
+      text: text ?? null,
+      imagePath: finalImagePath ?? null,
+      buttonText: buttonText ?? null,
+      buttonUrl: finalButtonUrl ?? null,
+      startedAt: new Date(),
+      finishedAt: null,
+      error: null,
+    });
 
     await this.mailingQueue.addBulk(
       users
@@ -65,8 +100,8 @@ export class UsersMailingService {
             telegramId: user.telegramId,
             userId: user.id,
             text: dto.text || publication?.payload?.text,
-            imagePath: imagePath || publication?.payload?.photoUrl,
-            buttonText: dto.buttonText || publication?.payload?.buttonText,
+            imagePath: finalImagePath,
+            buttonText,
             buttonUrl: finalButtonUrl,
           },
         })),
@@ -76,7 +111,7 @@ export class UsersMailingService {
       `Рассылка поставлена в очередь: jobId=${jobId}, count=${users.length}`,
     );
 
-    return { jobId, enqueuedCount: users.length };
+    return { jobId, enqueuedCount: recipientsWithTelegram.length };
   }
 
   private validateButton(dto: SendUsersMailingDto): void {
@@ -283,12 +318,28 @@ export class UsersMailingService {
     return admins.filter((admin) => !!admin.telegramId);
   }
 
+  private getAdminTelegramIdsFromEnv(): string[] {
+    const raw = process.env.ADMIN_IDS;
+    console.log(1111, raw);
+
+    if (!raw) {
+      this.logger.warn('ADMIN_IDS не задан в env');
+      return [];
+    }
+
+    return raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+  }
   private async notifyAdminsAboutMailingStart(
     dto: SendUsersMailingDto,
-    image?: Express.Multer.File,
+    image: Express.Multer.File | undefined,
+    recipientsCount?: number,
   ): Promise<void> {
     try {
-      const admins = await this.getAdminRecipients();
+      // const admins = await this.getAdminRecipients();
+      const admins = this.getAdminTelegramIdsFromEnv();
 
       if (!admins.length) {
         this.logger.warn(
@@ -297,17 +348,17 @@ export class UsersMailingService {
         return;
       }
 
-      const text = this.buildMailingStartMessage(dto, image);
+      const text = this.buildMailingStartMessage(dto, image, recipientsCount);
 
       for (const admin of admins) {
         try {
           await this.telegramService.sendMailingMessage({
-            chatId: admin.telegramId!,
+            chatId: admin,
             text,
           });
         } catch (error: any) {
           this.logger.error(
-            `Не удалось отправить уведомление о старте админу userId=${admin.id}, telegramId=${admin.telegramId}: ${error?.message ?? 'Unknown error'}`,
+            `Не удалось отправить уведомление о старте админу userId=${admin}, telegramId=${admin}: ${error?.message ?? 'Unknown error'}`,
             error?.stack,
           );
         }
@@ -321,18 +372,13 @@ export class UsersMailingService {
   }
 
   private async notifyAdminsAboutMailingFinish(
-    dto: SendUsersMailingDto,
-    result: {
-      total: number;
-      success: number;
-      failed: number;
-      errors: Array<{ userId: number; telegramId: string; error: string }>;
-    },
-    image?: Express.Multer.File,
+    mailingJob: MailingJobEntity,
+    errors: Array<{ userId: number; telegramId: string; error: string }> = [],
     fatalError?: any,
   ): Promise<void> {
     try {
-      const admins = await this.getAdminRecipients();
+      // const admins = await this.getAdminRecipients();
+      const admins = this.getAdminTelegramIdsFromEnv();
 
       if (!admins.length) {
         this.logger.warn(
@@ -341,22 +387,19 @@ export class UsersMailingService {
         return;
       }
 
-      const text = this.buildMailingFinishMessage(
-        dto,
-        result,
-        image,
-        fatalError,
-      );
+      const text = this.buildMailingFinishMessage(mailingJob);
 
       for (const admin of admins) {
         try {
+          console.log(admin);
+
           await this.telegramService.sendMailingMessage({
-            chatId: admin.telegramId!,
+            chatId: admin!,
             text,
           });
         } catch (error: any) {
           this.logger.error(
-            `Не удалось отправить уведомление о завершении админу userId=${admin.id}, telegramId=${admin.telegramId}: ${error?.message ?? 'Unknown error'}`,
+            `Не удалось отправить уведомление о завершении админу userId=${admin}, telegramId=${admin}: ${error?.message ?? 'Unknown error'}`,
             error?.stack,
           );
         }
@@ -368,16 +411,17 @@ export class UsersMailingService {
       );
     }
   }
-
   private buildMailingStartMessage(
     dto: SendUsersMailingDto,
-    image?: Express.Multer.File,
+    image: Express.Multer.File | undefined,
+    recipientsCount?: number,
   ): string {
     return [
       '🚀 Запущена рассылка',
       '',
       `Тип: ${dto.type}`,
-      `Текст: ${dto.text}`,
+      `Получателей: ${recipientsCount}`,
+      `Текст: ${dto.text ?? '-'}`,
       `User ID: ${dto.userId ?? '-'}`,
       `Group ID: ${dto.groupId ?? '-'}`,
       `Contest ID: ${dto.contestId ?? '-'}`,
@@ -388,18 +432,16 @@ export class UsersMailingService {
   }
 
   private buildMailingFinishMessage(
-    dto: SendUsersMailingDto,
-    result: {
-      total: number;
-      success: number;
-      failed: number;
-      errors: Array<{ userId: number; telegramId: string; error: string }>;
+    mailingJob: MailingJobEntity,
+    extra?: {
+      fatalError?: any;
+      errors?: Array<{ userId: number; telegramId: string; error: string }>;
     },
-    image?: Express.Multer.File,
-    fatalError?: any,
   ): string {
-    const errorLines = result.errors.length
-      ? result.errors
+    const errors = extra?.errors ?? [];
+
+    const errorLines = errors.length
+      ? errors
           .slice(0, 10)
           .map(
             (e, index) =>
@@ -408,28 +450,78 @@ export class UsersMailingService {
       : ['нет'];
 
     return [
-      fatalError
+      extra?.fatalError
         ? '❌ Рассылка завершена с критической ошибкой'
         : '✅ Рассылка завершена',
       '',
-      `Тип: ${dto.type}`,
-      `Текст: ${dto.text}`,
-      `User ID: ${dto.userId ?? '-'}`,
-      `Group ID: ${dto.groupId ?? '-'}`,
-      `Contest ID: ${dto.contestId ?? '-'}`,
-      `Текст кнопки: ${dto.buttonText ?? '-'}`,
-      `Ссылка кнопки: ${dto.buttonUrl ?? '-'}`,
-      `Медиа: ${image?.filename ?? 'нет'}`,
+      `Job ID: ${mailingJob.id}`,
+      `Статус: ${mailingJob.status}`,
+      `Тип: ${mailingJob.type}`,
+      `Текст: ${mailingJob.text ?? '-'}`,
+      `User ID: ${mailingJob.initiatorUserId ?? '-'}`,
+      `Group ID: ${mailingJob.groupId ?? '-'}`,
+      `Contest ID: ${mailingJob.contestId ?? '-'}`,
+      `Текст кнопки: ${mailingJob.buttonText ?? '-'}`,
+      `Ссылка кнопки: ${mailingJob.buttonUrl ?? '-'}`,
+      `Медиа: ${mailingJob.imagePath ?? 'нет'}`,
       '',
-      `Всего: ${result.total}`,
-      `Успешно: ${result.success}`,
-      `Ошибок: ${result.failed}`,
+      `Всего: ${mailingJob.totalRecipients}`,
+      `В очереди: ${mailingJob.queuedCount}`,
+      `Пропущено: ${mailingJob.skippedCount}`,
+      `Успешно: ${mailingJob.sentCount}`,
+      `Ошибок отправки: ${mailingJob.failedCount}`,
+      `Удалено: ${mailingJob.deletedCount}`,
+      `Ошибок удаления: ${mailingJob.deleteFailedCount}`,
       '',
       'Первые ошибки:',
       ...errorLines,
-      ...(fatalError
-        ? ['', `Critical error: ${fatalError?.message ?? 'Unknown error'}`]
+      ...(extra?.fatalError
+        ? [
+            '',
+            `Critical error: ${extra.fatalError?.message ?? 'Unknown error'}`,
+          ]
         : []),
     ].join('\n');
+  }
+
+  async notifyAdminsAboutMailingFinishByJobId(jobId: string): Promise<void> {
+    const mailingJob = await this.mailingJobRepo.findOne({
+      where: { id: jobId },
+    });
+
+    if (!mailingJob) {
+      this.logger.warn(
+        `Mailing job not found for finish notification: ${jobId}`,
+      );
+      return;
+    }
+
+    // const errors = await this.mailingMessageRepo.find({
+    //   where: {
+    //     mailingJobId: jobId,
+    //     sendStatus: 'failed',
+    //   },
+    //   order: {
+    //     id: 'ASC',
+    //   },
+    //   take: 10,
+    // });
+
+    // const formattedErrors = errors.map((e) => ({
+    //   userId: e.userId,
+    //   telegramId: e.telegramId,
+    //   error: e.sendError ?? 'Unknown error',
+    // }));
+
+    await this.notifyAdminsAboutMailingFinish(mailingJob);
+  }
+
+  private getNextDayDeleteDate(): Date {
+    const deleteAt = new Date();
+
+    deleteAt.setDate(deleteAt.getDate() + 1);
+    deleteAt.setHours(13, 59, 0, 0);
+
+    return deleteAt;
   }
 }

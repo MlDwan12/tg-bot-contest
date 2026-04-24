@@ -23,6 +23,12 @@ export class MailingMessageEntity {
   @Column({ type: 'timestamp' })
   sentAt: Date;
 
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  sendStatus: 'pending' | 'sent' | 'failed';
+
+  @Column({ type: 'text', nullable: true })
+  sendError: string | null;
+
   @Column({ type: 'timestamp' })
   deleteAfter: Date;
 
@@ -34,4 +40,10 @@ export class MailingMessageEntity {
 
   @Column({ type: 'text', nullable: true })
   deleteError: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  text: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  imagePath: string | null;
 }

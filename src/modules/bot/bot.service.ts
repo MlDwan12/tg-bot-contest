@@ -85,6 +85,7 @@ export class TelegramService {
         { source: createReadStream(filePath) },
         {
           caption: dto.text,
+          parse_mode: 'HTML',
           reply_markup: replyMarkup,
         },
       );
@@ -93,6 +94,7 @@ export class TelegramService {
 
     // Обычный текст
     const msg = await this.bot.telegram.sendMessage(dto.chatId, dto.text, {
+      parse_mode: 'HTML',
       reply_markup: replyMarkup,
     });
 
@@ -154,6 +156,7 @@ export class TelegramService {
         undefined,
         dto.text,
         {
+          parse_mode: 'HTML',
           reply_markup: replyMarkup,
         },
       );
@@ -264,6 +267,7 @@ export class TelegramService {
             { source: createReadStream(filePath) },
             {
               caption: dto.text,
+              parse_mode: 'HTML',
               reply_markup: replyMarkup,
             },
           );
@@ -275,14 +279,18 @@ export class TelegramService {
           return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
-        if (['.mp4', '.mov', '.webm'].includes(ext)) {
+        if (['.mp4', '.mov'].includes(ext)) {
           this.logger.log(`Отправка видео: chatId=${dto.chatId}`);
 
-          const msg = await this.bot.telegram.sendVideo(
+          const msg = await this.bot.telegram.sendVideoNote(
             dto.chatId,
-            { source: createReadStream(filePath) },
             {
-              caption: dto.text,
+              source: createReadStream(filePath),
+            },
+            {
+              // caption: dto.text,
+              // parse_mode: 'HTML',
+              // message_effect_id: '5104841245755180586',
               reply_markup: replyMarkup,
             },
           );
@@ -305,6 +313,7 @@ export class TelegramService {
         dto.text ?? '',
         {
           reply_markup: replyMarkup,
+          parse_mode: 'HTML',
         },
       );
 
