@@ -3,7 +3,18 @@
 /node_modules
 /build
 /uploads
+*.tar
+*.zip
+*.gz
+*.rar
 
+# backups
+backup/
+backups/
+
+# archives
+*.sql
+*.dump
 # Logs
 logs
 *.log
