@@ -44,7 +44,7 @@ export class ContestsParticipateService {
 
     @InjectQueue('contest-counters')
     private readonly contestCountersQueue: Queue,
-
+    @Inject(forwardRef(() => TelegramUserService))
     private readonly userTgService: TelegramUserService,
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
@@ -62,8 +62,6 @@ export class ContestsParticipateService {
       lastName?: string;
     },
   ) {
-    const user = await this.userTgService.ensureUser(tgData);
-
     const contest = await this.contestReadRepo.findByParams({
       id: contestId,
     });
@@ -93,6 +91,8 @@ export class ContestsParticipateService {
     if (contest.status !== ContestStatus.ACTIVE) {
       throw new NotFoundException('Конкурс не найден или завершен');
     }
+
+    const user = await this.userTgService.ensureUser(tgData);
 
     const requiredChannels = contest.requiredChannels ?? [];
 

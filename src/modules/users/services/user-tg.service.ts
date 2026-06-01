@@ -1,26 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from '../entities';
 import { UserRole } from 'src/shared/enums/user';
+import { TelegramService } from 'src/modules/bot/bot.service';
 
 @Injectable()
 export class TelegramUserService {
-  constructor(private readonly userService: UsersService) {}
+  constructor(
+    private readonly userService: UsersService,
+    @Inject(forwardRef(() => TelegramService))
+    private readonly telegramService: TelegramService,
+  ) {}
 
   async ensureUser(tgData: {
     telegramId: string;
+    groupId: string;
     username?: string;
     firstName?: string;
     lastName?: string;
-  }) {
+  }): Promise<User> {
     let user = await this.userService.findByTelegramId(tgData.telegramId);
 
     if (!user) {
+      const tgInfo = await this.telegramService.getUserFromChatMember(
+        tgData.groupId,
+        tgData.telegramId,
+      );
+
       user = await this.userService.create({
         telegramId: tgData.telegramId,
-        username: tgData.username,
-        firstName: tgData.firstName,
-        lastName: tgData.lastName,
+        username: tgInfo.username,
+        firstName: tgInfo.firstName,
+        lastName: tgInfo.lastName,
       });
 
       return user;

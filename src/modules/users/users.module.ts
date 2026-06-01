@@ -24,7 +24,7 @@ import { MailingJobEntity } from './entities/mailing-jobs.entity';
       MailingMessageEntity,
       MailingJobEntity,
     ]),
-    BotModule,
+    forwardRef(() => BotModule),
     ContestsModule,
     BullModule.registerQueue({ name: 'user-mailing' }),
     forwardRef(() => AuthModule),

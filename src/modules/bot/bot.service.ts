@@ -463,6 +463,22 @@ export class TelegramService {
       throw error;
     }
   }
+  async getUserFromChatMember(chatId: string | number, telegramId: string) {
+    const member = await this.bot.telegram.getChatMember(
+      chatId,
+      Number(telegramId),
+    );
+
+    return {
+      telegramId: String(member.user.id),
+      username: member.user.username,
+      firstName: member.user.first_name,
+      lastName: member.user.last_name,
+      isBot: member.user.is_bot,
+      languageCode: member.user.language_code,
+      status: member.status,
+    };
+  }
 
   async deleteMessage(chatId: string, messageId: number): Promise<void> {
     await this.bot.telegram.deleteMessage(Number(chatId), messageId);
