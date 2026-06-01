@@ -50,7 +50,7 @@ export class ContestPublicationProcessor extends WorkerHost {
     job: Job<{ publicationId: number; hasParticipants?: boolean }>,
     token?: string,
   ) {
-    this.logger.error(
+    this.logger.debug(
       {
         queue: job.queueName,
         jobId: job.id,
@@ -239,10 +239,8 @@ export class ContestPublicationProcessor extends WorkerHost {
           this.telegramService.updateContestMessageButton({
             chatId: String(pub.chatId),
             messageId,
-            buttonText: hasParticipants ? 'Конкурс завершён' : undefined,
-            buttonUrl: hasParticipants
-              ? `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`
-              : undefined,
+            buttonText: 'Конкурс завершён',
+            buttonUrl: `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`,
           }),
         );
 

@@ -13,6 +13,7 @@ import { IContestReadFilters, IContestReadRepository } from '../interfaces';
 import { ContestPublication, ContestParticipation } from '../entities';
 import { Paginated } from 'src/shared/commons/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
+import { ContestDetails } from '../dto/contest-info.dto';
 
 @Injectable()
 export class ContestReadRepository implements IContestReadRepository {
@@ -108,7 +109,9 @@ export class ContestReadRepository implements IContestReadRepository {
         'participantsUser.telegramId',
         'participantsUser.username',
         'winners.id',
+        'winners.userId',
         'winnerUser.id',
+        'winners.place',
         'winnerUser.telegramId',
         'winnerUser.username',
       ])
@@ -165,6 +168,8 @@ export class ContestReadRepository implements IContestReadRepository {
       winners:
         contest.winners?.map((winner) => ({
           id: winner.id,
+          userId: winner.userId,
+          place: winner.place,
           user: winner.user
             ? {
                 id: winner.user.id,

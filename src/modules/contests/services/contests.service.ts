@@ -933,7 +933,28 @@ export class ContestsService {
    * MVP: просто ставим COMPLETED, позже добавим выбор победителей и уведомления.
    */
   async finishContestIdempotent(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
+    // const contest = await this.contestReadRepo.findByParams({ id: contestId });
+    // if (!contest) return;
+
+    // if (contest.status === ContestStatus.COMPLETED) return;
+
+    // const now = new Date();
+    // if (contest.endDate > now) return;
+
+    // const changed =
+    //   await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
+    // if (!changed) return;
+
+    // const participants =
+    //   await this.contestParticipationReadRepo.findManyByContestId(contest.id);
+
+    // const hasParticipants = participants.length > 0;
+
+    // if (hasParticipants) {
+    //   await this.contestWinnerService.resolveAndSaveWinners(contest);
+    // }
+
+    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
     if (!contest) return;
 
     if (contest.status === ContestStatus.COMPLETED) return;
@@ -941,18 +962,18 @@ export class ContestsService {
     const now = new Date();
     if (contest.endDate > now) return;
 
-    const changed =
-      await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
-    if (!changed) return;
-
     const participants =
       await this.contestParticipationReadRepo.findManyByContestId(contest.id);
-
     const hasParticipants = participants.length > 0;
 
+    // Resolve winners BEFORE updating status (idempotent on retry)
     if (hasParticipants) {
       await this.contestWinnerService.resolveAndSaveWinners(contest);
     }
+
+    const changed =
+      await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
+    if (!changed) return;
 
     const publicationIds =
       await this.getPublishedPublicationIdsForContest(contestId);
@@ -1146,41 +1167,6 @@ export class ContestsService {
     }
 
     return contest;
-  }
-
-  private validateWinners(
-    winners: { userId: number; place: number }[],
-    prizePlaces: number,
-  ): void {
-    if (winners.length > prizePlaces) {
-      throw new BadRequestException(
-        'Количество победителей не может быть больше prizePlaces',
-      );
-    }
-
-    const userTgIds = winners.map((w) => w.userId);
-    const places = winners.map((w) => w.place);
-
-    const uniqueUserTgIds = new Set(userTgIds);
-    if (uniqueUserTgIds.size !== userTgIds.length) {
-      throw new BadRequestException(
-        'Один и тот же пользователь указан несколько раз',
-      );
-    }
-
-    const uniquePlaces = new Set(places);
-    if (uniquePlaces.size !== places.length) {
-      throw new BadRequestException('Места победителей должны быть уникальны');
-    }
-
-    const invalidPlace = places.find(
-      (place) => place < 1 || place > prizePlaces,
-    );
-    if (invalidPlace) {
-      throw new BadRequestException(
-        `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
-      );
-    }
   }
 
   async removeContest(contestId: number): Promise<void> {
