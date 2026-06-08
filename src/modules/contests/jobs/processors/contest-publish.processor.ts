@@ -1,14 +1,16 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
-import { ContestsService } from '../../services/contests.service';
+import { ContestLifecycleService } from '../../services/contest-lifecycle.service';
+import { ContestPublicationService } from '../../services/contest-publication.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
 
 @Processor('contest-scheduler')
 export class ContestPublishProcessor extends WorkerHost {
   constructor(
-    private readonly contestsService: ContestsService,
+    private readonly contestLifecycleService: ContestLifecycleService,
+    private readonly contestPublicationService: ContestPublicationService,
     @InjectQueue('contest-publication')
     private readonly publicationQueue: Queue,
     private readonly logger: Logger,
@@ -38,10 +40,10 @@ export class ContestPublishProcessor extends WorkerHost {
     this.logger.debug({ ...jobMeta(job), contestId }, 'publishContest: start');
 
     try {
-      await this.contestsService.activateContestIfDue(contestId);
+      await this.contestLifecycleService.activateContestIfDue(contestId);
 
       const publicationIds =
-        await this.contestsService.getPendingPublicationIds(contestId);
+        await this.contestPublicationService.getPendingPublicationIds(contestId);
 
       this.logger.debug(
         {

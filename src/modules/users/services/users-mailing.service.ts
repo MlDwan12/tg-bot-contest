@@ -11,7 +11,7 @@ import { User } from '../entities';
 import { SendUsersMailingDto } from '../dto/send-users-mailing.dto';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { UserMailingType } from 'src/shared/enums/user/user-mailing-type.enum';
-import { ContestsService } from '../../contests/services/contests.service';
+import { ContestPublicationService } from '../../contests/services/contest-publication.service';
 import { Logger } from 'nestjs-pino';
 import { ContestPublication } from 'src/modules/contests/entities';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -30,7 +30,7 @@ export class UsersMailingService {
     @InjectQueue('user-mailing')
     private readonly mailingQueue: Queue,
     private readonly telegramService: TelegramService,
-    private readonly contestsService: ContestsService,
+    private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
   ) {}
 
@@ -47,7 +47,7 @@ export class UsersMailingService {
     const users = await this.getRecipients(dto);
 
     const publication = dto.contestId
-      ? await this.contestsService.getPublicationByContestId(dto.contestId)
+      ? await this.contestPublicationService.getPublicationByContestId(dto.contestId)
       : undefined;
 
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
@@ -135,7 +135,7 @@ export class UsersMailingService {
     if (dto.contestId) {
       this.logger.log(`Определение ссылки по contestId=${dto.contestId}`);
 
-      // const publication = await this.contestsService.getPublicationByContestId(
+      // const publication = await this.contestPublicationService.getPublicationByContestId(
       //   dto.contestId,
       // );
 

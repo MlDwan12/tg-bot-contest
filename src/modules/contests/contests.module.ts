@@ -1,6 +1,8 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ContestsController } from './contests.controller';
 import { ContestsService } from './services/contests.service';
+import { ContestPublicationService } from './services/contest-publication.service';
+import { ContestLifecycleService } from './services/contest-lifecycle.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   BotMessage,
@@ -51,41 +53,10 @@ import { ContestCountersProcessor } from './jobs/processors';
     forwardRef(() => ContestsJobsModule),
   ],
   controllers: [ContestsController],
-  // providers: [
-  //   ContestsService,
-  //   ContestsParticipateService,
-  //   ContestWinnerService,
-  //   {
-  //     provide: CONTEST_READ_REPOSITORY,
-  //     useClass: ContestReadRepository,
-  //   },
-  //   {
-  //     provide: CONTEST_WRITE_REPOSITORY,
-  //     useClass: ContestWriteRepository,
-  //   },
-
-  //   {
-  //     provide: CONTEST_PARTICIPATE_READ_REPOSITORY,
-  //     useClass: ContestParticipationReadRepository,
-  //   },
-  //   {
-  //     provide: CONTEST_PARTICIPATE_WRITE_REPOSITORY,
-  //     useClass: ContestParticipationWriteRepository,
-  //   },
-
-  //   {
-  //     provide: CONTEST_WINNER_READ_REPOSITORY,
-  //     useClass: ContestWinnerReadRepository,
-  //   },
-
-  //   {
-  //     provide: CONTEST_WINNER_WRITE_REPOSITORY,
-  //     useClass: ContestWinnerWriteRepository,
-  //   },
-  // ],
-
   providers: [
     ContestsService,
+    ContestPublicationService,
+    ContestLifecycleService,
     ContestsParticipateService,
     ContestWinnerService,
     ContestCountersProcessor,
@@ -96,7 +67,6 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestParticipationWriteRepository,
     ContestWinnerReadRepository,
     ContestWinnerWriteRepository,
-    ContestWinnerService,
     {
       provide: CONTEST_READ_REPOSITORY,
       useExisting: ContestReadRepository,
@@ -124,6 +94,8 @@ import { ContestCountersProcessor } from './jobs/processors';
   ],
   exports: [
     ContestsService,
+    ContestPublicationService,
+    ContestLifecycleService,
     CONTEST_READ_REPOSITORY,
     CONTEST_WRITE_REPOSITORY,
     CONTEST_PARTICIPATE_READ_REPOSITORY,

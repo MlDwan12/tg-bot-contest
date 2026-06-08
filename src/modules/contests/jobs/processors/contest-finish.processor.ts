@@ -1,13 +1,13 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { ContestsService } from '../../services/contests.service';
+import { ContestLifecycleService } from '../../services/contest-lifecycle.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
 
 @Processor('contest-finish')
 export class ContestFinishProcessor extends WorkerHost {
   constructor(
-    private readonly contestsService: ContestsService,
+    private readonly contestLifecycleService: ContestLifecycleService,
     private readonly logger: Logger,
   ) {
     super();
@@ -21,7 +21,7 @@ export class ContestFinishProcessor extends WorkerHost {
     this.logger.warn({ ...jobMeta(job), contestId }, 'finishContest: start');
 
     try {
-      await this.contestsService.finishContestIdempotent(contestId);
+      await this.contestLifecycleService.finishContestIdempotent(contestId);
       this.logger.warn({ ...jobMeta(job), contestId }, 'finishContest: done');
     } catch (e: any) {
       this.logger.error(

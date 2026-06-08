@@ -5,15 +5,15 @@ import { InjectBot } from 'nestjs-telegraf';
 import { InputMediaPhoto } from 'node_modules/telegraf/typings/core/types/typegram';
 import { extname, join } from 'path';
 import { Telegraf } from 'telegraf';
-import { ContestsService } from '../contests/services/contests.service';
+import { ContestPublicationService } from '../contests/services/contest-publication.service';
 
 @Injectable()
 export class TelegramService {
   constructor(
     @InjectBot() private readonly bot: Telegraf,
     private readonly logger: Logger,
-    @Inject(forwardRef(() => ContestsService))
-    private readonly contestsService: ContestsService,
+    @Inject(forwardRef(() => ContestPublicationService))
+    private readonly contestPublicationService: ContestPublicationService,
   ) {}
 
   async checkBotAdmin(chatId: number): Promise<{
@@ -346,7 +346,7 @@ export class TelegramService {
 
   async deleteContestPublications(contestId: number): Promise<void> {
     const publications =
-      await this.contestsService.getPublicationsByContestId(contestId);
+      await this.contestPublicationService.getPublicationsByContestId(contestId);
 
     for (const pub of publications) {
       if (!pub.telegramMessageId || !pub.channel?.telegramId) continue;

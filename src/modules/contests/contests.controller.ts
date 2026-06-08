@@ -15,6 +15,7 @@ import {
 import { Contest } from './entities';
 import { Logger } from 'nestjs-pino';
 import {
+  ContestLifecycleService,
   ContestsParticipateService,
   ContestsService,
   ContestWinnerService,
@@ -33,12 +34,14 @@ import { JwtAuthGuard } from '../auth/guards';
 export class ContestsController {
   constructor(
     private readonly contestsService: ContestsService,
+    private readonly contestLifecycleService: ContestLifecycleService,
     private readonly contestsParticipateService: ContestsParticipateService,
     private readonly contestWinnerService: ContestWinnerService,
     private readonly logger: Logger,
   ) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async getAllContests(
     @Query() query: GetContestsQueryDto,
   ): Promise<Paginated<Contest>> {
@@ -102,13 +105,13 @@ export class ContestsController {
   async completeContest(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<Contest> {
-    return this.contestsService.completeContest(id);
+    return this.contestLifecycleService.completeContest(id);
   }
 
   @Patch(':id/cancel')
   @UseGuards(JwtAuthGuard)
   async cancelContest(@Param('id', ParseIntPipe) id: number): Promise<Contest> {
-    return this.contestsService.cancelContest(id);
+    return this.contestLifecycleService.cancelContest(id);
   }
 
   @Delete(':id')

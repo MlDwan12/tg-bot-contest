@@ -1,12 +1,12 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from 'nestjs-pino';
-import { ContestsService } from '../../services/contests.service';
+import { ContestPublicationService } from '../../services/contest-publication.service';
 
 @Processor('contest-counters')
 export class ContestCountersProcessor extends WorkerHost {
   constructor(
-    private readonly contestsService: ContestsService,
+    private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
   ) {
     super();
@@ -24,7 +24,7 @@ export class ContestCountersProcessor extends WorkerHost {
     );
     switch (job.name) {
       case 'sync-participants-counter':
-        await this.contestsService.syncParticipantsCounter(job.data.contestId);
+        await this.contestPublicationService.syncParticipantsCounter(job.data.contestId);
         return;
 
       default:
