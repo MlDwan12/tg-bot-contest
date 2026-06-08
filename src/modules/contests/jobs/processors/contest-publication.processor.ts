@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import Bottleneck from 'bottleneck';
@@ -6,6 +5,7 @@ import { ContestsService } from '../../services/contests.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
+import { ConfigService } from '@nestjs/config';
 
 const telegramLimiter = new Bottleneck({
   maxConcurrent: 5,
@@ -41,6 +41,7 @@ export class ContestPublicationProcessor extends WorkerHost {
     private readonly contestsService: ContestsService,
     private readonly telegramService: TelegramService,
     private readonly logger: Logger,
+    private readonly configService: ConfigService,
   ) {
     super();
     this.logger.log('ContestPublicationProcessor initialized');
@@ -240,7 +241,7 @@ export class ContestPublicationProcessor extends WorkerHost {
             chatId: String(pub.chatId),
             messageId,
             buttonText: 'Конкурс завершён',
-            buttonUrl: `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`,
+            buttonUrl: `${this.configService.get<string>('MINI_APP_URL')}?startapp=${pub.chatId}_${pub.contestId}`,
           }),
         );
 

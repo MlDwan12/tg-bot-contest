@@ -583,7 +583,27 @@ export class ContestsService {
       throw new NotFoundException('Конкурс не найден');
     }
 
+    if (contest.status === ContestStatus.COMPLETED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать завершённый конкурс');
+    }
+
+    if (contest.status === ContestStatus.CANCELLED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать отменённый конкурс');
+    }
+
     const oldImagePath = contest.imagePath;
+
+    if (
+      dto.startDate !== undefined &&
+      contest.status === ContestStatus.ACTIVE
+    ) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Нельзя изменить дату начала активного конкурса',
+      );
+    }
 
     const nextStartDate = dto.startDate
       ? this.parseContestDate(dto.startDate)
@@ -592,6 +612,12 @@ export class ContestsService {
     const nextEndDate = dto.endDate
       ? this.parseContestDate(dto.endDate)
       : contest.endDate;
+
+    const now = new Date();
+    if (dto.endDate !== undefined && nextEndDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('endDate must be in the future');
+    }
 
     if (nextStartDate >= nextEndDate) {
       await deleteUploadedContestImage(image);
@@ -691,51 +717,69 @@ export class ContestsService {
       //     })),
       //   );
       // }
+      if (dto.winners !== undefined && dto.winners.length > 0 && nextWinnerStrategy !== WinnerStrategy.MANUAL) {
+        throw new BadRequestException(
+          'Нельзя назначить победителей вручную при стратегии, отличной от manual',
+        );
+      }
+
       if (nextWinnerStrategy === WinnerStrategy.MANUAL) {
         if (dto.winners !== undefined) {
-          const uniqueWinnerIds = [...new Set(dto.winners)];
-
-          if (uniqueWinnerIds.length !== dto.winners.length) {
+          if (contest.status === ContestStatus.PENDING) {
             throw new BadRequestException(
-              'Список победителей содержит дубликаты',
+              'Нельзя назначить победителей до старта конкурса',
             );
           }
 
-          if (uniqueWinnerIds.length !== nextPrizePlaces) {
-            throw new BadRequestException(
-              'Количество победителей должно соответствовать количеству призовых мест',
+          if (dto.winners.length === 0) {
+            await this.contestWriteRepo.replaceWinners(contestId, []);
+          } else {
+            const uniqueWinnerIds = [...new Set(dto.winners)];
+
+            if (uniqueWinnerIds.length !== dto.winners.length) {
+              throw new BadRequestException(
+                'Список победителей содержит дубликаты',
+              );
+            }
+
+            if (uniqueWinnerIds.length !== nextPrizePlaces) {
+              throw new BadRequestException(
+                'Количество победителей должно соответствовать количеству призовых мест',
+              );
+            }
+
+            const resolved = await Promise.all(
+              uniqueWinnerIds.map((winnerId) =>
+                this.usersService.findByTelegramId(winnerId.toString()),
+              ),
             );
-          }
 
-          const resolved = await Promise.all(
-            uniqueWinnerIds.map((winnerId) =>
-              this.usersService.findByTelegramId(winnerId.toString()),
-            ),
-          );
-
-          const notFoundWinnerIds = uniqueWinnerIds.filter(
-            (_, index) => !resolved[index],
-          );
-
-          if (notFoundWinnerIds.length) {
-            throw new NotFoundException(
-              `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+            const notFoundWinnerIds = uniqueWinnerIds.filter(
+              (_, index) => !resolved[index],
             );
-          }
 
-          const orderedWinners = resolved as User[];
+            if (notFoundWinnerIds.length) {
+              throw new NotFoundException(
+                `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+              );
+            }
 
-          await this.contestWriteRepo.replaceWinners(
-            contestId,
-            orderedWinners.map((winner, index) => ({
+            const orderedWinners = resolved as User[];
+
+            await this.contestWriteRepo.replaceWinners(
               contestId,
-              userId: winner.id,
-              place: index + 1,
-            })),
-          );
+              orderedWinners.map((winner, index) => ({
+                contestId,
+                userId: winner.id,
+                place: index + 1,
+              })),
+            );
+          }
         }
       } else {
-        await this.contestWriteRepo.replaceWinners(contestId, []);
+        if (dto.winnerStrategy !== undefined && dto.winnerStrategy !== WinnerStrategy.MANUAL) {
+          await this.contestWriteRepo.replaceWinners(contestId, []);
+        }
       }
       // await this.contestWriteRepo.update(contestId, {
       //   name: nextName,
@@ -1175,6 +1219,10 @@ export class ContestsService {
       throw new NotFoundException('Конкурс не найден');
     }
 
+    if (contest.status === ContestStatus.ACTIVE) {
+      throw new BadRequestException('Невозможно удалить активный конкурс');
+    }
+
     await this.contestWriteRepo.delete(contestId);
   }
 
@@ -1213,6 +1261,10 @@ export class ContestsService {
 
     if (contest.status === ContestStatus.CANCELLED) {
       throw new BadRequestException('Нельзя завершить отменённый конкурс');
+    }
+
+    if (contest.status === ContestStatus.PENDING) {
+      throw new BadRequestException('Нельзя завершить конкурс до его старта');
     }
 
     await this.contestWinnerService.resolveAndSaveWinners(contest);

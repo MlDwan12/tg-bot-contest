@@ -80,6 +80,10 @@ export class TelegramService {
     if (dto.photoUrl) {
       const filePath = join(process.cwd(), dto.photoUrl);
 
+      if (!existsSync(filePath)) {
+        throw new Error(`Image file not found: ${dto.photoUrl}`);
+      }
+
       const msg = await this.bot.telegram.sendPhoto(
         dto.chatId,
         { source: createReadStream(filePath) },

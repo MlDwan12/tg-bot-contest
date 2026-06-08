@@ -1,6 +1,7 @@
 import {
   Injectable,
   Inject,
+  BadRequestException,
   ConflictException,
   NotFoundException,
   ForbiddenException,
@@ -88,8 +89,12 @@ export class ContestsParticipateService {
       return w;
     }
 
+    if (contest.status === ContestStatus.PENDING) {
+      throw new BadRequestException('Конкурс ещё не начался');
+    }
+
     if (contest.status !== ContestStatus.ACTIVE) {
-      throw new NotFoundException('Конкурс не найден или завершен');
+      throw new NotFoundException('Конкурс не найден');
     }
 
     const user = await this.userTgService.ensureUser(tgData);

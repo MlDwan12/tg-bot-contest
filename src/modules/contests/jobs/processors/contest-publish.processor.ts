@@ -60,29 +60,7 @@ export class ContestPublishProcessor extends WorkerHost {
           { publicationId },
           { jobId: `publication:${publicationId}:send` },
         );
-
-        setTimeout(async () => {
-          const reloaded = await this.publicationQueue.getJob(
-            publicationJob.id!,
-          );
-
-          this.logger.error(
-            {
-              pid: process.pid,
-              publicationId,
-              jobId: reloaded?.id,
-              jobName: reloaded?.name,
-              state: reloaded ? await reloaded.getState() : null,
-              data: reloaded?.data,
-              attemptsMade: reloaded?.attemptsMade,
-              failedReason: reloaded?.failedReason,
-              returnvalue: reloaded?.returnvalue,
-              processedOn: reloaded?.processedOn,
-              finishedOn: reloaded?.finishedOn,
-            },
-            'publishContest: sendPublication final details',
-          );
-        }, 1000);
+        added++;
 
         this.logger.debug(
           {
