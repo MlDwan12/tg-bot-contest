@@ -1,5 +1,6 @@
 // src/health/health.controller.ts
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   HealthCheck,
   HealthCheckService,
@@ -9,6 +10,10 @@ import { TypeOrmHealthIndicator } from '@nestjs/terminus';
 import { BullMQHealthIndicator } from './bullmq.health';
 import { RedisHealthIndicator } from './redis.health';
 
+// Load balancers, k8s liveness probes и мониторинг пингуют /health
+// каждые 10-30 секунд — без SkipThrottle они получат 429 и вызовут
+// ложные алерты "сервис недоступен".
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(

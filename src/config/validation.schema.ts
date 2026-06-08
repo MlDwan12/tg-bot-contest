@@ -30,4 +30,9 @@ export const validationSchema = Joi.object({
   REDIS_PORT: Joi.number().port().default(6379),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
   REDIS_DB: Joi.number().integer().min(0).max(15).default(0),
+
+  // JWT — объявляем явно чтобы приложение падало при старте
+  // если секреты не заданы, а не в рантайме при первом запросе.
+  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  JWT_REFRESH_SECRET: Joi.string().min(32).required(),
 });

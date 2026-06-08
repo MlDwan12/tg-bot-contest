@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { LoginDto } from '../dto';
 import { AuthService } from '../services';
 import type { Response } from 'express';
@@ -22,6 +23,11 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
+  // Переопределяем глобальный лимит (100/60s) на строгий для логина:
+  // 5 попыток в 15 минут с одного IP.
+  // Это защита от брутфорса: при скорости перебора 1 пароль/3 минуты
+  // 1 миллиард паролей займёт ~190 лет.
+  @Throttle({ global: { ttl: 900, limit: 5 } })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
