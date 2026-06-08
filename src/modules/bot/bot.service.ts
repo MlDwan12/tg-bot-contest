@@ -134,6 +134,7 @@ export class TelegramService {
               type: 'photo',
               media: { source: createReadStream(filePath) },
               caption: dto.text,
+              parse_mode: 'HTML',
             } as InputMediaPhoto,
             {
               reply_markup: replyMarkup,
@@ -148,6 +149,7 @@ export class TelegramService {
             dto.text,
             {
               reply_markup: replyMarkup,
+              parse_mode: 'HTML',
             },
           );
           return;
