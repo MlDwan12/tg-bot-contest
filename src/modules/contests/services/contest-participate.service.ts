@@ -25,7 +25,7 @@ import { ContestParticipation } from '../entities';
 import { ContestStatus } from 'src/shared/enums/contest';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { ContestWinnerService } from '.';
+import { ContestWinnerService } from './contest-winner.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 
 @Injectable()
