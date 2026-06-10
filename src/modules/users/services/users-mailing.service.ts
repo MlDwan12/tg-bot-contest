@@ -113,7 +113,14 @@ export class UsersMailingService {
     }
 
     this.logger.log(
-      `Рассылка поставлена в очередь: jobId=${jobId}, count=${users.length}`,
+      {
+        jobId,
+        type: dto.type,
+        queuedCount: recipientsWithTelegram.length,
+        skippedCount,
+        totalRecipients: users.length,
+      },
+      'mailing: queued',
     );
 
     return { jobId, enqueuedCount: recipientsWithTelegram.length };

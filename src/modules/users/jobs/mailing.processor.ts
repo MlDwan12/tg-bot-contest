@@ -105,6 +105,9 @@ export class MailingProcessor extends WorkerHost {
       jobId,
     } = job.data;
 
+    const attempt = job.attemptsMade + 1;
+    const maxAttempts = job.opts?.attempts ?? 3;
+
     // Защита от повторной отправки при retry.
     //
     // Сценарий без этой проверки:
@@ -123,7 +126,7 @@ export class MailingProcessor extends WorkerHost {
 
     if (alreadySent) {
       this.logger.warn(
-        { jobId, userId },
+        { jobId, userId, attempt },
         'mailing: письмо уже отправлено в предыдущей попытке, пропускаем retry',
       );
       return;
@@ -137,14 +140,16 @@ export class MailingProcessor extends WorkerHost {
 
     if (alreadyFailed) {
       this.logger.warn(
-        { jobId, userId },
+        { jobId, userId, attempt },
         'mailing: предыдущая попытка уже записана как failed, пропускаем повторный retry',
       );
       return;
     }
 
+    const sendStart = Date.now();
+
     try {
-      this.logger.debug({ jobId, userId, telegramId }, 'mailing: sending');
+      this.logger.debug({ jobId, userId, telegramId, attempt, maxAttempts }, 'mailing: sending');
 
       const sentMessage = await this.telegramService.sendMailingMessage({
         chatId: telegramId,
@@ -188,8 +193,10 @@ export class MailingProcessor extends WorkerHost {
           userId,
           telegramId,
           messageId: sentMessage.messageId,
+          attempt,
+          elapsedMs: Date.now() - sendStart,
         },
-        'mailing: sent and saved',
+        'mailing: sent',
       );
     } catch (error) {
       const errorMessage =
@@ -228,6 +235,9 @@ export class MailingProcessor extends WorkerHost {
           jobId,
           userId,
           telegramId,
+          attempt,
+          maxAttempts,
+          elapsedMs: Date.now() - sendStart,
           err: error,
         },
         'mailing: failed',
@@ -264,6 +274,25 @@ export class MailingProcessor extends WorkerHost {
       .execute();
 
     if (!result.affected) return;
+
+    const mailingJob = await this.mailingJobRepo.findOne({ where: { id: jobId } });
+    if (mailingJob) {
+      const durationMs = mailingJob.startedAt
+        ? Date.now() - new Date(mailingJob.startedAt).getTime()
+        : null;
+      this.logger.log(
+        {
+          jobId,
+          status: mailingJob.status,
+          sent: mailingJob.sentCount,
+          failed: mailingJob.failedCount,
+          skipped: mailingJob.skippedCount,
+          total: mailingJob.queuedCount,
+          durationSec: durationMs !== null ? Math.round(durationMs / 1000) : null,
+        },
+        'mailing: job completed',
+      );
+    }
 
     await this.usersMailingService.notifyAdminsAboutMailingFinishByJobId(jobId);
   }
