@@ -18,11 +18,11 @@ export class ContestFinishProcessor extends WorkerHost {
 
     const { contestId } = job.data;
 
-    this.logger.warn({ ...jobMeta(job), contestId }, 'finishContest: start');
+    this.logger.log({ ...jobMeta(job), contestId }, 'finishContest: start');
 
     try {
       await this.contestLifecycleService.finishContestIdempotent(contestId);
-      this.logger.warn({ ...jobMeta(job), contestId }, 'finishContest: done');
+      this.logger.log({ ...jobMeta(job), contestId }, 'finishContest: done');
     } catch (e: any) {
       this.logger.error(
         { ...jobMeta(job), contestId, err: e?.message ?? e },
