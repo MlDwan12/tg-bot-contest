@@ -55,7 +55,7 @@ export class ContestsService {
     dto: CreateContest,
     image?: Express.Multer.File,
   ): Promise<Contest> {
-    this.logger.log('В сервисе создания конкурса');
+    this.logger.debug('createContest: start');
 
     const startDate = fromZonedTime(dto.startDate, this.APP_TIME_ZONE);
     const endDate = fromZonedTime(dto.endDate, this.APP_TIME_ZONE);
@@ -213,6 +213,11 @@ export class ContestsService {
     if (dto.endDate !== undefined && nextEndDate <= now) {
       await deleteUploadedContestImage(image);
       throw new BadRequestException('endDate must be in the future');
+    }
+
+    if (dto.startDate !== undefined && nextStartDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be in the future');
     }
 
     if (nextStartDate >= nextEndDate) {
