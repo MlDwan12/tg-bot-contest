@@ -27,6 +27,10 @@ async function bootstrap() {
   // которому нужны куки — иначе req.cookies будет undefined.
   app.use(cookieParser());
 
+  // Отключаем ETag — иначе Express отвечает 304 Not Modified на повторные
+  // запросы с одинаковым телом, что сбивает клиентов и замусоривает логи.
+  app.set('etag', false);
+
   const serverAdapter = new BullBoardExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 

@@ -14,30 +14,33 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
     relabel_configs:
-      # Имя контейнера → label "container" (убираем ведущий слэш)
       - source_labels: [__meta_docker_container_name]
         regex: '/(.*)'
         target_label: container
-      # Имя сервиса из docker-compose → label "service"
       - source_labels: [__meta_docker_container_label_com_docker_compose_service]
         target_label: service
     pipeline_stages:
-      # Парсим JSON только для api-контейнера (pino-логи)
       - match:
           selector: '{service="api"}'
           stages:
             - json:
                 expressions:
                   level: level
-                  req_id: reqId
                   msg: msg
-            # конвертируем числовой pino-уровень в строку
+                  req_method: req.method
+                  req_url: req.url
+            # Конвертируем числовой pino-уровень в строку
             - template:
                 source: level
                 template: '{{if eq .Value "10"}}trace{{else if eq .Value "20"}}debug{{else if eq .Value "30"}}info{{else if eq .Value "40"}}warn{{else if eq .Value "50"}}error{{else if eq .Value "60"}}fatal{{else}}{{.Value}}{{end}}'
-            # level выносим в label (низкая кардинальность — ok)
             - labels:
                 level:
-            # Финальный вывод — поле msg, остальное ищется через фильтры
+            # warn/error: добавляем [METHOD /url] если это HTTP-контекст
+            - match:
+                selector: '{level=~"warn|error|fatal"}'
+                stages:
+                  - template:
+                      source: msg
+                      template: '{{if .req_method}}[{{.req_method}} {{.req_url}}] {{.msg}}{{else}}{{.msg}}{{end}}'
             - output:
                 source: msg
