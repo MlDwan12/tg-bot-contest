@@ -1,82 +1,101 @@
-## Project setup
+# Telegram Contest Bot
+
+Система управления конкурсами в Telegram-каналах. Позволяет создавать конкурсы, публиковать их в каналах, отслеживать участников и выбирать победителей. Включает систему массовых рассылок и полный стек мониторинга.
+
+## Стек
+
+| Слой | Технологии |
+|------|-----------|
+| Backend | NestJS 11, TypeScript |
+| База данных | PostgreSQL 16 + TypeORM |
+| Очереди | BullMQ + Redis 7 |
+| Бот | Telegraf + nestjs-telegraf |
+| Мониторинг | Prometheus, Loki, Grafana, Promtail |
+| Аутентификация | JWT (httpOnly cookies) |
+
+## Быстрый старт
 
 ```bash
-$ yarn install
+# Установка зависимостей
+yarn install
+
+# Копировать и заполнить переменные окружения
+cp .env.development .env
+
+# Запустить миграции
+yarn migration:run
+
+# Запуск в режиме разработки
+yarn start:dev
 ```
 
-## Compile and run the project
+## Docker
 
 ```bash
-# development
-$ yarn run start
-
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
+docker compose up -d
 ```
 
-## Run tests
+Сервис поднимается на `http://localhost:3004`.
+
+## Переменные окружения
+
+| Переменная | Обязательная | Описание |
+|-----------|:---:|---------|
+| `PORT` | | Порт приложения (по умолчанию 3004) |
+| `NODE_ENV` | | `development` / `production` |
+| `JWT_ACCESS_SECRET` | ✓ | Секрет для access-токена (мин. 32 символа) |
+| `JWT_REFRESH_SECRET` | ✓ | Секрет для refresh-токена (мин. 32 символа) |
+| `TELEGRAM_BOT_TOKEN` | ✓ | Токен бота от @BotFather |
+| `ADMIN_IDS` | ✓ | Telegram ID администраторов (через запятую) |
+| `DATABASE_HOST` | ✓ | Хост PostgreSQL |
+| `DATABASE_USER` | ✓ | Пользователь PostgreSQL |
+| `DATABASE_PASSWORD` | ✓ | Пароль PostgreSQL |
+| `DATABASE_NAME` | ✓ | Имя базы данных |
+| `REDIS_HOST` | ✓ | Хост Redis |
+| `REDIS_PORT` | ✓ | Порт Redis |
+| `SENTRY_DSN` | | DSN для Sentry (опционально) |
+| `LOG_LEVEL` | | `debug` / `info` / `warn` / `error` |
+
+## API
+
+| Метод | Путь | Описание | Защита |
+|-------|------|---------|:------:|
+| `POST` | `/auth/login` | Вход | — |
+| `GET` | `/auth/logout` | Выход | — |
+| `GET` | `/auth/me` | Текущий пользователь | JWT |
+| `POST` | `/users` | Создать администратора | JWT |
+| `GET` | `/users` | Список пользователей | — |
+| `POST` | `/users/broadcast` | Массовая рассылка | JWT |
+| `POST` | `/contest` | Создать конкурс | JWT |
+| `GET` | `/contest` | Список конкурсов | JWT |
+| `POST` | `/contest/:id/participate` | Участвовать | — |
+| `PATCH` | `/contest/:id/complete` | Завершить и выбрать победителей | JWT |
+| `POST` | `/channels` | Добавить канал | JWT |
+| `GET` | `/channels` | Список каналов | — |
+| `GET` | `/health` | Проверка состояния сервиса | — |
+| `GET` | `/admin/queues` | Bull Board — управление очередями | JWT (admin) |
+
+## Мониторинг
+
+| Сервис | URL | Описание |
+|--------|-----|---------|
+| Grafana | `:3001` | Дашборды логов и метрик |
+| Prometheus | `:9090` | Метрики сервера |
+| Bull Board | `:3004/admin/queues` | Состояние очередей |
+
+## Миграции
 
 ```bash
-# unit tests
-$ yarn run test
+# Применить
+yarn migration:run
 
-# e2e tests
-$ yarn run test:e2e
+# Создать новую
+yarn migration:generate src/database/migrations/migration_name
 
-# test coverage
-$ yarn run test:cov
+# Откатить
+yarn migration:revert
 ```
 
-src/modules/bot/
-├─ bot.module.ts # регистрирует Telegraf
-├─ bot.update.ts # ловит /start и callback
-├─ bot.service.ts # логика рассылок, отправка сообщений
-└─ bot.constants.ts # константы, admin id, лимиты
+## Документация
 
-ТЕСТЫ
-Покрытие ContestsService.createContest
-
-1. Успешные сценарии
-   ✔ Создание конкурса без изображения
-   ✔ Создание конкурса с изображением
-   ✔ Подставляется дефолтный buttonText, если не передан
-   ✔ Создание при пустом publishChannelIds
-   ✔ Создание при пустом requiredChannelIds
-   ✔ Сохраняется порядок каналов (важно для UX и логики публикаций)
-   ✔ Корректно формируется payload публикаций (текст, кнопка, URL)
-2. Валидация входных данных
-   ✔ Ошибка, если startDate >= endDate
-   ✔ Ошибка, если создатель (админ) не найден
-3. Работа с каналами
-   ✔ Ошибка, если publish-каналы не найдены
-   ✔ Ошибка, если required-каналы не найдены
-   ✔ Проверка, что бот:
-   ❌ не найден в канале → ошибка
-   ❌ не админ → ошибка
-   ❌ не может постить → ошибка
-   ❌ не может редактировать → ошибка
-   ✔ Агрегация ошибок прав (несколько каналов → одно сообщение)
-4. Интеграция с Telegram
-   ✔ Проверка прав бота вызывается
-   ✔ Проверка не вызывается, если нет publish-каналов
-5. Работа с репозиториями
-   ✔ Создание конкурса (create)
-   ✔ Привязка publish-каналов
-   ✔ Привязка required-каналов
-   ✔ Создание публикаций
-   ✔ Удаление старых pending публикаций
-6. Ошибки (critical path)
-
-Ты проверил, что сервис не глотает ошибки, а пробрасывает их:
-
-✔ Ошибка при create
-✔ Ошибка при setPublishChannels
-✔ Ошибка при setRequiredChannels
-✔ Ошибка при createPublications
-✔ Ошибка при scheduleContest
-✔ Ошибка при финальном findByIdWithRelations 7. Очереди (jobs)
-✔ Проверка, что scheduleContest вызывается
-✔ Проверка, что ошибка из него пробрасывается
+Полная документация — [DOCS.md](./DOCS.md).
