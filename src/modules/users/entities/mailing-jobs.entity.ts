@@ -21,8 +21,8 @@ export class MailingJobEntity {
   @Column({ type: 'varchar', length: 50 })
   type: string;
 
-  @Column({ type: 'int', nullable: true })
-  initiatorUserId: number | null;
+  @Column({ type: 'bigint', nullable: true })
+  initiatorUserId: string | null;
 
   @Column({ type: 'int', nullable: true })
   contestId: number | null;

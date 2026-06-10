@@ -68,7 +68,7 @@ export class UsersMailingService {
     await this.mailingJobRepo.save({
       id: jobId,
       type: dto.type,
-      initiatorUserId: dto.userId ?? null,
+      initiatorUserId: dto.userId != null ? String(dto.userId) : null,
       contestId: dto.contestId ?? null,
       groupId: dto.groupId ? String(dto.groupId) : null,
       totalRecipients: users.length,
