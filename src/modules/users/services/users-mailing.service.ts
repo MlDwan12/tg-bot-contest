@@ -52,7 +52,7 @@ export class UsersMailingService {
 
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
 
-    await this.notifyAdminsAboutMailingStart(dto, image);
+    await this.notifyAdminsAboutMailingStart(dto, image, users.length);
 
     const imagePath = image ? `/uploads/mailings/${image.filename}` : undefined;
     const finalButtonUrl = this.resolveButtonUrl(dto, publication);
@@ -90,22 +90,27 @@ export class UsersMailingService {
       error: null,
     });
 
-    await this.mailingQueue.addBulk(
-      users
-        .filter((user) => !!user.telegramId)
-        .map((user) => ({
-          name: 'send-message',
-          data: {
-            jobId,
-            telegramId: user.telegramId,
-            userId: user.id,
-            text: dto.text || publication?.payload?.text,
-            imagePath: finalImagePath,
-            buttonText,
-            buttonUrl: finalButtonUrl,
-          },
-        })),
-    );
+    try {
+      await this.mailingQueue.addBulk(
+        users
+          .filter((user) => !!user.telegramId)
+          .map((user) => ({
+            name: 'send-message',
+            data: {
+              jobId,
+              telegramId: user.telegramId,
+              userId: user.id,
+              text: dto.text || publication?.payload?.text,
+              imagePath: finalImagePath,
+              buttonText,
+              buttonUrl: finalButtonUrl,
+            },
+          })),
+      );
+    } catch (error) {
+      await this.mailingJobRepo.update({ id: jobId }, { status: 'failed', error: String(error), finishedAt: new Date() });
+      throw error;
+    }
 
     this.logger.log(
       `Рассылка поставлена в очередь: jobId=${jobId}, count=${users.length}`,
@@ -133,7 +138,7 @@ export class UsersMailingService {
     publication?: ContestPublication,
   ): string | undefined {
     if (dto.contestId) {
-      this.logger.log(`Определение ссылки по contestId=${dto.contestId}`);
+      this.logger.debug({ contestId: dto.contestId }, 'resolveButtonUrl: building URL from contestId');
 
       // const publication = await this.contestPublicationService.getPublicationByContestId(
       //   dto.contestId,
@@ -141,13 +146,15 @@ export class UsersMailingService {
 
       if (!publication) {
         this.logger.warn(
-          `Публикация конкурса не найдена для contestId=${dto.contestId}`,
+          { contestId: dto.contestId },
+          'resolveButtonUrl: публикация конкурса не найдена',
         );
         throw new NotFoundException('Contest publication not found');
       }
 
-      this.logger.log(
-        `Публикация найдена: publicationId=${publication.id}, telegramMessageId=${publication.telegramMessageId}, channelId=${publication.channel?.id ?? '-'}, chatId=${publication.chatId}`,
+      this.logger.debug(
+        { publicationId: publication.id, telegramMessageId: publication.telegramMessageId, chatId: publication.chatId },
+        'resolveButtonUrl: publication found',
       );
 
       const postUrl = this.buildTelegramPostUrl({
@@ -157,13 +164,13 @@ export class UsersMailingService {
         messageId: publication.telegramMessageId!,
       });
 
-      this.logger.log(`Собрана ссылка на telegram-пост: ${postUrl}`);
+      this.logger.debug({ postUrl }, 'resolveButtonUrl: URL built');
 
       return postUrl;
     }
 
     if (dto.buttonUrl) {
-      this.logger.log(`Используется переданный buttonUrl: ${dto.buttonUrl}`);
+      this.logger.debug({ buttonUrl: dto.buttonUrl }, 'resolveButtonUrl: using provided buttonUrl');
     }
 
     return dto.buttonUrl;
@@ -181,30 +188,32 @@ export class UsersMailingService {
         ? String(telegramId)
         : undefined;
 
-    this.logger.log(
-      `Построение ссылки на пост: telegramUsername=${telegramUsername ?? '-'}, telegramId=${telegramIdStr ?? '-'}, messageId=${messageId ?? '-'}`,
+    this.logger.debug(
+      { telegramUsername, telegramId: telegramIdStr, messageId },
+      'buildTelegramPostUrl: building',
     );
 
     if (!messageId) {
-      this.logger.warn('Невозможно построить ссылку: отсутствует messageId');
+      this.logger.warn({ telegramId: telegramIdStr }, 'buildTelegramPostUrl: отсутствует messageId');
       throw new BadRequestException('Publication messageId is missing');
     }
 
     if (telegramUsername) {
       const url = `https://t.me/${telegramUsername}/${messageId}`;
-      this.logger.log(`Собрана публичная ссылка на пост: ${url}`);
+      this.logger.debug({ url }, 'buildTelegramPostUrl: public post URL');
       return url;
     }
 
     if (telegramIdStr?.startsWith('-100')) {
       const internalChatId = telegramIdStr.slice(4);
       const url = `https://t.me/c/${internalChatId}/${messageId}`;
-      this.logger.log(`Собрана ссылка на приватный пост: ${url}`);
+      this.logger.debug({ url }, 'buildTelegramPostUrl: private post URL');
       return url;
     }
 
     this.logger.warn(
-      `Невозможно построить Telegram post URL: telegramUsername=${telegramUsername ?? '-'}, telegramId=${telegramIdStr ?? '-'}`,
+      { telegramUsername, telegramId: telegramIdStr },
+      'buildTelegramPostUrl: невозможно построить URL',
     );
 
     throw new BadRequestException(
@@ -213,20 +222,16 @@ export class UsersMailingService {
   }
 
   private async getRecipients(dto: SendUsersMailingDto): Promise<User[]> {
-    this.logger.log(`Получение получателей для type=${dto.type}`);
+    this.logger.debug({ type: dto.type }, 'getRecipients: fetching');
 
     switch (dto.type) {
       case UserMailingType.USER: {
         if (!dto.userId) {
-          this.logger.warn('Для USER рассылки не передан userId');
+          this.logger.warn({ type: dto.type }, 'getRecipients: userId не передан');
           throw new BadRequestException(
             'userId is required for USER mailing type',
           );
         }
-
-        this.logger.log(
-          `Поиск одного пользователя по telegramId=${dto.userId}`,
-        );
 
         const user = await this.usersRepository.findOne({
           where: {
@@ -237,19 +242,18 @@ export class UsersMailingService {
 
         if (!user) {
           this.logger.warn(
-            `Пользователь не найден по telegramId=${dto.userId}`,
+            { telegramId: dto.userId },
+            'getRecipients: пользователь не найден',
           );
           throw new NotFoundException('User not found');
         }
 
-        this.logger.log(`Найден пользователь userId=${user.id}`);
+        this.logger.debug({ userId: user.id }, 'getRecipients: found user');
 
         return [user];
       }
 
       case UserMailingType.GROUP: {
-        this.logger.log(`Поиск участников группы groupId=${dto.groupId}`);
-
         const participations = await this.participationRepository.find({
           where: {
             groupId: dto.groupId,
@@ -259,14 +263,15 @@ export class UsersMailingService {
           },
         });
 
-        this.logger.log(`Найдено участий по группе: ${participations.length}`);
-
         const uniqueUserIds = [...new Set(participations.map((p) => p.userId))];
 
-        this.logger.log(`Уникальных userId в группе: ${uniqueUserIds.length}`);
+        this.logger.debug(
+          { groupId: dto.groupId, participations: participations.length, uniqueUsers: uniqueUserIds.length },
+          'getRecipients: GROUP participations',
+        );
 
         if (!uniqueUserIds.length) {
-          this.logger.warn(`Для groupId=${dto.groupId} получатели не найдены`);
+          this.logger.warn({ groupId: dto.groupId }, 'getRecipients: получатели не найдены');
           return [];
         }
 
@@ -277,31 +282,25 @@ export class UsersMailingService {
           },
         });
 
-        this.logger.log(
-          `Пользователей для GROUP рассылки найдено: ${users.length}`,
-        );
+        this.logger.debug({ count: users.length }, 'getRecipients: GROUP users loaded');
 
         return users;
       }
 
       case UserMailingType.ALL: {
-        this.logger.log('Получение всех пользователей для ALL рассылки');
-
         const users = await this.usersRepository.find({
           where: {
             role: UserRole.USER,
           },
         });
 
-        this.logger.log(
-          `Пользователей для ALL рассылки найдено: ${users.length}`,
-        );
+        this.logger.debug({ count: users.length }, 'getRecipients: ALL users loaded');
 
         return users;
       }
 
       default:
-        this.logger.warn(`Неизвестный тип рассылки: ${dto.type}`);
+        this.logger.warn({ type: dto.type }, 'getRecipients: неизвестный тип рассылки');
         return [];
     }
   }
@@ -313,14 +312,13 @@ export class UsersMailingService {
       },
     });
 
-    this.logger.log(`Найдено админов для уведомления: ${admins.length}`);
+    this.logger.debug({ count: admins.length }, 'getAdminRecipients: found');
 
     return admins.filter((admin) => !!admin.telegramId);
   }
 
   private getAdminTelegramIdsFromEnv(): string[] {
     const raw = process.env.ADMIN_IDS;
-    console.log(1111, raw);
 
     if (!raw) {
       this.logger.warn('ADMIN_IDS не задан в env');
@@ -358,15 +356,15 @@ export class UsersMailingService {
           });
         } catch (error: any) {
           this.logger.error(
-            `Не удалось отправить уведомление о старте админу userId=${admin}, telegramId=${admin}: ${error?.message ?? 'Unknown error'}`,
-            error?.stack,
+            { err: error, adminTelegramId: admin },
+            'notifyAdminsAboutMailingStart: не удалось отправить уведомление',
           );
         }
       }
     } catch (error: any) {
       this.logger.error(
-        `Ошибка при уведомлении админов о старте рассылки: ${error?.message ?? 'Unknown error'}`,
-        error?.stack,
+        { err: error },
+        'notifyAdminsAboutMailingStart: ошибка',
       );
     }
   }
@@ -391,23 +389,21 @@ export class UsersMailingService {
 
       for (const admin of admins) {
         try {
-          console.log(admin);
-
           await this.telegramService.sendMailingMessage({
             chatId: admin!,
             text,
           });
         } catch (error: any) {
           this.logger.error(
-            `Не удалось отправить уведомление о завершении админу userId=${admin}, telegramId=${admin}: ${error?.message ?? 'Unknown error'}`,
-            error?.stack,
+            { err: error, adminTelegramId: admin },
+            'notifyAdminsAboutMailingFinish: не удалось отправить уведомление',
           );
         }
       }
     } catch (error: any) {
       this.logger.error(
-        `Ошибка при уведомлении админов о завершении рассылки: ${error?.message ?? 'Unknown error'}`,
-        error?.stack,
+        { err: error },
+        'notifyAdminsAboutMailingFinish: ошибка',
       );
     }
   }

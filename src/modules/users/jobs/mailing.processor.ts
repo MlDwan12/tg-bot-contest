@@ -105,6 +105,44 @@ export class MailingProcessor extends WorkerHost {
       jobId,
     } = job.data;
 
+    // Защита от повторной отправки при retry.
+    //
+    // Сценарий без этой проверки:
+    //   1. sendMailingMessage отправил сообщение в Telegram ✓
+    //   2. dataSource.transaction упала (краш, таймаут БД) ✗
+    //   3. BullMQ помечает job как failed → retry
+    //   4. Пользователь получает то же письмо второй раз
+    //
+    // BullMQ никогда не запускает один job параллельно, поэтому race condition
+    // между двумя воркерами для одного job здесь невозможен — только retry.
+    const alreadySent = await this.mailingMessageRepo.existsBy({
+      mailingJobId: jobId,
+      userId,
+      sendStatus: 'sent',
+    });
+
+    if (alreadySent) {
+      this.logger.warn(
+        { jobId, userId },
+        'mailing: письмо уже отправлено в предыдущей попытке, пропускаем retry',
+      );
+      return;
+    }
+
+    const alreadyFailed = await this.mailingMessageRepo.existsBy({
+      mailingJobId: jobId,
+      userId,
+      sendStatus: 'failed',
+    });
+
+    if (alreadyFailed) {
+      this.logger.warn(
+        { jobId, userId },
+        'mailing: предыдущая попытка уже записана как failed, пропускаем повторный retry',
+      );
+      return;
+    }
+
     try {
       this.logger.debug({ jobId, userId, telegramId }, 'mailing: sending');
 
@@ -200,29 +238,32 @@ export class MailingProcessor extends WorkerHost {
   }
 
   private async tryFinalizeJob(jobId: string): Promise<void> {
-    const job = await this.mailingJobRepo.findOne({ where: { id: jobId } });
-    if (!job) return;
+    // Атомарный подход: читаем счётчики и меняем статус в одном SQL-запросе.
+    //
+    // Проблема с предыдущим подходом (SELECT + UPDATE):
+    //   1. Worker A и Worker B оба вызывают tryFinalizeJob
+    //   2. Оба читают sentCount = 1000, queuedCount = 1000 → оба "последние"
+    //   3. Только один UPDATE проходит (условие status='processing')
+    //   4. Но до UPDATE оба уже могли принять решение об уведомлении
+    //
+    // Здесь WHERE содержит ВСЕ условия: статус, счётчик — всё проверяется
+    // и изменяется атомарно на уровне одной строки PostgreSQL.
+    // Если affected = 0 — либо статус уже не 'processing', либо счётчики
+    // ещё не дошли до queuedCount. В обоих случаях правильно ничего не делать.
+    const result = await this.mailingJobRepo
+      .createQueryBuilder()
+      .update(MailingJobEntity)
+      .set({
+        status: () =>
+          `CASE WHEN "failedCount" > 0 THEN 'completed_with_errors' ELSE 'completed' END`,
+        finishedAt: () => 'NOW()',
+      })
+      .where('"id" = :id', { id: jobId })
+      .andWhere('"status" = :status', { status: 'processing' })
+      .andWhere('("sentCount" + "failedCount") >= "queuedCount"')
+      .execute();
 
-    const processed = job.sentCount + job.failedCount;
-
-    if (processed < job.queuedCount) {
-      return;
-    }
-
-    const finalStatus =
-      job.failedCount > 0 ? 'completed_with_errors' : 'completed';
-
-    const updateResult = await this.mailingJobRepo.update(
-      { id: jobId, status: 'processing' },
-      {
-        status: finalStatus,
-        finishedAt: new Date(),
-      },
-    );
-
-    if (!updateResult.affected) {
-      return;
-    }
+    if (!result.affected) return;
 
     await this.usersMailingService.notifyAdminsAboutMailingFinishByJobId(jobId);
   }
