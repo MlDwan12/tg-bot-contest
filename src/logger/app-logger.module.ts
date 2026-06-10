@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { IncomingMessage } from 'http';
+import { randomUUID } from 'crypto';
+import { IncomingMessage, ServerResponse } from 'http';
 import { LoggerModule } from 'nestjs-pino';
 
 @Module({
@@ -30,6 +31,39 @@ import { LoggerModule } from 'nestjs-pino';
                 }
               : undefined,
 
+            genReqId(req: IncomingMessage, res: ServerResponse) {
+              const existing = req.headers['x-request-id'];
+              if (existing) return Array.isArray(existing) ? existing[0] : existing;
+              const id = randomUUID();
+              res.setHeader('x-request-id', id);
+              return id;
+            },
+
+            customLogLevel(
+              _req: IncomingMessage,
+              res: ServerResponse,
+              err?: Error,
+            ): 'error' | 'warn' | 'info' | 'debug' {
+              if (err || res.statusCode >= 500) return 'error';
+              if (res.statusCode >= 400) return 'warn';
+              return isProd ? 'info' : 'debug';
+            },
+
+            customSuccessMessage(req: IncomingMessage, res: ServerResponse) {
+              return `${req.method} ${(req as any).url?.split('?')[0]} ${res.statusCode}`;
+            },
+
+            customErrorMessage(req: IncomingMessage, res: ServerResponse) {
+              return `${req.method} ${(req as any).url?.split('?')[0]} ${res.statusCode}`;
+            },
+
+            autoLogging: {
+              ignore: (req: IncomingMessage) => {
+                const url = (req as any).url as string | undefined;
+                return url === '/health' || url === '/ping';
+              },
+            },
+
             redact:
               redactFromEnv ||
               (isProd
@@ -41,13 +75,15 @@ import { LoggerModule } from 'nestjs-pino';
                   ]
                 : ['req.headers.authorization', 'req.headers.cookie']),
 
-            autoLogging: false, // true логирует req/res автоматически
             serializers: {
               req(req: IncomingMessage & { url?: string }) {
-                if (req.url) {
-                  req.url = req.url.split('?')[0]; // скрываем query
-                }
-                return req;
+                return {
+                  method: req.method,
+                  url: req.url?.split('?')[0],
+                };
+              },
+              res(res: ServerResponse) {
+                return { statusCode: res.statusCode };
               },
             },
           },
