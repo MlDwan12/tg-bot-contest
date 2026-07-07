@@ -42,19 +42,8 @@ export class AuthController {
 
     const isProd = this.configService.get('NODE_ENV') === 'production';
 
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'strict',
-      maxAge: 3600000, // 1 час
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 3600 * 1000, // 7 дней
-    });
+    this.authService.setAccessCookie(res, accessToken);
+    this.authService.setRefreshCookie(res, refreshToken);
 
     return { message: 'Успешный вход' };
   }

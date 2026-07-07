@@ -16,7 +16,7 @@ export class ContestPublishProcessor extends WorkerHost {
     private readonly logger: Logger,
   ) {
     super();
-    this.logger.log('ContestPublishProcessor initialized');
+    this.logger.debug('ContestPublishProcessor initialized');
   }
 
   async process(job: Job<{ contestId: number }>) {

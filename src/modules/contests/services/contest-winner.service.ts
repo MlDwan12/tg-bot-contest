@@ -283,14 +283,14 @@ export class ContestWinnerService {
     contestId: number,
     users: User[],
   ): Promise<void> {
-    await this.contestParticipationWriteRepo.resetWinnerFlags(contestId);
+    const winners = users.map((user, index) => ({
+      userId: user.id,
+      place: index + 1,
+    }));
 
-    for (const [index, user] of users.entries()) {
-      await this.contestParticipationWriteRepo.markAsWinner(
-        contestId,
-        user.id,
-        index + 1,
-      );
-    }
+    await this.contestParticipationWriteRepo.syncWinnerFlagsInTransaction(
+      contestId,
+      winners,
+    );
   }
 }

@@ -57,12 +57,12 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: '1h',
+        expiresIn: '15m', // совпадает с maxAge в setAccessCookie и cookie контроллера
       }),
 
       this.jwtService.signAsync(refreshPayload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: '7d',
+        expiresIn: '30d', // совпадает с maxAge в setRefreshCookie
       }),
     ]);
 

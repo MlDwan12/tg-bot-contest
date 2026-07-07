@@ -46,7 +46,7 @@ export class ContestPublicationProcessor extends WorkerHost {
     private readonly configService: ConfigService,
   ) {
     super();
-    this.logger.log('ContestPublicationProcessor initialized');
+    this.logger.debug('ContestPublicationProcessor initialized');
   }
 
   async process(

@@ -27,6 +27,7 @@ scrape_configs:
                 expressions:
                   level: level
                   msg: msg
+                  context: context
                   req_method: req.method
                   req_url: req.url
             # Конвертируем числовой pino-уровень в строку
@@ -35,6 +36,10 @@ scrape_configs:
                 template: '{{if eq .Value "10"}}trace{{else if eq .Value "20"}}debug{{else if eq .Value "30"}}info{{else if eq .Value "40"}}warn{{else if eq .Value "50"}}error{{else if eq .Value "60"}}fatal{{else}}{{.Value}}{{end}}'
             - labels:
                 level:
+            # Если msg пустой — берём context (nestjs-pino кладёт сообщение туда)
+            - template:
+                source: msg
+                template: '{{if .Value}}{{.Value}}{{else}}{{.context}}{{end}}'
             # warn/error: добавляем [METHOD /url] если это HTTP-контекст
             - match:
                 selector: '{level=~"warn|error|fatal"}'

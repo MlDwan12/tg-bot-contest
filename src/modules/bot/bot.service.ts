@@ -234,15 +234,10 @@ export class TelegramService {
     buttonText?: string;
     buttonUrl?: string;
   }): Promise<{ messageId: number; chatId: string }> {
-    this.logger.log(
-      `sendMailingMessage: chatId=${dto.chatId}, hasMedia=${!!dto.imagePath}, hasButton=${!!dto.buttonText && !!dto.buttonUrl}`,
+    this.logger.debug(
+      { chatId: dto.chatId, hasMedia: !!dto.imagePath, hasButton: !!(dto.buttonText && dto.buttonUrl) },
+      'sendMailingMessage: start',
     );
-
-    if (dto.buttonText || dto.buttonUrl) {
-      this.logger.log(
-        `Кнопка: text=${dto.buttonText ?? '-'}, url=${dto.buttonUrl ?? '-'}`,
-      );
-    }
 
     const replyMarkup =
       dto.buttonText && dto.buttonUrl
@@ -255,18 +250,17 @@ export class TelegramService {
       if (dto.imagePath) {
         const filePath = join(process.cwd(), dto.imagePath);
 
-        this.logger.log(`Путь к файлу: ${filePath}`);
+        this.logger.debug({ chatId: dto.chatId, filePath }, 'sendMailingMessage: resolving file');
 
         if (!existsSync(filePath)) {
-          this.logger.error(`Файл не найден: ${filePath}`);
+          this.logger.error({ chatId: dto.chatId, filePath }, 'Файл не найден');
           throw new Error(`Media file not found: ${dto.imagePath}`);
         }
 
         const ext = extname(filePath).toLowerCase();
-        this.logger.log(`Тип файла: ${ext}`);
 
         if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-          this.logger.log(`Отправка фото: chatId=${dto.chatId}`);
+          this.logger.debug({ chatId: dto.chatId, ext }, 'sendMailingMessage: sending photo');
 
           const msg = await this.bot.telegram.sendPhoto(
             dto.chatId,
@@ -278,15 +272,16 @@ export class TelegramService {
             },
           );
 
-          this.logger.log(
-            `Фото отправлено успешно: chatId=${dto.chatId}, messageId=${msg.message_id}`,
+          this.logger.debug(
+            { chatId: dto.chatId, messageId: msg.message_id },
+            'sendMailingMessage: photo sent',
           );
 
           return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
         if (['.mp4', '.mov'].includes(ext)) {
-          this.logger.log(`Отправка видео: chatId=${dto.chatId}`);
+          this.logger.debug({ chatId: dto.chatId, ext }, 'sendMailingMessage: sending video');
 
           const msg = await this.bot.telegram.sendVideoNote(
             dto.chatId,
@@ -301,18 +296,19 @@ export class TelegramService {
             },
           );
 
-          this.logger.log(
-            `Видео отправлено успешно: chatId=${dto.chatId}, messageId=${msg.message_id}`,
+          this.logger.debug(
+            { chatId: dto.chatId, messageId: msg.message_id },
+            'sendMailingMessage: video sent',
           );
 
           return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
-        this.logger.error(`Неподдерживаемый тип файла: ${ext}`);
+        this.logger.error({ chatId: dto.chatId, ext }, 'Неподдерживаемый тип файла');
         throw new Error(`Unsupported media type: ${ext}`);
       }
 
-      this.logger.log(`Отправка текстового сообщения: chatId=${dto.chatId}`);
+      this.logger.debug({ chatId: dto.chatId }, 'sendMailingMessage: sending text');
 
       const msg = await this.bot.telegram.sendMessage(
         dto.chatId,
@@ -323,23 +319,17 @@ export class TelegramService {
         },
       );
 
-      this.logger.log(
-        `Сообщение отправлено: chatId=${dto.chatId}, messageId=${msg.message_id}`,
+      this.logger.debug(
+        { chatId: dto.chatId, messageId: msg.message_id },
+        'sendMailingMessage: text sent',
       );
 
       return { messageId: msg.message_id, chatId: String(msg.chat.id) };
     } catch (error: any) {
       this.logger.error(
-        `Ошибка при отправке в Telegram: chatId=${dto.chatId}, error=${error?.message}`,
-        error?.stack,
+        { err: error, chatId: dto.chatId, tgResponse: error?.response },
+        'sendMailingMessage: Telegram error',
       );
-
-      if (error?.response) {
-        this.logger.error(
-          `Telegram response: ${JSON.stringify(error.response)}`,
-        );
-      }
-
       throw error;
     }
   }

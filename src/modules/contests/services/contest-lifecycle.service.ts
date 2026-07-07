@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
+import { DataSource } from 'typeorm';
 import {
   ContestParticipationReadRepository,
   ContestReadRepository,
@@ -38,6 +39,7 @@ export class ContestLifecycleService {
     private readonly contestWinnerService: ContestWinnerService,
     private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
+    private readonly dataSource: DataSource,
   ) {}
 
   async activateContestIfDue(contestId: number): Promise<void> {
@@ -62,42 +64,73 @@ export class ContestLifecycleService {
   }
 
   async finishContestIdempotent(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
-    if (!contest) return;
-
-    if (contest.status === ContestStatus.COMPLETED) return;
-
-    const now = new Date();
-    if (contest.endDate > now) return;
-
-    const participants =
-      await this.contestParticipationReadRepo.findManyByContestId(contest.id);
-    const hasParticipants = participants.length > 0;
-
-    if (hasParticipants) {
-      await this.contestWinnerService.resolveAndSaveWinners(contest);
-    }
-
-    const changed =
-      await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
-    if (!changed) return;
-
-    const publicationIds =
-      await this.contestPublicationService.getPublishedPublicationIdsForContest(
-        contestId,
-      );
-
-    this.logger.warn(
-      { contestId, hasParticipants, publicationIds },
-      'finishContestIdempotent: publications for finished button update',
+    // PostgreSQL Advisory Lock гарантирует, что при параллельном запуске
+    // (BullMQ retry, два воркера) только один процесс выполняет тело функции
+    // для данного contestId. Остальные сразу получают acquired=false и выходят.
+    //
+    // Почему это важно: resolveAndSaveWinners делает случайный розыгрыш.
+    // Если два процесса запустят его одновременно — будет два разных розыгрыша,
+    // и победители окажутся непредсказуемыми (последний перезапишет первого).
+    //
+    // pg_try_advisory_lock — non-blocking: не ждёт, сразу возвращает boolean.
+    // Лок session-level: удерживается до pg_advisory_unlock или закрытия соединения.
+    const [{ acquired }] = await this.dataSource.query<[{ acquired: boolean }]>(
+      'SELECT pg_try_advisory_lock($1) AS acquired',
+      [contestId],
     );
 
-    for (const publicationId of publicationIds) {
-      await this.publicationQueue.add(
-        'updateFinishedButton',
-        { publicationId, hasParticipants },
-        { jobId: `publication:${publicationId}:finish-button` },
+    if (!acquired) {
+      this.logger.warn(
+        { contestId },
+        'finishContestIdempotent: лок уже удерживается другим процессом, пропускаем',
       );
+      return;
+    }
+
+    try {
+      const contest =
+        await this.contestReadRepo.findByIdWithRelations(contestId);
+      if (!contest) return;
+
+      if (contest.status === ContestStatus.COMPLETED) return;
+
+      const now = new Date();
+      if (contest.endDate > now) return;
+
+      const participants =
+        await this.contestParticipationReadRepo.findManyByContestId(contest.id);
+      const hasParticipants = participants.length > 0;
+
+      if (hasParticipants) {
+        await this.contestWinnerService.resolveAndSaveWinners(contest);
+      }
+
+      const changed =
+        await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
+      if (!changed) return;
+
+      const publicationIds =
+        await this.contestPublicationService.getPublishedPublicationIdsForContest(
+          contestId,
+        );
+
+      this.logger.log(
+        { contestId, hasParticipants, publicationIds },
+        'finishContestIdempotent: publications for finished button update',
+      );
+
+      for (const publicationId of publicationIds) {
+        await this.publicationQueue.add(
+          'updateFinishedButton',
+          { publicationId, hasParticipants },
+          { jobId: `publication:${publicationId}:finish-button` },
+        );
+      }
+    } finally {
+      // Освобождаем лок при любом исходе — в том числе при исключении.
+      // Без finally: если resolveAndSaveWinners выбросит ошибку, лок
+      // останется висеть до закрытия соединения (может быть долго).
+      await this.dataSource.query('SELECT pg_advisory_unlock($1)', [contestId]);
     }
   }
 

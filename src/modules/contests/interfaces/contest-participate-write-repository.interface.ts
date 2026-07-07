@@ -1,4 +1,4 @@
-import { ContestParticipation, ContestPublication } from '../entities';
+import { ContestParticipation } from '../entities';
 
 export interface IContestParticipationWriteRepository {
   createParticipation(data: {
@@ -7,5 +7,8 @@ export interface IContestParticipationWriteRepository {
     groupId: string;
   }): Promise<ContestParticipation>;
 
-  
+  syncWinnerFlagsInTransaction(
+    contestId: number,
+    winners: Array<{ userId: number; place: number }>,
+  ): Promise<void>;
 }

@@ -140,14 +140,12 @@ export class ContestsParticipateService {
           userId: user.id,
           groupId: tgData.groupId,
         });
+
+      // BullMQ гарантирует уникальность по jobId: если джоб с таким id уже
+      // стоит в очереди (delayed/waiting), повторный add его не дублирует.
+      // Поэтому getJob+remove+add заменяем на простой add — это атомарно
+      // и безопасно при параллельных запросах.
       const counterJobId = `contest-counter-${contest.id}`;
-
-      const existingJob = await this.contestCountersQueue.getJob(counterJobId);
-
-      if (existingJob) {
-        await existingJob.remove();
-      }
-
       const job = await this.contestCountersQueue.add(
         'sync-participants-counter',
         { contestId: contest.id },
@@ -167,11 +165,14 @@ export class ContestsParticipateService {
       return participation;
     } catch (error) {
       if (error?.code === '23505') {
+        // Уникальный индекс стоит на [contestId, userId] — без groupId.
+        // Пользователь мог прийти из другого чата (другой groupId), но участие
+        // уже существует. Ищем только по userId+contestId, иначе findOne
+        // вернёт null и клиент получит 500 вместо своей записи.
         const existing = await this.contestParticipationReadRepo.findOneByParam(
           {
             userId: user.id,
             contestId: contest.id,
-            groupId: tgData.groupId,
           },
         );
         if (existing) return existing; // ← тоже 200
@@ -195,14 +196,12 @@ export class ContestsParticipateService {
     contestId: number,
     winners: Array<{ userId: number; place: number }>,
   ): Promise<void> {
-    await this.contestParticipationWriteRepo.resetWinnerFlags(contestId);
-
-    for (const winner of winners) {
-      await this.contestParticipationWriteRepo.markAsWinner(
-        contestId,
-        winner.userId,
-        winner.place,
-      );
-    }
+    // Сброс и простановка флагов в одной транзакции: если между reset и mark
+    // придёт параллельный читатель, он увидит либо старые данные, либо новые —
+    // никогда не увидит состояние "все сброшены, ни один не отмечен победителем".
+    await this.contestParticipationWriteRepo.syncWinnerFlagsInTransaction(
+      contestId,
+      winners,
+    );
   }
 }
