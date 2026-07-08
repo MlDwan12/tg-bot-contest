@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { validationSchema } from './validation.schema';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppImports } from './modules';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -18,9 +19,13 @@ import { ScheduleModule } from '@nestjs/schedule';
       cache: true,
       validationSchema: validationSchema,
     }),
+    // Глобальный лимит: 100 запросов в 60 секунд с одного IP.
+    // Чтобы он реально работал — ниже добавлен APP_GUARD с ThrottlerGuard.
+    // Без APP_GUARD этот модуль — мёртвый код.
     ThrottlerModule.forRoot({
       throttlers: [
         {
+          name: 'global',
           ttl: 60,
           limit: 100,
         },
@@ -60,6 +65,16 @@ import { ScheduleModule } from '@nestjs/schedule';
     }),
     ScheduleModule.forRoot(),
     ...AppImports,
+  ],
+  providers: [
+    // APP_GUARD — это специальный токен NestJS для глобальных guard'ов.
+    // ThrottlerGuard применяется ко ВСЕМ роутам автоматически.
+    // На конкретных роутах можно переопределить через @Throttle()
+    // или отключить через @SkipThrottle().
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppConfigModule {}

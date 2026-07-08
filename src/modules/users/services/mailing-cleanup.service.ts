@@ -36,6 +36,8 @@ export class MailingCleanupService {
     }
 
     this.isCleanupRunning = true;
+    const cleanupStart = Date.now();
+    this.logger.log('cleanup:deleteExpiredMessages: started');
 
     const batchSize = 100;
     let totalProcessed = 0;
@@ -70,13 +72,15 @@ export class MailingCleanupService {
 
         if (totalLeft === 0) {
           this.logger.log(
-            `Удаление сообщений завершено. Обработано=${totalProcessed}, удалено=${totalDeleted}, failed=${totalFailed}`,
+            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            'cleanup:deleteExpiredMessages: done',
           );
           break;
         }
 
-        this.logger.log(
-          `Осталось сообщений для удаления: ${totalLeft}. Беру пачку ${batchSize}`,
+        this.logger.debug(
+          { totalLeft, batchSize },
+          'deleteExpiredMessages: fetching next batch',
         );
 
         const messages = await this.mailingMessageRepo.find({
@@ -95,7 +99,8 @@ export class MailingCleanupService {
 
         if (!messages.length) {
           this.logger.log(
-            `Удаление сообщений завершено. Обработано=${totalProcessed}, удалено=${totalDeleted}, failed=${totalFailed}`,
+            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            'cleanup:deleteExpiredMessages: done',
           );
           break;
         }
@@ -142,13 +147,15 @@ export class MailingCleanupService {
           totalProcessed++;
         }
 
-        this.logger.log(
-          `Пачка обработана. Обработано=${totalProcessed}, удалено=${totalDeleted}, failed=${totalFailed}`,
+        this.logger.debug(
+          { totalProcessed, totalDeleted, totalFailed },
+          'deleteExpiredMessages: batch done',
         );
 
         if (messages.length < batchSize) {
           this.logger.log(
-            `Удаление сообщений завершено. Обработано=${totalProcessed}, удалено=${totalDeleted}, failed=${totalFailed}`,
+            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            'cleanup:deleteExpiredMessages: done',
           );
           break;
         }
@@ -172,6 +179,9 @@ export class MailingCleanupService {
     timeZone: 'Europe/Moscow',
   })
   async cleanupFailedMessages(): Promise<void> {
+    const cleanupStart = Date.now();
+    this.logger.log('cleanup:cleanupFailedMessages: started');
+
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - 2);
 
@@ -200,8 +210,9 @@ export class MailingCleanupService {
       const result = await this.mailingMessageRepo.delete(ids);
       totalDeleted += result.affected ?? 0;
 
-      this.logger.log(
-        `Очистка failed сообщений: удалено ${result.affected ?? 0}, всего ${totalDeleted}`,
+      this.logger.debug(
+        { deletedInBatch: result.affected ?? 0, totalDeleted },
+        'cleanupFailedMessages: batch deleted',
       );
 
       if (rows.length < batchSize) {
@@ -210,7 +221,8 @@ export class MailingCleanupService {
     }
 
     this.logger.log(
-      `Очистка failed сообщений завершена. Всего удалено: ${totalDeleted}`,
+      { totalDeleted, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+      'cleanup:cleanupFailedMessages: done',
     );
   }
 }

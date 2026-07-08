@@ -105,8 +105,51 @@ export class MailingProcessor extends WorkerHost {
       jobId,
     } = job.data;
 
+    const attempt = job.attemptsMade + 1;
+    const maxAttempts = job.opts?.attempts ?? 3;
+
+    // Защита от повторной отправки при retry.
+    //
+    // Сценарий без этой проверки:
+    //   1. sendMailingMessage отправил сообщение в Telegram ✓
+    //   2. dataSource.transaction упала (краш, таймаут БД) ✗
+    //   3. BullMQ помечает job как failed → retry
+    //   4. Пользователь получает то же письмо второй раз
+    //
+    // BullMQ никогда не запускает один job параллельно, поэтому race condition
+    // между двумя воркерами для одного job здесь невозможен — только retry.
+    const alreadySent = await this.mailingMessageRepo.existsBy({
+      mailingJobId: jobId,
+      userId,
+      sendStatus: 'sent',
+    });
+
+    if (alreadySent) {
+      this.logger.warn(
+        { jobId, userId, attempt },
+        'mailing: письмо уже отправлено в предыдущей попытке, пропускаем retry',
+      );
+      return;
+    }
+
+    const alreadyFailed = await this.mailingMessageRepo.existsBy({
+      mailingJobId: jobId,
+      userId,
+      sendStatus: 'failed',
+    });
+
+    if (alreadyFailed) {
+      this.logger.warn(
+        { jobId, userId, attempt },
+        'mailing: предыдущая попытка уже записана как failed, пропускаем повторный retry',
+      );
+      return;
+    }
+
+    const sendStart = Date.now();
+
     try {
-      this.logger.debug({ jobId, userId, telegramId }, 'mailing: sending');
+      this.logger.debug({ jobId, userId, telegramId, attempt, maxAttempts }, 'mailing: sending');
 
       const sentMessage = await this.telegramService.sendMailingMessage({
         chatId: telegramId,
@@ -150,8 +193,10 @@ export class MailingProcessor extends WorkerHost {
           userId,
           telegramId,
           messageId: sentMessage.messageId,
+          attempt,
+          elapsedMs: Date.now() - sendStart,
         },
-        'mailing: sent and saved',
+        'mailing: sent',
       );
     } catch (error) {
       const errorMessage =
@@ -190,6 +235,9 @@ export class MailingProcessor extends WorkerHost {
           jobId,
           userId,
           telegramId,
+          attempt,
+          maxAttempts,
+          elapsedMs: Date.now() - sendStart,
           err: error,
         },
         'mailing: failed',
@@ -200,28 +248,50 @@ export class MailingProcessor extends WorkerHost {
   }
 
   private async tryFinalizeJob(jobId: string): Promise<void> {
-    const job = await this.mailingJobRepo.findOne({ where: { id: jobId } });
-    if (!job) return;
+    // Атомарный подход: читаем счётчики и меняем статус в одном SQL-запросе.
+    //
+    // Проблема с предыдущим подходом (SELECT + UPDATE):
+    //   1. Worker A и Worker B оба вызывают tryFinalizeJob
+    //   2. Оба читают sentCount = 1000, queuedCount = 1000 → оба "последние"
+    //   3. Только один UPDATE проходит (условие status='processing')
+    //   4. Но до UPDATE оба уже могли принять решение об уведомлении
+    //
+    // Здесь WHERE содержит ВСЕ условия: статус, счётчик — всё проверяется
+    // и изменяется атомарно на уровне одной строки PostgreSQL.
+    // Если affected = 0 — либо статус уже не 'processing', либо счётчики
+    // ещё не дошли до queuedCount. В обоих случаях правильно ничего не делать.
+    const result = await this.mailingJobRepo
+      .createQueryBuilder()
+      .update(MailingJobEntity)
+      .set({
+        status: () =>
+          `CASE WHEN "failedCount" > 0 THEN 'completed_with_errors' ELSE 'completed' END`,
+        finishedAt: () => 'NOW()',
+      })
+      .where('"id" = :id', { id: jobId })
+      .andWhere('"status" = :status', { status: 'processing' })
+      .andWhere('("sentCount" + "failedCount") >= "queuedCount"')
+      .execute();
 
-    const processed = job.sentCount + job.failedCount;
+    if (!result.affected) return;
 
-    if (processed < job.queuedCount) {
-      return;
-    }
-
-    const finalStatus =
-      job.failedCount > 0 ? 'completed_with_errors' : 'completed';
-
-    const updateResult = await this.mailingJobRepo.update(
-      { id: jobId, status: 'processing' },
-      {
-        status: finalStatus,
-        finishedAt: new Date(),
-      },
-    );
-
-    if (!updateResult.affected) {
-      return;
+    const mailingJob = await this.mailingJobRepo.findOne({ where: { id: jobId } });
+    if (mailingJob) {
+      const durationMs = mailingJob.startedAt
+        ? Date.now() - new Date(mailingJob.startedAt).getTime()
+        : null;
+      this.logger.log(
+        {
+          jobId,
+          status: mailingJob.status,
+          sent: mailingJob.sentCount,
+          failed: mailingJob.failedCount,
+          skipped: mailingJob.skippedCount,
+          total: mailingJob.queuedCount,
+          durationSec: durationMs !== null ? Math.round(durationMs / 1000) : null,
+        },
+        'mailing: job completed',
+      );
     }
 
     await this.usersMailingService.notifyAdminsAboutMailingFinishByJobId(jobId);

@@ -76,6 +76,7 @@ export class UsersController {
   }
 
   @Post('broadcast')
+  @UseGuards(JwtAuthGuard)
   // @UseGuards(JwtAuthGuard, AfterMoscowTimeGuard)
   @UseInterceptors(
     FileInterceptor('media', {

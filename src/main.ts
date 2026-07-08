@@ -15,11 +15,22 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { AllExceptionsFilter } from './common/filters/allExceptionsFilter';
+import * as jwt from 'jsonwebtoken';
+import type { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
+
+  // cookieParser должен быть зарегистрирован ДО любого middleware,
+  // которому нужны куки — иначе req.cookies будет undefined.
+  app.use(cookieParser());
+
+  // Отключаем ETag — иначе Express отвечает 304 Not Modified на повторные
+  // запросы с одинаковым телом, что сбивает клиентов и замусоривает логи.
+  app.set('etag', false);
+
   const serverAdapter = new BullBoardExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
@@ -46,6 +57,44 @@ async function bootstrap() {
     serverAdapter,
   });
 
+  // Защита Bull Board: проверяем JWT из cookie напрямую через jsonwebtoken,
+  // так как на этом уровне мы вне NestJS DI и JwtAuthGuard недоступен.
+  // Используем тот же JWT_ACCESS_SECRET что и остальное приложение —
+  // никакого дублирования логики, единый источник истины.
+  app.use(
+    '/admin/queues',
+    (req: Request, res: Response, next: NextFunction) => {
+      const token = req.cookies?.accessToken as string | undefined;
+
+      if (!token) {
+        res.status(401).json({ message: 'Unauthorized: no session' });
+        return;
+      }
+
+      try {
+        const secret = process.env.JWT_ACCESS_SECRET;
+        if (!secret) {
+          res.status(500).json({ message: 'Server misconfiguration' });
+          return;
+        }
+
+        const payload = jwt.verify(token, secret) as { role?: string };
+
+        // Только администраторы могут видеть очереди.
+        // Обычные пользователи с role='user' получают 403.
+        if (payload?.role !== 'admin') {
+          res.status(403).json({ message: 'Forbidden: admin only' });
+          return;
+        }
+
+        next();
+      } catch {
+        // JWT просрочен или подделан
+        res.status(401).json({ message: 'Unauthorized: invalid session' });
+      }
+    },
+  );
+
   app.use('/admin/queues', serverAdapter.getRouter());
   app.use(helmet());
 
@@ -57,7 +106,6 @@ async function bootstrap() {
     }),
   );
   // app.useGlobalFilters(new SentryFilter());
-  app.use(cookieParser());
 
   app.useGlobalInterceptors(new ResponseInterceptor());
 

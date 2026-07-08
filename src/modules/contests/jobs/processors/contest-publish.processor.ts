@@ -1,20 +1,22 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
-import { ContestsService } from '../../services/contests.service';
+import { ContestLifecycleService } from '../../services/contest-lifecycle.service';
+import { ContestPublicationService } from '../../services/contest-publication.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
 
 @Processor('contest-scheduler')
 export class ContestPublishProcessor extends WorkerHost {
   constructor(
-    private readonly contestsService: ContestsService,
+    private readonly contestLifecycleService: ContestLifecycleService,
+    private readonly contestPublicationService: ContestPublicationService,
     @InjectQueue('contest-publication')
     private readonly publicationQueue: Queue,
     private readonly logger: Logger,
   ) {
     super();
-    this.logger.log('ContestPublishProcessor initialized');
+    this.logger.debug('ContestPublishProcessor initialized');
   }
 
   async process(job: Job<{ contestId: number }>) {
@@ -38,10 +40,10 @@ export class ContestPublishProcessor extends WorkerHost {
     this.logger.debug({ ...jobMeta(job), contestId }, 'publishContest: start');
 
     try {
-      await this.contestsService.activateContestIfDue(contestId);
+      await this.contestLifecycleService.activateContestIfDue(contestId);
 
       const publicationIds =
-        await this.contestsService.getPendingPublicationIds(contestId);
+        await this.contestPublicationService.getPendingPublicationIds(contestId);
 
       this.logger.debug(
         {
@@ -60,29 +62,7 @@ export class ContestPublishProcessor extends WorkerHost {
           { publicationId },
           { jobId: `publication:${publicationId}:send` },
         );
-
-        setTimeout(async () => {
-          const reloaded = await this.publicationQueue.getJob(
-            publicationJob.id!,
-          );
-
-          this.logger.error(
-            {
-              pid: process.pid,
-              publicationId,
-              jobId: reloaded?.id,
-              jobName: reloaded?.name,
-              state: reloaded ? await reloaded.getState() : null,
-              data: reloaded?.data,
-              attemptsMade: reloaded?.attemptsMade,
-              failedReason: reloaded?.failedReason,
-              returnvalue: reloaded?.returnvalue,
-              processedOn: reloaded?.processedOn,
-              finishedOn: reloaded?.finishedOn,
-            },
-            'publishContest: sendPublication final details',
-          );
-        }, 1000);
+        added++;
 
         this.logger.debug(
           {

@@ -1,11 +1,12 @@
-import { ConfigService } from '@nestjs/config';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import Bottleneck from 'bottleneck';
-import { ContestsService } from '../../services/contests.service';
+import { ContestPublicationService } from '../../services/contest-publication.service';
+import { ContestLifecycleService } from '../../services/contest-lifecycle.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
+import { ConfigService } from '@nestjs/config';
 
 const telegramLimiter = new Bottleneck({
   maxConcurrent: 5,
@@ -38,19 +39,21 @@ function formatTelegramError(e: any): {
 @Processor('contest-publication')
 export class ContestPublicationProcessor extends WorkerHost {
   constructor(
-    private readonly contestsService: ContestsService,
+    private readonly contestPublicationService: ContestPublicationService,
+    private readonly contestLifecycleService: ContestLifecycleService,
     private readonly telegramService: TelegramService,
     private readonly logger: Logger,
+    private readonly configService: ConfigService,
   ) {
     super();
-    this.logger.log('ContestPublicationProcessor initialized');
+    this.logger.debug('ContestPublicationProcessor initialized');
   }
 
   async process(
     job: Job<{ publicationId: number; hasParticipants?: boolean }>,
     token?: string,
   ) {
-    this.logger.error(
+    this.logger.debug(
       {
         queue: job.queueName,
         jobId: job.id,
@@ -59,6 +62,7 @@ export class ContestPublicationProcessor extends WorkerHost {
       },
       'ContestPublicationProcessor got job',
     );
+
     if (job.name === 'sendPublication') {
       const { publicationId } = job.data;
 
@@ -68,7 +72,7 @@ export class ContestPublicationProcessor extends WorkerHost {
       );
 
       const publication =
-        await this.contestsService.claimPublication(publicationId);
+        await this.contestPublicationService.claimPublication(publicationId);
 
       if (!publication) {
         this.logger.warn(
@@ -96,7 +100,7 @@ export class ContestPublicationProcessor extends WorkerHost {
           { ...jobMeta(job), publicationId, payload },
           'sendPublication: empty payload -> fail',
         );
-        await this.contestsService.failPublication(
+        await this.contestPublicationService.failPublication(
           publicationId,
           'Empty payload',
         );
@@ -119,7 +123,7 @@ export class ContestPublicationProcessor extends WorkerHost {
           'sendPublication: telegram sent',
         );
 
-        await this.contestsService.markPublicationPublished(
+        await this.contestPublicationService.markPublicationPublished(
           publicationId,
           sent.messageId,
         );
@@ -131,17 +135,18 @@ export class ContestPublicationProcessor extends WorkerHost {
       } catch (e: any) {
         const meta = formatTelegramError(e);
 
-        // 400/403 — перманентные
         if (meta.code === 400 || meta.code === 403) {
           this.logger.warn(
             { ...jobMeta(job), publicationId, tg: meta.text },
             'sendPublication: permanent telegram error -> fail',
           );
-          await this.contestsService.failPublication(publicationId, meta.text);
+          await this.contestPublicationService.failPublication(
+            publicationId,
+            meta.text,
+          );
           return;
         }
 
-        // 429 — переносим job в delayed и не тратим attempts
         if (
           meta.code === 429 &&
           typeof meta.retryAfterSec === 'number' &&
@@ -152,7 +157,7 @@ export class ContestPublicationProcessor extends WorkerHost {
             'sendPublication: rate limited -> delayed',
           );
 
-          await this.contestsService.bumpPublicationError(
+          await this.contestPublicationService.bumpPublicationError(
             publicationId,
             meta.text,
           );
@@ -180,13 +185,12 @@ export class ContestPublicationProcessor extends WorkerHost {
           return;
         }
 
-        // временные — ретрай по attempts/backoff очереди
         this.logger.error(
           { ...jobMeta(job), publicationId, tg: meta.text },
           'sendPublication: temporary error -> retry via throw',
         );
 
-        await this.contestsService.bumpPublicationError(
+        await this.contestPublicationService.bumpPublicationError(
           publicationId,
           meta.text,
         );
@@ -195,16 +199,17 @@ export class ContestPublicationProcessor extends WorkerHost {
     }
 
     if (job.name === 'updateFinishedButton') {
-      const { publicationId, hasParticipants } = job.data;
+      const { publicationId } = job.data;
 
       this.logger.debug(
         { ...jobMeta(job), publicationId },
         'updateFinishedButton: start',
       );
 
-      // Нужны chatId + telegramMessageId + contestId
       const pub =
-        await this.contestsService.getPublicationForButtonUpdate(publicationId);
+        await this.contestPublicationService.getPublicationForButtonUpdate(
+          publicationId,
+        );
 
       if (!pub) {
         this.logger.warn(
@@ -223,8 +228,7 @@ export class ContestPublicationProcessor extends WorkerHost {
         return;
       }
 
-      // Идемпотентность: если конкурс ещё не завершён — выходим
-      const isFinished = await this.contestsService.isContestCompleted(
+      const isFinished = await this.contestLifecycleService.isContestCompleted(
         pub.contestId,
       );
       if (!isFinished) {
@@ -234,15 +238,14 @@ export class ContestPublicationProcessor extends WorkerHost {
         );
         return;
       }
+
       try {
         await telegramLimiter.schedule(() =>
           this.telegramService.updateContestMessageButton({
             chatId: String(pub.chatId),
             messageId,
-            buttonText: hasParticipants ? 'Конкурс завершён' : undefined,
-            buttonUrl: hasParticipants
-              ? `${process.env.MINI_APP_URL}?startapp=${pub.chatId}_${pub.contestId}`
-              : undefined,
+            buttonText: 'Конкурс завершён',
+            buttonUrl: `${this.configService.get<string>('MINI_APP_URL')}?startapp=${pub.chatId}_${pub.contestId}`,
           }),
         );
 
@@ -260,20 +263,19 @@ export class ContestPublicationProcessor extends WorkerHost {
             { ...jobMeta(job), publicationId, tg: meta.text },
             'updateFinishedButton: permanent telegram error -> skip',
           );
-          await this.contestsService.bumpPublicationError(
+          await this.contestPublicationService.bumpPublicationError(
             publicationId,
             meta.text,
           );
           return;
         }
 
-        // 429 — переносим job в delayed, аналогично sendPublication
         if (
           meta.code === 429 &&
           typeof meta.retryAfterSec === 'number' &&
           meta.retryAfterSec > 0
         ) {
-          await this.contestsService.bumpPublicationError(
+          await this.contestPublicationService.bumpPublicationError(
             publicationId,
             meta.text,
           );
@@ -288,7 +290,7 @@ export class ContestPublicationProcessor extends WorkerHost {
           return;
         }
 
-        await this.contestsService.bumpPublicationError(
+        await this.contestPublicationService.bumpPublicationError(
           publicationId,
           meta.text,
         );

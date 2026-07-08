@@ -16,7 +16,8 @@ export class TelegramMessagesQueueEventsListener extends QueueEventsHost {
   @OnQueueEvent('failed')
   onFailed(args: { jobId: string; failedReason?: string; prev?: string }) {
     this.logger.error(
-      `Queue telegram-messages job failed: ${JSON.stringify(args)}`,
+      { jobId: args.jobId, failedReason: args.failedReason, prev: args.prev },
+      'Queue telegram-messages job failed',
     );
 
     Sentry.withScope((scope) => {
@@ -40,7 +41,8 @@ export class ContestSchedulerQueueEventsListener extends QueueEventsHost {
   @OnQueueEvent('failed')
   onFailed(args: { jobId: string; failedReason?: string; prev?: string }) {
     this.logger.error(
-      `Queue contest-scheduler job failed: ${JSON.stringify(args)}`,
+      { jobId: args.jobId, failedReason: args.failedReason, prev: args.prev },
+      'Queue contest-scheduler job failed',
     );
 
     Sentry.withScope((scope) => {
@@ -62,7 +64,8 @@ export class ContestFinishQueueEventsListener extends QueueEventsHost {
   @OnQueueEvent('failed')
   onFailed(args: { jobId: string; failedReason?: string; prev?: string }) {
     this.logger.error(
-      `Queue contest-finish job failed: ${JSON.stringify(args)}`,
+      { jobId: args.jobId, failedReason: args.failedReason, prev: args.prev },
+      'Queue contest-finish job failed',
     );
 
     Sentry.withScope((scope) => {
@@ -86,7 +89,8 @@ export class ContestPublicationQueueEventsListener extends QueueEventsHost {
   @OnQueueEvent('failed')
   onFailed(args: { jobId: string; failedReason?: string; prev?: string }) {
     this.logger.error(
-      `Queue contest-publication job failed: ${JSON.stringify(args)}`,
+      { jobId: args.jobId, failedReason: args.failedReason, prev: args.prev },
+      'Queue contest-publication job failed',
     );
 
     Sentry.withScope((scope) => {
@@ -110,7 +114,8 @@ export class ContestMaintenanceQueueEventsListener extends QueueEventsHost {
   @OnQueueEvent('failed')
   onFailed(args: { jobId: string; failedReason?: string; prev?: string }) {
     this.logger.error(
-      `Queue contest-maintenance job failed: ${JSON.stringify(args)}`,
+      { jobId: args.jobId, failedReason: args.failedReason, prev: args.prev },
+      'Queue contest-maintenance job failed',
     );
 
     Sentry.withScope((scope) => {

@@ -1,51 +1,41 @@
-import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
-  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
-  ContestParticipationReadRepository,
   ContestReadRepository,
   ContestWriteRepository,
 } from '../repositories';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
 } from 'src/shared/commons/constants';
 import { CreateContest } from 'src/shared/types/contests';
-import { Contest, ContestPublication } from '../entities';
-import {
-  ContestStatus,
-  PublicationStatus,
-  WinnerStrategy,
-} from 'src/shared/enums/contest';
+import { Contest } from '../entities';
+import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
 import { ContestJobsService } from '../jobs/services';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { GetContestsQueryDto } from '../dto/get-contests-query.dto';
 import { Paginated } from 'src/shared/commons/response/paginated.type';
 import { ContestShortInfoDto } from '../dto/contest-short-info.dto';
 import { UpdateContestDto } from '../dto';
-import { TelegramService } from 'src/modules/bot/bot.service';
 import { In } from 'typeorm';
 import { UsersService } from '../../users/services/users.service';
 import { User } from 'src/modules/users/entities';
-import { ContestWinnerService } from './contest-winner.service';
-import { ContestsParticipateService } from './contest-participate.service';
 import { Channel } from 'src/modules/channels/entities';
 import { fromZonedTime } from 'date-fns-tz';
 import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.helper';
 import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
+import { ContestPublicationService } from './contest-publication.service';
 
 @Injectable()
 export class ContestsService {
+  private readonly APP_TIME_ZONE = 'Europe/Moscow';
+
   constructor(
     @Inject(CONTEST_READ_REPOSITORY)
     private readonly contestReadRepo: ContestReadRepository,
@@ -53,111 +43,22 @@ export class ContestsService {
     @Inject(CONTEST_WRITE_REPOSITORY)
     private readonly contestWriteRepo: ContestWriteRepository,
 
-    @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
-    private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
-
-    @InjectQueue('contest-publication')
-    private readonly publicationQueue: Queue,
-
     private readonly adminService: AdminService,
     private readonly logger: Logger,
     private readonly channelService: ChannelsService,
     private readonly contestJobsService: ContestJobsService,
-    @Inject(forwardRef(() => TelegramService))
-    private readonly telegramService: TelegramService,
-    private readonly configService: ConfigService,
-    private readonly contestWinnerService: ContestWinnerService,
-    private readonly contestsParticipateService: ContestsParticipateService,
+    private readonly contestPublicationService: ContestPublicationService,
     private readonly usersService: UsersService,
   ) {}
-
-  // async createContest(
-  //   dto: CreateContest,
-  //   image?: Express.Multer.File,
-  // ): Promise<Contest> {
-  //   this.logger.log(`В сервисе создания конкурса`);
-
-  //   const startDate = fromZonedTime(dto.startDate, 'Europe/Moscow');
-  //   const endDate = fromZonedTime(dto.endDate, 'Europe/Moscow');
-
-  //   if (startDate >= endDate) {
-  //     throw new BadRequestException('startDate must be before endDate');
-  //   }
-
-  //   try {
-  //     const creator = await this.adminService.findById(dto.creatorId);
-
-  //     if (!creator) throw new NotFoundException('Creator not found');
-
-  //     const publishChannels = await this.getChannelsByTelegramIds(
-  //       dto.publishChannelIds,
-  //       'Один или несколько каналов публикации не найдены',
-  //     );
-
-  //     const requiredChannels = await this.getChannelsByTelegramIds(
-  //       dto.requiredChannelIds,
-  //       'Один или несколько обязательных каналов не найдены',
-  //     );
-
-  //     await this.validateBotPermissionsForPublishChannels(publishChannels);
-
-  //     const imagePath = this.resolveContestImagePath(image);
-
-  //     const contest = await this.contestWriteRepo.create({
-  //       name: dto.name,
-  //       description: dto.description,
-  //       winnerStrategy: dto.winnerStrategy,
-  //       prizePlaces: dto.prizePlaces,
-  //       startDate,
-  //       endDate,
-  //       status: ContestStatus.PENDING,
-  //       creatorId: dto.creatorId,
-  //       imagePath,
-  //       buttonText: dto.buttonText || 'Участвовать',
-  //     });
-
-  //     await this.contestWriteRepo.setPublishChannels(
-  //       contest.id,
-  //       publishChannels.map((channel) => channel.id),
-  //     );
-
-  //     await this.contestWriteRepo.setRequiredChannels(
-  //       contest.id,
-  //       requiredChannels.map((channel) => channel.id),
-  //     );
-
-  //     await this.recreatePendingPublications({
-  //       contestId: contest.id,
-  //       channels: publishChannels,
-  //       name: dto.name,
-  //       description: dto.description,
-  //       buttonText: dto.buttonText,
-  //       imagePath,
-  //     });
-
-  //     await this.contestJobsService.scheduleContest(
-  //       contest.id,
-  //       contest.startDate,
-  //       contest.endDate,
-  //     );
-
-  //     return this.contestReadRepo.findByIdWithRelations(
-  //       contest.id,
-  //     ) as Promise<Contest>;
-  //   } catch (error) {
-  //     this.logger.error(`Ошибка при создании конкурса: ${error}`);
-  //     throw error;
-  //   }
-  // }
 
   async createContest(
     dto: CreateContest,
     image?: Express.Multer.File,
   ): Promise<Contest> {
-    this.logger.log('В сервисе создания конкурса');
+    this.logger.debug('createContest: start');
 
-    const startDate = fromZonedTime(dto.startDate, 'Europe/Moscow');
-    const endDate = fromZonedTime(dto.endDate, 'Europe/Moscow');
+    const startDate = fromZonedTime(dto.startDate, this.APP_TIME_ZONE);
+    const endDate = fromZonedTime(dto.endDate, this.APP_TIME_ZONE);
     const now = new Date();
 
     const buttonText = dto.buttonText?.trim() || 'Участвовать';
@@ -184,9 +85,6 @@ export class ContestsService {
         throw new NotFoundException('Creator not found');
       }
 
-      // ВАЖНО:
-      // Сейчас метод ищет по telegramId, хотя поля называются publishChannelIds.
-      // Либо переименуй DTO-поля, либо поменяй метод.
       const publishChannels = await this.getChannelsByTelegramIds(
         dto.publishChannelIds,
         'Один или несколько каналов публикации не найдены',
@@ -197,7 +95,9 @@ export class ContestsService {
         'Один или несколько обязательных каналов не найдены',
       );
 
-      await this.validateBotPermissionsForPublishChannels(publishChannels);
+      await this.contestPublicationService.validateBotPermissionsForPublishChannels(
+        publishChannels,
+      );
 
       const imagePath = this.resolveContestImagePath(image);
 
@@ -224,7 +124,7 @@ export class ContestsService {
         requiredChannels.map((channel) => channel.id),
       );
 
-      await this.recreatePendingPublications({
+      await this.contestPublicationService.recreatePendingPublications({
         contestId: contest.id,
         channels: publishChannels,
         name: dto.name.trim(),
@@ -267,308 +167,6 @@ export class ContestsService {
     }
   }
 
-  async getByStatus(status: ContestStatus): Promise<Paginated<Contest>> {
-    return this.contestReadRepo.findMany({ status });
-  }
-
-  async getActiveContestById(contestId: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByParams({
-      id: contestId,
-      status: ContestStatus.ACTIVE,
-    });
-
-    if (!contest) {
-      throw new NotFoundException('Конкурс не найден или завершен');
-    }
-
-    return contest;
-  }
-
-  /**
-   * Идемпотентно переводит конкурс в ACTIVE, если уже наступило startDate.
-   * Под нагрузкой важно: не делаем лишних обновлений.
-   */
-  async activateContestIfDue(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
-    if (!contest) return;
-
-    // Уже активен/завершен — ничего делать не надо
-    if (contest.status !== ContestStatus.PENDING) return;
-
-    // Рано
-    const now = new Date();
-    if (contest.startDate > now) return;
-
-    // Идемпотентное обновление на уровне БД (желательно через WHERE status = PENDING)
-    await this.contestWriteRepo.updateStatusIfCurrent(
-      contestId,
-      ContestStatus.PENDING,
-      ContestStatus.ACTIVE,
-    );
-  }
-
-  /**
-   * Возвращает id публикаций, которые нужно отправить.
-   */
-  async getPendingPublicationIds(contestId: number): Promise<number[]> {
-    return this.contestReadRepo.getPublicationIdsByStatus(
-      contestId,
-      PublicationStatus.PENDING,
-    );
-  }
-
-  /**
-   * Атомарно "забираем" публикацию в работу: PENDING -> PROCESSING.
-   * Если вернуло null — уже взяли/обработали другой воркер.
-   */
-  async claimPublication(
-    publicationId: number,
-  ): Promise<ContestPublication | null> {
-    return this.contestWriteRepo.claimPublication(publicationId);
-  }
-
-  async markPublicationPublished(
-    publicationId: number,
-    messageId: number,
-  ): Promise<void> {
-    await this.contestWriteRepo.markPublicationPublished(publicationId, {
-      telegramMessageId: messageId,
-      publishedAt: new Date(),
-    });
-  }
-
-  async failPublication(publicationId: number, error: string): Promise<void> {
-    await this.contestWriteRepo.markPublicationFailed(publicationId, {
-      error: error.slice(0, 4000),
-    });
-  }
-
-  // async updateContest(
-  //   contestId: number,
-  //   dto: UpdateContestDto,
-  //   image?: Express.Multer.File,
-  // ): Promise<Contest> {
-  //   ///TODO: типизировать нормально, а не any
-  //   const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
-
-  //   this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
-
-  //   if (!contest) {
-  //     throw new NotFoundException('Конкурс не найден');
-  //   }
-
-  //   const nextStartDate = dto.startDate
-  //     ? this.parseContestDate(dto.startDate)
-  //     : contest.startDate;
-
-  //   const nextEndDate = dto.endDate
-  //     ? this.parseContestDate(dto.endDate)
-  //     : contest.endDate;
-
-  //   if (nextStartDate >= nextEndDate) {
-  //     throw new BadRequestException('startDate must be before endDate');
-  //   }
-
-  //   if (
-  //     dto.publishChannelIds !== undefined &&
-  //     contest.status !== ContestStatus.PENDING
-  //   ) {
-  //     throw new BadRequestException(
-  //       'Нельзя менять каналы публикации после запуска конкурса',
-  //     );
-  //   }
-
-  //   const nextPrizePlaces: number = dto.prizePlaces ?? contest.prizePlaces;
-
-  //   // let imagePath = contest.imagePath;
-  //   const imagePath = this.resolveContestImagePath(image, contest.imagePath);
-
-  //   // if (image) {
-  //   //   if (!image.filename) {
-  //   //     throw new BadRequestException('Файл изображения загружен некорректно');
-  //   //   }
-
-  //   //   imagePath = `/uploads/contests/${image.filename}`;
-  //   // }
-
-  //   const publishChannels =
-  //     dto.publishChannelIds !== undefined
-  //       ? await this.getChannelsByTelegramIds(
-  //           dto.publishChannelIds,
-  //           'Один или несколько каналов публикации не найдены',
-  //         )
-  //       : null;
-
-  //   const requiredChannels =
-  //     dto.requiredChannelIds !== undefined
-  //       ? await this.getChannelsByTelegramIds(
-  //           dto.requiredChannelIds,
-  //           'Один или несколько обязательных каналов не найдены',
-  //         )
-  //       : null;
-
-  //   // let publishGroupIds: number[] = [];
-  //   // let requiredGroupIds: number[] = [];
-
-  //   // if (dto.publishChannelIds !== undefined) {
-  //   //   if (dto.publishChannelIds.length) {
-  //   //     const publishChannels =
-  //   //       await this.channelService.getChannelsByParameters({
-  //   //         telegramId: In(dto.publishChannelIds),
-  //   //       });
-
-  //   //     if (publishChannels.length !== dto.publishChannelIds.length) {
-  //   //       throw new NotFoundException(
-  //   //         'Один или несколько каналов публикации не найдены',
-  //   //       );
-  //   //     }
-
-  //   //     const publishChannelsMap = new Map(
-  //   //       publishChannels.map((channel) => [
-  //   //         String(channel.telegramId),
-  //   //         channel,
-  //   //       ]),
-  //   //     );
-
-  //   //     publishGroupIds = dto.publishChannelIds.map((telegramId) => {
-  //   //       const channel = publishChannelsMap.get(String(telegramId));
-
-  //   //       if (!channel) {
-  //   //         throw new NotFoundException(
-  //   //           `Канал публикации с telegramId ${telegramId} не найден`,
-  //   //         );
-  //   //       }
-
-  //   //       return channel.id;
-  //   //     });
-  //   //   } else {
-  //   //     publishGroupIds = [];
-  //   //   }
-  //   // }
-
-  //   // if (dto.requiredChannelIds !== undefined) {
-  //   //   if (dto.requiredChannelIds.length) {
-  //   //     const requiredChannels =
-  //   //       await this.channelService.getChannelsByParameters({
-  //   //         telegramId: In(dto.requiredChannelIds),
-  //   //       });
-
-  //   //     if (requiredChannels.length !== dto.requiredChannelIds.length) {
-  //   //       throw new NotFoundException(
-  //   //         'Один или несколько обязательных каналов не найдены',
-  //   //       );
-  //   //     }
-
-  //   //     const requiredChannelsMap = new Map(
-  //   //       requiredChannels.map((channel) => [
-  //   //         String(channel.telegramId),
-  //   //         channel,
-  //   //       ]),
-  //   //     );
-
-  //   //     requiredGroupIds = dto.requiredChannelIds.map((telegramId) => {
-  //   //       const channel = requiredChannelsMap.get(String(telegramId));
-
-  //   //       if (!channel) {
-  //   //         throw new NotFoundException(
-  //   //           `Обязательный канал с telegramId ${telegramId} не найден`,
-  //   //         );
-  //   //       }
-
-  //   //       return channel.id;
-  //   //     });
-  //   //   } else {
-  //   //     requiredGroupIds = [];
-  //   //   }
-  //   // }
-
-  //   if (dto.winners !== undefined) {
-  //     const resolved = await Promise.all(
-  //       dto.winners.map((winnerId) =>
-  //         this.usersService.findByTelegramId(winnerId.toString()),
-  //       ),
-  //     );
-
-  //     const orderedWinners = resolved.filter(
-  //       (user): user is User => user !== null,
-  //     );
-
-  //     await this.contestWinnerService.saveResolvedWinners(
-  //       contestId,
-  //       orderedWinners,
-  //       nextPrizePlaces,
-  //     );
-
-  //     await this.contestWriteRepo.replaceWinners(
-  //       contestId,
-  //       orderedWinners.map((winner, index) => ({
-  //         contestId,
-  //         userId: winner.id,
-  //         place: index + 1,
-  //       })),
-  //     );
-  //   }
-
-  //   await this.contestWriteRepo.update(contestId, {
-  //     name: dto.name ?? contest.name,
-  //     description: dto.description ?? contest.description,
-  //     winnerStrategy: dto.winnerStrategy ?? contest.winnerStrategy,
-  //     prizePlaces: nextPrizePlaces,
-  //     startDate: nextStartDate,
-  //     endDate: nextEndDate,
-  //     status: dto.status ?? contest.status,
-  //     imagePath,
-  //     buttonText: dto.buttonText ?? contest.buttonText,
-  //   });
-
-  //   if (publishChannels !== null) {
-  //     await this.contestWriteRepo.setPublishChannels(
-  //       contestId,
-  //       publishChannels.map((channel) => channel.id),
-  //     );
-
-  //     await this.recreatePendingPublications({
-  //       contestId,
-  //       channels: publishChannels,
-  //       name: dto.name ?? contest.name,
-  //       description: dto.description ?? contest.description,
-  //       buttonText: dto.buttonText ?? contest.buttonText,
-  //       imagePath,
-  //     });
-  //   }
-
-  //   if (requiredChannels !== null) {
-  //     await this.contestWriteRepo.setRequiredChannels(
-  //       contestId,
-  //       requiredChannels.map((channel) => channel.id),
-  //     );
-  //   }
-
-  //   const updatedContest =
-  //     await this.contestReadRepo.findByIdWithRelations(contestId);
-
-  //   if (!updatedContest) {
-  //     throw new NotFoundException('Конкурс не найден после обновления');
-  //   }
-
-  //   await this.syncPublishedPosts(updatedContest);
-
-  //   try {
-  //     await this.contestJobsService.scheduleContest(
-  //       updatedContest.id,
-  //       updatedContest.startDate,
-  //       updatedContest.endDate,
-  //     );
-  //   } catch (error) {
-  //     this.logger.error(
-  //       { err: error, contestId: updatedContest.id },
-  //       'Ошибка при пересоздании jobs конкурса',
-  //     );
-  //   }
-
-  //   return updatedContest;
-  // }
-
   async updateContest(
     contestId: number,
     dto: UpdateContestDto,
@@ -583,7 +181,25 @@ export class ContestsService {
       throw new NotFoundException('Конкурс не найден');
     }
 
-    const oldImagePath = contest.imagePath;
+    if (contest.status === ContestStatus.COMPLETED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать завершённый конкурс');
+    }
+
+    if (contest.status === ContestStatus.CANCELLED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать отменённый конкурс');
+    }
+
+    if (
+      dto.startDate !== undefined &&
+      contest.status === ContestStatus.ACTIVE
+    ) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Нельзя изменить дату начала активного конкурса',
+      );
+    }
 
     const nextStartDate = dto.startDate
       ? this.parseContestDate(dto.startDate)
@@ -593,14 +209,21 @@ export class ContestsService {
       ? this.parseContestDate(dto.endDate)
       : contest.endDate;
 
+    const now = new Date();
+    if (dto.endDate !== undefined && nextEndDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('endDate must be in the future');
+    }
+
+    if (dto.startDate !== undefined && nextStartDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be in the future');
+    }
+
     if (nextStartDate >= nextEndDate) {
       await deleteUploadedContestImage(image);
       throw new BadRequestException('startDate must be before endDate');
     }
-
-    const datesChanged =
-      nextStartDate.getTime() !== new Date(contest.startDate).getTime() ||
-      nextEndDate.getTime() !== new Date(contest.endDate).getTime();
 
     if (
       dto.publishChannelIds !== undefined &&
@@ -612,9 +235,14 @@ export class ContestsService {
       );
     }
 
+    const datesChanged =
+      nextStartDate.getTime() !== new Date(contest.startDate).getTime() ||
+      nextEndDate.getTime() !== new Date(contest.endDate).getTime();
+
     const nextPrizePlaces = dto.prizePlaces ?? contest.prizePlaces;
     const nextWinnerStrategy = dto.winnerStrategy ?? contest.winnerStrategy;
     const imagePath = this.resolveContestImagePath(image, contest.imagePath);
+    const oldImagePath = contest.imagePath;
 
     const nextName = dto.name?.trim() || contest.name;
     const nextDescription =
@@ -625,6 +253,7 @@ export class ContestsService {
       dto.buttonText !== undefined
         ? dto.buttonText.trim() || 'Участвовать'
         : contest.buttonText || 'Участвовать';
+
     let contestUpdated = false;
     try {
       const publishChannels =
@@ -643,111 +272,77 @@ export class ContestsService {
             )
           : null;
 
-      // if (dto.winners !== undefined) {
-      //   const uniqueWinnerIds = [...new Set(dto.winners)];
+      if (
+        dto.winners !== undefined &&
+        dto.winners.length > 0 &&
+        nextWinnerStrategy !== WinnerStrategy.MANUAL
+      ) {
+        throw new BadRequestException(
+          'Нельзя назначить победителей вручную при стратегии, отличной от manual',
+        );
+      }
 
-      //   if (uniqueWinnerIds.length !== dto.winners.length) {
-      //     throw new BadRequestException(
-      //       'Список победителей содержит дубликаты',
-      //     );
-      //   }
-
-      //   if (uniqueWinnerIds.length > nextPrizePlaces) {
-      //     throw new BadRequestException(
-      //       'Количество победителей не может быть больше prizePlaces',
-      //     );
-      //   }
-
-      //   const resolved = await Promise.all(
-      //     uniqueWinnerIds.map((winnerId) =>
-      //       this.usersService.findByTelegramId(winnerId.toString()),
-      //     ),
-      //   );
-
-      //   const notFoundWinnerIds = uniqueWinnerIds.filter(
-      //     (_, index) => !resolved[index],
-      //   );
-
-      //   if (notFoundWinnerIds.length) {
-      //     throw new NotFoundException(
-      //       `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
-      //     );
-      //   }
-
-      //   const orderedWinners = resolved as User[];
-
-      //   await this.contestWinnerService.saveResolvedWinners(
-      //     contestId,
-      //     orderedWinners,
-      //     nextPrizePlaces,
-      //   );
-
-      //   await this.contestWriteRepo.replaceWinners(
-      //     contestId,
-      //     orderedWinners.map((winner, index) => ({
-      //       contestId,
-      //       userId: winner.id,
-      //       place: index + 1,
-      //     })),
-      //   );
-      // }
       if (nextWinnerStrategy === WinnerStrategy.MANUAL) {
         if (dto.winners !== undefined) {
-          const uniqueWinnerIds = [...new Set(dto.winners)];
-
-          if (uniqueWinnerIds.length !== dto.winners.length) {
+          if (contest.status === ContestStatus.PENDING) {
             throw new BadRequestException(
-              'Список победителей содержит дубликаты',
+              'Нельзя назначить победителей до старта конкурса',
             );
           }
 
-          if (uniqueWinnerIds.length !== nextPrizePlaces) {
-            throw new BadRequestException(
-              'Количество победителей должно соответствовать количеству призовых мест',
+          if (dto.winners.length === 0) {
+            await this.contestWriteRepo.replaceWinners(contestId, []);
+          } else {
+            const uniqueWinnerIds = [...new Set(dto.winners)];
+
+            if (uniqueWinnerIds.length !== dto.winners.length) {
+              throw new BadRequestException(
+                'Список победителей содержит дубликаты',
+              );
+            }
+
+            if (uniqueWinnerIds.length !== nextPrizePlaces) {
+              throw new BadRequestException(
+                'Количество победителей должно соответствовать количеству призовых мест',
+              );
+            }
+
+            const resolved = await Promise.all(
+              uniqueWinnerIds.map((winnerId) =>
+                this.usersService.findByTelegramId(winnerId.toString()),
+              ),
             );
-          }
 
-          const resolved = await Promise.all(
-            uniqueWinnerIds.map((winnerId) =>
-              this.usersService.findByTelegramId(winnerId.toString()),
-            ),
-          );
-
-          const notFoundWinnerIds = uniqueWinnerIds.filter(
-            (_, index) => !resolved[index],
-          );
-
-          if (notFoundWinnerIds.length) {
-            throw new NotFoundException(
-              `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+            const notFoundWinnerIds = uniqueWinnerIds.filter(
+              (_, index) => !resolved[index],
             );
-          }
 
-          const orderedWinners = resolved as User[];
+            if (notFoundWinnerIds.length) {
+              throw new NotFoundException(
+                `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+              );
+            }
 
-          await this.contestWriteRepo.replaceWinners(
-            contestId,
-            orderedWinners.map((winner, index) => ({
+            const orderedWinners = resolved as User[];
+
+            await this.contestWriteRepo.replaceWinners(
               contestId,
-              userId: winner.id,
-              place: index + 1,
-            })),
-          );
+              orderedWinners.map((winner, index) => ({
+                contestId,
+                userId: winner.id,
+                place: index + 1,
+              })),
+            );
+          }
         }
       } else {
-        await this.contestWriteRepo.replaceWinners(contestId, []);
+        if (
+          dto.winnerStrategy !== undefined &&
+          dto.winnerStrategy !== WinnerStrategy.MANUAL
+        ) {
+          await this.contestWriteRepo.replaceWinners(contestId, []);
+        }
       }
-      // await this.contestWriteRepo.update(contestId, {
-      //   name: nextName,
-      //   description: nextDescription,
-      //   winnerStrategy: dto.winnerStrategy ?? contest.winnerStrategy,
-      //   prizePlaces: nextPrizePlaces,
-      //   startDate: nextStartDate,
-      //   endDate: nextEndDate,
-      //   status: dto.status ?? contest.status,
-      //   imagePath,
-      //   buttonText: nextButtonText,
-      // });
 
       await this.contestWriteRepo.update(contestId, {
         name: nextName,
@@ -762,42 +357,12 @@ export class ContestsService {
       });
       contestUpdated = true;
 
-      const actualPublishChannels =
-        publishChannels ?? contest.publishChannels ?? [];
-
       if (publishChannels !== null) {
         await this.contestWriteRepo.setPublishChannels(
           contestId,
           publishChannels.map((channel) => channel.id),
         );
       }
-
-      // if (shouldRefreshPendingPublications) {
-      //   await this.recreatePendingPublications({
-      //     contestId,
-      //     channels: actualPublishChannels,
-      //     name: nextName,
-      //     description: nextDescription,
-      //     buttonText: nextButtonText,
-      //     imagePath,
-      //   });
-      // }
-
-      // if (publishChannels !== null) {
-      //   await this.contestWriteRepo.setPublishChannels(
-      //     contestId,
-      //     publishChannels.map((channel) => channel.id),
-      //   );
-
-      //   await this.recreatePendingPublications({
-      //     contestId,
-      //     channels: publishChannels,
-      //     name: nextName,
-      //     description: nextDescription,
-      //     buttonText: nextButtonText,
-      //     imagePath,
-      //   });
-      // }
 
       if (requiredChannels !== null) {
         await this.contestWriteRepo.setRequiredChannels(
@@ -836,7 +401,7 @@ export class ContestsService {
       }
 
       try {
-        await this.syncPublishedPosts(updatedContest);
+        await this.contestPublicationService.syncPublishedPosts(updatedContest);
       } catch (error) {
         this.logger.error(
           { err: error, contestId: updatedContest.id },
@@ -869,14 +434,13 @@ export class ContestsService {
           {
             contestId,
             channelsCount: channels.length,
-            channels,
             imagePath: updatedContest.imagePath,
           },
           'Before recreatePendingPublications',
         );
 
         try {
-          await this.recreatePendingPublications({
+          await this.contestPublicationService.recreatePendingPublications({
             contestId,
             channels,
             name: updatedContest.name,
@@ -886,17 +450,13 @@ export class ContestsService {
           });
         } catch (error) {
           this.logger.error(
-            {
-              err: error,
-              contestId,
-              channels,
-              imagePath: updatedContest.imagePath,
-            },
+            { err: error, contestId, imagePath: updatedContest.imagePath },
             'Ошибка при пересоздании pending publications',
           );
           throw error;
         }
       }
+
       if (image && oldImagePath && oldImagePath !== imagePath) {
         await deleteContestImageByPath(oldImagePath);
       }
@@ -914,173 +474,6 @@ export class ContestsService {
 
       throw error;
     }
-  }
-
-  /**
-   * Ошибка, которую стоит сохранить, но job пусть ретраится (throw в processor).
-   */
-  async bumpPublicationError(
-    publicationId: number,
-    error: string,
-  ): Promise<void> {
-    await this.contestWriteRepo.bumpPublicationError(publicationId, {
-      error: error.slice(0, 4000),
-    });
-  }
-
-  /**
-   * Идемпотентное завершение конкурса (finish job).
-   * MVP: просто ставим COMPLETED, позже добавим выбор победителей и уведомления.
-   */
-  async finishContestIdempotent(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
-    if (!contest) return;
-
-    if (contest.status === ContestStatus.COMPLETED) return;
-
-    const now = new Date();
-    if (contest.endDate > now) return;
-
-    const changed =
-      await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
-    if (!changed) return;
-
-    const participants =
-      await this.contestParticipationReadRepo.findManyByContestId(contest.id);
-
-    const hasParticipants = participants.length > 0;
-
-    if (hasParticipants) {
-      await this.contestWinnerService.resolveAndSaveWinners(contest);
-    }
-
-    const publicationIds =
-      await this.getPublishedPublicationIdsForContest(contestId);
-    this.logger.warn(
-      {
-        contestId,
-        hasParticipants,
-        publicationIds,
-      },
-      'finishContestIdempotent: publications for finished button update',
-    );
-    for (const publicationId of publicationIds) {
-      await this.publicationQueue.add(
-        'updateFinishedButton',
-        { publicationId, hasParticipants },
-        {
-          jobId: `publication:${publicationId}:finish-button`,
-        },
-      );
-    }
-  }
-
-  private async syncPublishedPosts(contest: Contest): Promise<void> {
-    const publishedPublications =
-      await this.contestReadRepo.findPublishedPublicationIdsForContest(
-        contest.id,
-      );
-
-    if (!publishedPublications.length) {
-      this.logger.debug(
-        { contestId: contest.id },
-        'У конкурса нет опубликованных постов для синхронизации',
-      );
-      return;
-    }
-
-    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
-
-    for (const publication of publishedPublications) {
-      if (!publication.telegramMessageId) {
-        this.logger.warn(
-          {
-            contestId: contest.id,
-            publicationId: publication.id,
-          },
-          'Пропущена синхронизация: отсутствует telegramMessageId',
-        );
-        continue;
-      }
-
-      if (!publication.chatId) {
-        this.logger.warn(
-          {
-            contestId: contest.id,
-            publicationId: publication.id,
-          },
-          'Пропущена синхронизация: отсутствует chatId',
-        );
-        continue;
-      }
-
-      const photoUrl =
-        contest.imagePath && !contest.imagePath.endsWith('/undefined')
-          ? contest.imagePath
-          : undefined;
-
-      try {
-        await this.telegramService.updateContestPublishedMessage({
-          chatId: String(publication.chatId),
-          messageId: publication.telegramMessageId,
-          text: `${contest.name}\n\n${contest.description || ''}`,
-          buttonText:
-            contest.status === ContestStatus.COMPLETED
-              ? 'Конкурс завершён'
-              : contest.participants.length > 0
-                ? `${contest.buttonText ?? 'Участвовать'} (${contest.participants.length})`
-                : (contest.buttonText ?? 'Участвовать'),
-          buttonUrl: `${miniAppUrl}?startapp=${publication.chatId}_${contest.id}`,
-          photoUrl,
-        });
-
-        this.logger.debug(
-          {
-            contestId: contest.id,
-            publicationId: publication.id,
-            chatId: publication.chatId,
-            telegramMessageId: publication.telegramMessageId,
-          },
-          'Опубликованный пост конкурса успешно синхронизирован',
-        );
-      } catch (error) {
-        this.logger.error(
-          {
-            err: error,
-            contestId: contest.id,
-            publicationId: publication.id,
-            chatId: publication.chatId,
-            telegramMessageId: publication.telegramMessageId,
-          },
-          'Ошибка при обновлении опубликованного поста конкурса',
-        );
-      }
-    }
-  }
-
-  getPublicationForButtonUpdate(
-    publicationId: number,
-  ): Promise<Pick<
-    ContestPublication,
-    'id' | 'contestId' | 'chatId' | 'telegramMessageId'
-  > | null> {
-    return this.contestReadRepo.findPublicationForButtonUpdate(publicationId);
-  }
-
-  // ✅ 2) Проверка, что конкурс завершён
-  async isContestCompleted(contestId: number): Promise<boolean> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
-    return !!contest && contest.status === ContestStatus.COMPLETED;
-  }
-
-  async getPublishedPublicationIdsForContest(
-    contestId: number,
-  ): Promise<number[]> {
-    return (
-      await this.contestReadRepo.findPublishedPublicationIdsForContest(
-        contestId,
-      )
-    ).map((pub) => pub.id);
   }
 
   async getAllContests(
@@ -1148,183 +541,36 @@ export class ContestsService {
     return contest;
   }
 
-  private validateWinners(
-    winners: { userId: number; place: number }[],
-    prizePlaces: number,
-  ): void {
-    if (winners.length > prizePlaces) {
-      throw new BadRequestException(
-        'Количество победителей не может быть больше prizePlaces',
-      );
+  async getByStatus(status: ContestStatus): Promise<Paginated<Contest>> {
+    return this.contestReadRepo.findMany({ status });
+  }
+
+  async getActiveContestById(contestId: number): Promise<Contest> {
+    const contest = await this.contestReadRepo.findByParams({
+      id: contestId,
+      status: ContestStatus.ACTIVE,
+    });
+
+    if (!contest) {
+      throw new NotFoundException('Конкурс не найден или завершен');
     }
 
-    const userTgIds = winners.map((w) => w.userId);
-    const places = winners.map((w) => w.place);
-
-    const uniqueUserTgIds = new Set(userTgIds);
-    if (uniqueUserTgIds.size !== userTgIds.length) {
-      throw new BadRequestException(
-        'Один и тот же пользователь указан несколько раз',
-      );
-    }
-
-    const uniquePlaces = new Set(places);
-    if (uniquePlaces.size !== places.length) {
-      throw new BadRequestException('Места победителей должны быть уникальны');
-    }
-
-    const invalidPlace = places.find(
-      (place) => place < 1 || place > prizePlaces,
-    );
-    if (invalidPlace) {
-      throw new BadRequestException(
-        `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
-      );
-    }
+    return contest;
   }
 
   async removeContest(contestId: number): Promise<void> {
     const contest = await this.contestReadRepo.findById(contestId);
+
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
+    }
+
+    if (contest.status === ContestStatus.ACTIVE) {
+      throw new BadRequestException('Невозможно удалить активный конкурс');
     }
 
     await this.contestWriteRepo.delete(contestId);
   }
-
-  async getPublicationByContestId(
-    contestId: number,
-  ): Promise<ContestPublication> {
-    const publication =
-      await this.contestReadRepo.findPublicationByContestId(contestId);
-
-    if (!publication) {
-      throw new NotFoundException('Публикация конкурса не найдена');
-    }
-
-    return publication;
-  }
-
-  async getPublicationsByContestId(
-    contestId: number,
-  ): Promise<ContestPublication[]> {
-    const publications =
-      await this.contestReadRepo.findPublicationsByContestId(contestId);
-
-    return publications;
-  }
-
-  async completeContest(contestId: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
-
-    if (!contest) {
-      throw new NotFoundException('Конкурс не найден');
-    }
-
-    if (contest.status === ContestStatus.COMPLETED) {
-      throw new BadRequestException('Конкурс уже завершён');
-    }
-
-    if (contest.status === ContestStatus.CANCELLED) {
-      throw new BadRequestException('Нельзя завершить отменённый конкурс');
-    }
-
-    await this.contestWinnerService.resolveAndSaveWinners(contest);
-
-    await this.contestWriteRepo.update(contest.id, {
-      status: ContestStatus.COMPLETED,
-      buttonText: 'Конкурс завершён',
-    });
-
-    const updatedContest = await this.contestReadRepo.findByIdWithRelations(
-      contest.id,
-    );
-
-    if (!updatedContest) {
-      throw new NotFoundException('Конкурс не найден после завершения');
-    }
-
-    await this.syncPublishedPosts(updatedContest);
-
-    return updatedContest;
-  }
-
-  async cancelContest(id: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(id);
-
-    if (!contest) {
-      throw new NotFoundException('Конкурс не найден');
-    }
-
-    if (contest.status === ContestStatus.CANCELLED) {
-      throw new BadRequestException('Конкурс уже отменён');
-    }
-
-    if (contest.status === ContestStatus.COMPLETED) {
-      throw new BadRequestException('Нельзя отменить завершённый конкурс');
-    }
-
-    const hasWinners = Boolean(contest.winners?.length);
-
-    if (hasWinners && contest.winnerStrategy !== WinnerStrategy.MANUAL) {
-      throw new BadRequestException(
-        'Нельзя отменить конкурс с выбранными победителями, если стратегия не manual',
-      );
-    }
-
-    await this.contestJobsService.removeContestJobs(contest.id);
-
-    // удалить уже опубликованные сообщения из Telegram
-    await this.telegramService.deleteContestPublications(contest.id);
-
-    // пометить публикации отменёнными
-    await this.contestWriteRepo.cancelPendingPublications(contest.id);
-
-    await this.contestWriteRepo.update(contest.id, {
-      status: ContestStatus.CANCELLED,
-    });
-
-    const updatedContest = await this.contestReadRepo.findByIdWithRelations(id);
-
-    if (!updatedContest) {
-      throw new NotFoundException('Конкурс не найден после отмены');
-    }
-
-    return updatedContest;
-  }
-
-  // private async getChannelsByTelegramIds(
-  //   telegramIds?: number[],
-  //   errorMessage = 'Один или несколько каналов не найдены',
-  // ): Promise<Channel[]> {
-  //   if (!telegramIds?.length) {
-  //     return [];
-  //   }
-
-  //   const channels = await this.channelService.getChannelsByParameters({
-  //     telegramId: In(telegramIds),
-  //   });
-
-  //   if (channels.length !== telegramIds.length) {
-  //     throw new NotFoundException(errorMessage);
-  //   }
-
-  //   const channelsMap = new Map(
-  //     channels.map((channel) => [String(channel.telegramId), channel]),
-  //   );
-
-  //   return telegramIds.map((telegramId) => {
-  //     const channel = channelsMap.get(String(telegramId));
-
-  //     if (!channel) {
-  //       throw new NotFoundException(
-  //         `Канал с telegramId ${telegramId} не найден`,
-  //       );
-  //     }
-
-  //     return channel;
-  //   });
-  // }
 
   private async getChannelsByTelegramIds(
     telegramIds?: number[],
@@ -1367,70 +613,6 @@ export class ContestsService {
     });
   }
 
-  private buildPublicationTasks(params: {
-    contestId: number;
-    channels: Channel[];
-    name: string;
-    description?: string;
-    // postText?: string;
-    buttonText?: string;
-    imagePath?: string;
-  }): Array<Partial<ContestPublication>> {
-    const { contestId, channels, name, description, buttonText, imagePath } =
-      params;
-    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
-
-    return channels.map((channel) => {
-      if (!channel.telegramId) {
-        throw new BadRequestException(
-          `У канала ${channel.id} отсутствует telegramId`,
-        );
-      }
-
-      const chatId = Number(channel.telegramId);
-
-      if (Number.isNaN(chatId)) {
-        throw new BadRequestException(
-          `У канала ${channel.id} некорректный telegramId`,
-        );
-      }
-
-      return {
-        contestId,
-        channelId: channel.id,
-        chatId,
-        status: PublicationStatus.PENDING,
-        payload: {
-          text: `${name}\n\n${description || ''}`,
-          buttonText: buttonText || 'Участвовать',
-          buttonUrl: `${miniAppUrl}?startapp=${channel.telegramId}_${contestId}`,
-          photoUrl: imagePath,
-        },
-      };
-    });
-  }
-
-  private async recreatePendingPublications(params: {
-    contestId: number;
-    channels: Channel[];
-    name: string;
-    description?: string;
-    buttonText?: string;
-    imagePath?: string;
-  }): Promise<void> {
-    await this.contestWriteRepo.deletePendingPublicationsByContestId(
-      params.contestId,
-    );
-
-    if (!params.channels.length) {
-      return;
-    }
-
-    const publicationTasks = this.buildPublicationTasks(params);
-
-    await this.contestWriteRepo.createPublications(publicationTasks);
-  }
-
   private resolveContestImagePath(
     image?: Express.Multer.File,
     currentImagePath?: string,
@@ -1446,104 +628,6 @@ export class ContestsService {
     return `/uploads/contests/${image.filename}`;
   }
 
-  private buildParticipantsButtonText(
-    baseButtonText?: string,
-    participantsCount?: number,
-  ): string {
-    const text = baseButtonText?.trim() || 'Участвовать';
-
-    if (!participantsCount || participantsCount <= 0) {
-      return text;
-    }
-
-    return `${text} (${participantsCount})`;
-  }
-
-  async syncParticipantsCounter(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
-
-    if (!contest) {
-      this.logger.warn(
-        { contestId },
-        'Конкурс не найден при синхронизации счётчика участников',
-      );
-      return;
-    }
-
-    const participantsCount =
-      await this.contestParticipationReadRepo.countUniqueUsersByContestId(
-        contestId,
-      );
-
-    const nextButtonText = this.buildParticipantsButtonText(
-      contest.buttonText,
-      participantsCount,
-    );
-
-    const publications =
-      await this.contestWriteRepo.findPublishedPublicationsByContestId(
-        contestId,
-      );
-
-    if (!publications.length) {
-      this.logger.debug(
-        { contestId, participantsCount },
-        'Нет опубликованных публикаций для обновления счётчика участников',
-      );
-      return;
-    }
-
-    for (const publication of publications) {
-      try {
-        const payload = (publication.payload ?? {}) as {
-          text?: string;
-          buttonText?: string;
-          buttonUrl?: string;
-          photoUrl?: string;
-        };
-
-        const chatId = publication.chatId ?? publication.channel?.telegramId;
-        const messageId = publication.telegramMessageId;
-
-        if (!chatId || !messageId || !payload.buttonUrl) {
-          continue;
-        }
-
-        if (payload.buttonText === nextButtonText) {
-          continue;
-        }
-
-        await this.telegramService.updateContestMessageButton({
-          chatId: String(chatId),
-          messageId,
-          buttonText: nextButtonText,
-          buttonUrl: payload.buttonUrl,
-        });
-
-        await this.contestWriteRepo.updatePublication(publication.id, {
-          payload: {
-            text:
-              payload.text ?? `${contest.name}\n\n${contest.description || ''}`,
-            buttonUrl: payload.buttonUrl,
-            photoUrl: payload.photoUrl,
-            buttonText: nextButtonText,
-          },
-        });
-      } catch (error) {
-        this.logger.error(
-          {
-            err: error,
-            contestId,
-            publicationId: publication.id,
-          },
-          'Ошибка при обновлении кнопки счётчика участников',
-        );
-      }
-    }
-  }
-
-  private readonly APP_TIME_ZONE = 'Europe/Moscow';
-
   private parseContestDate(date: string | Date): Date {
     const source =
       date instanceof Date
@@ -1551,48 +635,5 @@ export class ContestsService {
         : date;
 
     return fromZonedTime(source, this.APP_TIME_ZONE);
-  }
-
-  private async validateBotPermissionsForPublishChannels(
-    channels: Channel[],
-  ): Promise<void> {
-    const errors: string[] = [];
-
-    for (const channel of channels) {
-      if (!channel.telegramId) {
-        errors.push(
-          `У канала "${channel.name ?? channel.id}" отсутствует telegramId`,
-        );
-        continue;
-      }
-
-      const check = await this.telegramService.checkBotChannelPermissions(
-        Number(channel.telegramId),
-      );
-
-      const channelLabel =
-        channel.name ?? channel.telegramUsername ?? channel.telegramId;
-
-      if (!check.exists) {
-        errors.push(`Бот не найден в канале "${channelLabel}"`);
-        continue;
-      }
-
-      if (!check.isAdmin) {
-        errors.push(`Бот не администратор канала "${channelLabel}"`);
-      }
-
-      if (!check.canPost) {
-        errors.push(`Нет права на публикацию в "${channelLabel}"`);
-      }
-
-      if (!check.canEdit) {
-        errors.push(`Нет права на редактирование в "${channelLabel}"`);
-      }
-    }
-
-    if (errors.length) {
-      throw new BadRequestException(errors.join('; '));
-    }
   }
 }

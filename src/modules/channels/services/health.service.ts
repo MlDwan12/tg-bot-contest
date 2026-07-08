@@ -2,35 +2,35 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Logger } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
 import { Channel } from '../entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
 
 @Injectable()
 export class ChannelHealthService {
-  private readonly logger = new Logger(ChannelHealthService.name);
-
   constructor(
     @InjectRepository(Channel)
     private readonly channelRepository: Repository<Channel>,
     private readonly telegramService: TelegramService,
+    private readonly logger: Logger,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async checkChannelsHealth(): Promise<void> {
-    this.logger.log('Запущена ежедневная проверка прав бота во всех каналах');
+    this.logger.log('checkChannelsHealth: start');
 
     const channels = await this.channelRepository.find();
 
     if (!channels.length) {
-      this.logger.log('Каналы для проверки не найдены');
+      this.logger.log('checkChannelsHealth: нет каналов для проверки');
       return;
     }
 
     for (const channel of channels) {
       if (!channel.telegramId) {
         this.logger.warn(
-          `Канал id=${channel.id} пропущен: отсутствует telegramId`,
+          { channelId: channel.id },
+          'checkChannelsHealth: канал без telegramId, пропущен',
         );
         continue;
       }
@@ -49,17 +49,19 @@ export class ChannelHealthService {
           });
 
           this.logger.warn(
-            `Обновлен статус канала id=${channel.id}, telegramId=${channel.telegramId}: isActive=${isValid}`,
+            { channelId: channel.id, telegramId: channel.telegramId, isActive: isValid },
+            'checkChannelsHealth: статус канала обновлён',
           );
         } else {
-          this.logger.log(
-            `Канал id=${channel.id}, telegramId=${channel.telegramId}: статус без изменений (${isValid})`,
+          this.logger.debug(
+            { channelId: channel.id, telegramId: channel.telegramId, isActive: isValid },
+            'checkChannelsHealth: статус без изменений',
           );
         }
       } catch (error: any) {
         this.logger.error(
-          `Ошибка проверки канала id=${channel.id}, telegramId=${channel.telegramId}: ${error.message}`,
-          error.stack,
+          { err: error, channelId: channel.id, telegramId: channel.telegramId },
+          'checkChannelsHealth: ошибка проверки канала',
         );
 
         if (channel.isActive !== false) {
@@ -68,12 +70,13 @@ export class ChannelHealthService {
           });
 
           this.logger.warn(
-            `Канал id=${channel.id}, telegramId=${channel.telegramId} помечен как неактивный из-за ошибки проверки`,
+            { channelId: channel.id, telegramId: channel.telegramId },
+            'checkChannelsHealth: канал помечен неактивным из-за ошибки',
           );
         }
       }
     }
 
-    this.logger.log('Ежедневная проверка каналов завершена');
+    this.logger.log('checkChannelsHealth: done');
   }
 }

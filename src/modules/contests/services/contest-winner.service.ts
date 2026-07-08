@@ -50,12 +50,7 @@ export class ContestWinnerService {
         'Для конкурса должно быть указано корректное количество призовых мест',
       );
     }
-    const manual = contest.winners?.length
-      ? WinnerStrategy.MANUAL
-      : WinnerStrategy.RANDOM;
-    console.log(11111111111, manual, contest.winners?.length);
-
-    switch (manual) {
+    switch (contest.winnerStrategy) {
       case WinnerStrategy.MANUAL:
         return this.resolveManualWinners(contest);
 
@@ -240,20 +235,20 @@ export class ContestWinnerService {
       );
     }
 
-    // const uniquePlaces = new Set(places);
-    // if (uniquePlaces.size !== places.length) {
-    //   throw new BadRequestException('Места победителей должны быть уникальны');
-    // }
+    const uniquePlaces = new Set(places);
+    if (uniquePlaces.size !== places.length) {
+      throw new BadRequestException('Места победителей должны быть уникальны');
+    }
 
-    // const invalidPlace = places.find(
-    //   (place) => place < 1 || place > prizePlaces,
-    // );
+    const invalidPlace = places.find(
+      (place) => place < 1 || place > prizePlaces,
+    );
 
-    // if (invalidPlace) {
-    //   throw new BadRequestException(
-    //     `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
-    //   );
-    // }
+    if (invalidPlace !== undefined) {
+      throw new BadRequestException(
+        `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
+      );
+    }
   }
 
   private shuffleArray<T>(items: T[]): T[] {
@@ -268,10 +263,19 @@ export class ContestWinnerService {
   }
 
   async resolveAndSaveWinners(contest: Contest): Promise<void> {
+    const existingWinners = await this.contestWinnerReadRepo.findByContestId(
+      contest.id,
+    );
+    if (existingWinners.length > 0) {
+      const users = existingWinners
+        .map((w) => w.user)
+        .filter((u): u is User => u != null);
+      await this.syncParticipantsWithResolvedWinners(contest.id, users);
+      return;
+    }
+
     const users = await this.resolveWinners(contest);
-
     await this.saveResolvedWinners(contest.id, users, contest.prizePlaces);
-
     await this.syncParticipantsWithResolvedWinners(contest.id, users);
   }
 
@@ -279,14 +283,14 @@ export class ContestWinnerService {
     contestId: number,
     users: User[],
   ): Promise<void> {
-    await this.contestParticipationWriteRepo.resetWinnerFlags(contestId);
+    const winners = users.map((user, index) => ({
+      userId: user.id,
+      place: index + 1,
+    }));
 
-    for (const [index, user] of users.entries()) {
-      await this.contestParticipationWriteRepo.markAsWinner(
-        contestId,
-        user.id,
-        index + 1,
-      );
-    }
+    await this.contestParticipationWriteRepo.syncWinnerFlagsInTransaction(
+      contestId,
+      winners,
+    );
   }
 }

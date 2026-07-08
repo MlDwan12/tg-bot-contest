@@ -1,4 +1,10 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import { TelegramError } from 'telegraf';
 import { UsersService } from './users.service';
 import { User } from '../entities';
 import { UserRole } from 'src/shared/enums/user';
@@ -22,10 +28,22 @@ export class TelegramUserService {
     let user = await this.userService.findByTelegramId(tgData.telegramId);
 
     if (!user) {
-      const tgInfo = await this.telegramService.getUserFromChatMember(
-        tgData.groupId,
-        tgData.telegramId,
-      );
+      let tgInfo: Awaited<ReturnType<TelegramService['getUserFromChatMember']>>;
+      try {
+        tgInfo = await this.telegramService.getUserFromChatMember(
+          tgData.groupId,
+          tgData.telegramId,
+        );
+      } catch (error) {
+        if (error instanceof TelegramError) {
+          throw new BadRequestException(
+            `Не удалось получить данные пользователя из Telegram: ${
+              tgData.groupId
+            },${tgData.telegramId},${error.description}`,
+          );
+        }
+        throw error;
+      }
 
       user = await this.userService.create({
         telegramId: tgData.telegramId,

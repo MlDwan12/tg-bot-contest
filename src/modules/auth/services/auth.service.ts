@@ -57,12 +57,12 @@ export class AuthService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: '1h',
+        expiresIn: '15m', // совпадает с maxAge в setAccessCookie и cookie контроллера
       }),
 
       this.jwtService.signAsync(refreshPayload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: '7d',
+        expiresIn: '30d', // совпадает с maxAge в setRefreshCookie
       }),
     ]);
 
@@ -95,6 +95,7 @@ export class AuthService {
     refreshPayload: RefreshTokenPayload,
   ): Promise<{
     accessToken: string;
+    refreshToken: string;
     user: AccessTokenPayload;
   }> {
     const userEntity = await this.adminService.findById(refreshPayload.sub);
@@ -105,15 +106,25 @@ export class AuthService {
 
     const user = this.buildAccessPayload(userEntity);
 
-    const accessToken = await this.jwtService.signAsync(user, {
-      secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: '15m',
-    });
+    // Ротация: выдаём новый refresh-токен при каждом использовании старого.
+    // Если refresh-токен украли — он перестанет работать после того как
+    // легитимный пользователь использует его первым и получит новый.
+    // Без DB-версионирования это единственная защита от replay-атак.
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(user, {
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
+        expiresIn: '15m',
+      }),
+      this.jwtService.signAsync(
+        { sub: userEntity.id } satisfies RefreshTokenPayload,
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: '30d',
+        },
+      ),
+    ]);
 
-    return {
-      accessToken,
-      user,
-    };
+    return { accessToken, refreshToken, user };
   }
 
   buildAccessPayload(user: User): AccessTokenPayload {

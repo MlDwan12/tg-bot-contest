@@ -52,14 +52,15 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Сессия истекла');
     }
 
-    const { accessToken: newAccessToken, user } =
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken, user } =
       await this.authService.issueAccessTokenFromRefresh(refreshPayload);
 
     this.authService.setAccessCookie(res, newAccessToken);
+    this.authService.setRefreshCookie(res, newRefreshToken);
 
     req.user = user;
 
-    this.logger.debug(`Access token reissued for userId=${user.sub}`);
+    this.logger.debug(`Tokens rotated for userId=${user.sub}`);
 
     return true;
   }

@@ -41,7 +41,7 @@ export class ChannelsService {
     type?: ChannelType;
   }): Promise<Channel> {
     try {
-      this.logger.log({ data }, 'Create channel request');
+      this.logger.debug({ data }, 'createChannel: start');
 
       if (!data.telegramId && !data.telegramUsername) {
         throw new BadRequestException(
@@ -58,8 +58,6 @@ export class ChannelsService {
           );
         }
       }
-      console.log(data.telegramId);
-
       const chatId =
         data.telegramId ??
         (data.telegramUsername
@@ -83,8 +81,6 @@ export class ChannelsService {
           'Bot must be administrator in the channel/group',
         );
       }
-      console.log(tgCheck);
-
       const channel = await this.writeRepo.create({
         telegramId: tgCheck.chat?.id,
         telegramUsername: tgCheck.chat?.username,
@@ -185,51 +181,36 @@ export class ChannelsService {
       type?: ChannelType;
     },
   ): Promise<Channel> {
-    this.logger.log({ id, data }, 'Update channel started');
+    this.logger.debug({ id, data }, 'updateChannel: start');
 
     const updated = await this.writeRepo.update(id, data);
 
     this.logger.log(
       { id, updatedFields: Object.keys(data) },
-      'Channel successfully updated',
+      'updateChannel: done',
     );
 
     return updated;
   }
 
   async setChannelActive(id: number, isActive: boolean): Promise<void> {
-    this.logger.log({ id, isActive }, 'Set channel active state');
+    this.logger.log({ id, isActive }, 'setChannelActive');
 
     return this.writeRepo.setActive(id, isActive);
   }
 
   async deleteChannelById(id: number): Promise<void> {
     try {
-      this.logger.log({ id }, 'Delete channel request');
-
       await this.writeRepo.delete(id);
-
-      this.logger.log({ id }, 'Channel deleted');
+      this.logger.log({ id }, 'deleteChannelById: done');
     } catch (error) {
-      this.logger.log(
-        {
-          id,
-          err: error,
-        },
-        'Delete channel failed',
-      );
+      this.logger.error({ id, err: error }, 'deleteChannelById: failed');
       throw error;
     }
   }
 
   async deleteChannelByTelegramId(telegramId: number): Promise<void> {
-    this.logger.log({ telegramId }, 'Delete channel by telegramId started');
-
     await this.writeRepo.deleteByTelegramId(telegramId);
-
-    this.logger.log(
-      { telegramId },
-      'Channel successfully deleted by telegramId',
-    );
+    this.logger.log({ telegramId }, 'deleteChannelByTelegramId: done');
   }
 }
