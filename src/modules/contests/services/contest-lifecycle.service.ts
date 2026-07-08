@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -19,6 +19,10 @@ import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
 import { ContestJobsService } from '../jobs/services';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestPublicationService } from './contest-publication.service';
+import { TelegramService } from 'src/modules/bot/bot.service';
+import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
+
+const WINNER_SELECTION_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
 export class ContestLifecycleService {
@@ -40,6 +44,9 @@ export class ContestLifecycleService {
     private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
     private readonly dataSource: DataSource,
+
+    @Inject(forwardRef(() => TelegramService))
+    private readonly telegramService: TelegramService,
   ) {}
 
   async activateContestIfDue(contestId: number): Promise<void> {
@@ -102,7 +109,42 @@ export class ContestLifecycleService {
       const hasParticipants = participants.length > 0;
 
       if (hasParticipants) {
-        await this.contestWinnerService.resolveAndSaveWinners(contest);
+        if (contest.winnerStrategy === WinnerStrategy.MANUAL) {
+          const existingWinners =
+            await this.contestWinnerService.getContestWinners(contest.id);
+
+          if (existingWinners.length === 0) {
+            // Не завершаем конкурс: даём админу ещё немного времени выбрать
+            // победителя вручную, сдвигая дедлайн и перепланируя finish-job.
+            // Уведомление отправляется на каждой попытке, чтобы админ не забыл.
+            const extendedEndDate = new Date(
+              contest.endDate.getTime() + WINNER_SELECTION_GRACE_PERIOD_MS,
+            );
+
+            this.logger.warn(
+              { contestId: contest.id, extendedEndDate },
+              'finishContestIdempotent: MANUAL-стратегия без выбранного победителя, откладываем завершение',
+            );
+
+            await this.contestWriteRepo.update(contest.id, {
+              endDate: extendedEndDate,
+            });
+            await this.contestJobsService.scheduleFinishRetry(
+              contest.id,
+              extendedEndDate,
+            );
+            await this.notifyAdminsAboutMissingManualWinner(
+              contest,
+              extendedEndDate,
+            );
+
+            return;
+          } else {
+            await this.contestWinnerService.resolveAndSaveWinners(contest);
+          }
+        } else {
+          await this.contestWinnerService.resolveAndSaveWinners(contest);
+        }
       }
 
       const changed =
@@ -210,5 +252,52 @@ export class ContestLifecycleService {
     }
 
     return updatedContest;
+  }
+
+  private async notifyAdminsAboutMissingManualWinner(
+    contest: Contest,
+    extendedEndDate: Date,
+  ): Promise<void> {
+    try {
+      const admins = getAdminTelegramIdsFromEnv();
+
+      if (!admins.length) {
+        this.logger.warn(
+          'Нет админов в ADMIN_IDS для уведомления о невыбранном победителе',
+        );
+        return;
+      }
+
+      const extendedEndDateStr = extendedEndDate.toLocaleString('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      });
+
+      const text =
+        `⚠️ Конкурс «${contest.name}» (ID: ${contest.id}) должен был завершиться, ` +
+        'но для него не выбраны победители (стратегия: вручную).\n\n' +
+        `Завершение отложено до ${extendedEndDateStr} (МСК). ` +
+        'Пожалуйста, назначьте победителей в панели администратора до этого времени.';
+
+      for (const admin of admins) {
+        try {
+          await this.telegramService.sendMailingMessage({
+            chatId: admin,
+            text,
+          });
+        } catch (error: any) {
+          this.logger.error(
+            { err: error, adminTelegramId: admin, contestId: contest.id },
+            'notifyAdminsAboutMissingManualWinner: не удалось отправить уведомление',
+          );
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(
+        { err: error, contestId: contest.id },
+        'notifyAdminsAboutMissingManualWinner: ошибка',
+      );
+    }
   }
 }

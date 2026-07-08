@@ -28,12 +28,10 @@ export class TelegramService {
   }> {
     try {
       const botInfo = await this.bot.telegram.getMe();
-
       const [member, chat] = await Promise.all([
         this.bot.telegram.getChatMember(chatId, botInfo.id),
         this.bot.telegram.getChat(chatId),
       ]);
-
       const isAdmin =
         member.status === 'administrator' || member.status === 'creator';
 
@@ -235,7 +233,11 @@ export class TelegramService {
     buttonUrl?: string;
   }): Promise<{ messageId: number; chatId: string }> {
     this.logger.debug(
-      { chatId: dto.chatId, hasMedia: !!dto.imagePath, hasButton: !!(dto.buttonText && dto.buttonUrl) },
+      {
+        chatId: dto.chatId,
+        hasMedia: !!dto.imagePath,
+        hasButton: !!(dto.buttonText && dto.buttonUrl),
+      },
       'sendMailingMessage: start',
     );
 
@@ -250,7 +252,10 @@ export class TelegramService {
       if (dto.imagePath) {
         const filePath = join(process.cwd(), dto.imagePath);
 
-        this.logger.debug({ chatId: dto.chatId, filePath }, 'sendMailingMessage: resolving file');
+        this.logger.debug(
+          { chatId: dto.chatId, filePath },
+          'sendMailingMessage: resolving file',
+        );
 
         if (!existsSync(filePath)) {
           this.logger.error({ chatId: dto.chatId, filePath }, 'Файл не найден');
@@ -260,7 +265,10 @@ export class TelegramService {
         const ext = extname(filePath).toLowerCase();
 
         if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-          this.logger.debug({ chatId: dto.chatId, ext }, 'sendMailingMessage: sending photo');
+          this.logger.debug(
+            { chatId: dto.chatId, ext },
+            'sendMailingMessage: sending photo',
+          );
 
           const msg = await this.bot.telegram.sendPhoto(
             dto.chatId,
@@ -281,7 +289,10 @@ export class TelegramService {
         }
 
         if (['.mp4', '.mov'].includes(ext)) {
-          this.logger.debug({ chatId: dto.chatId, ext }, 'sendMailingMessage: sending video');
+          this.logger.debug(
+            { chatId: dto.chatId, ext },
+            'sendMailingMessage: sending video',
+          );
 
           const msg = await this.bot.telegram.sendVideoNote(
             dto.chatId,
@@ -304,11 +315,17 @@ export class TelegramService {
           return { messageId: msg.message_id, chatId: String(msg.chat.id) };
         }
 
-        this.logger.error({ chatId: dto.chatId, ext }, 'Неподдерживаемый тип файла');
+        this.logger.error(
+          { chatId: dto.chatId, ext },
+          'Неподдерживаемый тип файла',
+        );
         throw new Error(`Unsupported media type: ${ext}`);
       }
 
-      this.logger.debug({ chatId: dto.chatId }, 'sendMailingMessage: sending text');
+      this.logger.debug(
+        { chatId: dto.chatId },
+        'sendMailingMessage: sending text',
+      );
 
       const msg = await this.bot.telegram.sendMessage(
         dto.chatId,
@@ -336,7 +353,9 @@ export class TelegramService {
 
   async deleteContestPublications(contestId: number): Promise<void> {
     const publications =
-      await this.contestPublicationService.getPublicationsByContestId(contestId);
+      await this.contestPublicationService.getPublicationsByContestId(
+        contestId,
+      );
 
     for (const pub of publications) {
       if (!pub.telegramMessageId || !pub.channel?.telegramId) continue;

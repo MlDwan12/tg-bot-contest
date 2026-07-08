@@ -155,6 +155,40 @@ export class ContestJobsService implements OnModuleInit {
     if (finishJob) {
       await finishJob.remove();
     }
+
+    // Джобы с продлением дедлайна (scheduleFinishRetry) используют динамический
+    // jobId, поэтому их не найти по контестному jobId выше — вычищаем отдельно.
+    const delayedFinishJobs = await this.finishQueue.getJobs(['delayed']);
+    for (const job of delayedFinishJobs) {
+      const data = job.data as { contestId?: number };
+      if (data.contestId === contestId) {
+        await job.remove();
+      }
+    }
+  }
+
+  // Планирует повторную проверку finishContest на новое время, не трогая
+  // текущий (уже активный/заблокированный воркером) job — попытка удалить
+  // или переиспользовать его jobId изнутри собственного обработчика
+  // проваливается (BullMQ либо кидает "locked by another worker" при remove,
+  // либо молча не создаёт новую задачу при add с тем же jobId).
+  async scheduleFinishRetry(contestId: number, endDate: Date): Promise<void> {
+    const now = Date.now();
+    // BullMQ требует, чтобы кастомный jobId с ':' содержал ровно 3 части
+    // (обратная совместимость со старым форматом repeatable jobs), иначе
+    // add() падает с "Custom Id cannot contain :" — поэтому суффикс без ':'.
+    const finishJobId = `contest:${contestId}:finish-retry-${endDate.getTime()}`;
+
+    await this.finishQueue.add(
+      'finishContest',
+      { contestId },
+      {
+        jobId: finishJobId,
+        delay: Math.max(0, endDate.getTime() - now),
+        removeOnComplete: true,
+        removeOnFail: 1000,
+      },
+    );
   }
 
   async rescheduleContest(

@@ -17,6 +17,7 @@ import { ContestPublication } from 'src/modules/contests/entities';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { MailingJobEntity } from '../entities/mailing-jobs.entity';
+import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
 
 @Injectable()
 export class UsersMailingService {
@@ -47,7 +48,9 @@ export class UsersMailingService {
     const users = await this.getRecipients(dto);
 
     const publication = dto.contestId
-      ? await this.contestPublicationService.getPublicationByContestId(dto.contestId)
+      ? await this.contestPublicationService.getPublicationByContestId(
+          dto.contestId,
+        )
       : undefined;
 
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
@@ -108,7 +111,10 @@ export class UsersMailingService {
           })),
       );
     } catch (error) {
-      await this.mailingJobRepo.update({ id: jobId }, { status: 'failed', error: String(error), finishedAt: new Date() });
+      await this.mailingJobRepo.update(
+        { id: jobId },
+        { status: 'failed', error: String(error), finishedAt: new Date() },
+      );
       throw error;
     }
 
@@ -145,7 +151,10 @@ export class UsersMailingService {
     publication?: ContestPublication,
   ): string | undefined {
     if (dto.contestId) {
-      this.logger.debug({ contestId: dto.contestId }, 'resolveButtonUrl: building URL from contestId');
+      this.logger.debug(
+        { contestId: dto.contestId },
+        'resolveButtonUrl: building URL from contestId',
+      );
 
       // const publication = await this.contestPublicationService.getPublicationByContestId(
       //   dto.contestId,
@@ -160,7 +169,11 @@ export class UsersMailingService {
       }
 
       this.logger.debug(
-        { publicationId: publication.id, telegramMessageId: publication.telegramMessageId, chatId: publication.chatId },
+        {
+          publicationId: publication.id,
+          telegramMessageId: publication.telegramMessageId,
+          chatId: publication.chatId,
+        },
         'resolveButtonUrl: publication found',
       );
 
@@ -177,7 +190,10 @@ export class UsersMailingService {
     }
 
     if (dto.buttonUrl) {
-      this.logger.debug({ buttonUrl: dto.buttonUrl }, 'resolveButtonUrl: using provided buttonUrl');
+      this.logger.debug(
+        { buttonUrl: dto.buttonUrl },
+        'resolveButtonUrl: using provided buttonUrl',
+      );
     }
 
     return dto.buttonUrl;
@@ -201,7 +217,10 @@ export class UsersMailingService {
     );
 
     if (!messageId) {
-      this.logger.warn({ telegramId: telegramIdStr }, 'buildTelegramPostUrl: отсутствует messageId');
+      this.logger.warn(
+        { telegramId: telegramIdStr },
+        'buildTelegramPostUrl: отсутствует messageId',
+      );
       throw new BadRequestException('Publication messageId is missing');
     }
 
@@ -234,7 +253,10 @@ export class UsersMailingService {
     switch (dto.type) {
       case UserMailingType.USER: {
         if (!dto.userId) {
-          this.logger.warn({ type: dto.type }, 'getRecipients: userId не передан');
+          this.logger.warn(
+            { type: dto.type },
+            'getRecipients: userId не передан',
+          );
           throw new BadRequestException(
             'userId is required for USER mailing type',
           );
@@ -273,12 +295,19 @@ export class UsersMailingService {
         const uniqueUserIds = [...new Set(participations.map((p) => p.userId))];
 
         this.logger.debug(
-          { groupId: dto.groupId, participations: participations.length, uniqueUsers: uniqueUserIds.length },
+          {
+            groupId: dto.groupId,
+            participations: participations.length,
+            uniqueUsers: uniqueUserIds.length,
+          },
           'getRecipients: GROUP participations',
         );
 
         if (!uniqueUserIds.length) {
-          this.logger.warn({ groupId: dto.groupId }, 'getRecipients: получатели не найдены');
+          this.logger.warn(
+            { groupId: dto.groupId },
+            'getRecipients: получатели не найдены',
+          );
           return [];
         }
 
@@ -289,7 +318,10 @@ export class UsersMailingService {
           },
         });
 
-        this.logger.debug({ count: users.length }, 'getRecipients: GROUP users loaded');
+        this.logger.debug(
+          { count: users.length },
+          'getRecipients: GROUP users loaded',
+        );
 
         return users;
       }
@@ -301,13 +333,19 @@ export class UsersMailingService {
           },
         });
 
-        this.logger.debug({ count: users.length }, 'getRecipients: ALL users loaded');
+        this.logger.debug(
+          { count: users.length },
+          'getRecipients: ALL users loaded',
+        );
 
         return users;
       }
 
       default:
-        this.logger.warn({ type: dto.type }, 'getRecipients: неизвестный тип рассылки');
+        this.logger.warn(
+          { type: dto.type },
+          'getRecipients: неизвестный тип рассылки',
+        );
         return [];
     }
   }
@@ -324,19 +362,6 @@ export class UsersMailingService {
     return admins.filter((admin) => !!admin.telegramId);
   }
 
-  private getAdminTelegramIdsFromEnv(): string[] {
-    const raw = process.env.ADMIN_IDS;
-
-    if (!raw) {
-      this.logger.warn('ADMIN_IDS не задан в env');
-      return [];
-    }
-
-    return raw
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean);
-  }
   private async notifyAdminsAboutMailingStart(
     dto: SendUsersMailingDto,
     image: Express.Multer.File | undefined,
@@ -344,7 +369,7 @@ export class UsersMailingService {
   ): Promise<void> {
     try {
       // const admins = await this.getAdminRecipients();
-      const admins = this.getAdminTelegramIdsFromEnv();
+      const admins = getAdminTelegramIdsFromEnv();
 
       if (!admins.length) {
         this.logger.warn(
@@ -383,7 +408,7 @@ export class UsersMailingService {
   ): Promise<void> {
     try {
       // const admins = await this.getAdminRecipients();
-      const admins = this.getAdminTelegramIdsFromEnv();
+      const admins = getAdminTelegramIdsFromEnv();
 
       if (!admins.length) {
         this.logger.warn(
@@ -397,7 +422,7 @@ export class UsersMailingService {
       for (const admin of admins) {
         try {
           await this.telegramService.sendMailingMessage({
-            chatId: admin!,
+            chatId: admin,
             text,
           });
         } catch (error: any) {

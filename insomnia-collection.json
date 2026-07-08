@@ -1,7 +1,7 @@
 {
   "_type": "export",
   "__export_format": 4,
-  "__export_date": "2026-06-08T00:00:00.000Z",
+  "__export_date": "2026-07-07T00:00:00.000Z",
   "__export_source": "insomnia.desktop.app",
   "resources": [
     {
@@ -22,7 +22,7 @@
       "created": 1717804800000,
       "name": "Base Environment",
       "data": {
-        "base_url": "http://localhost:3000",
+        "base_url": "http://localhost:3004",
         "contest_id": "1",
         "channel_id": "1",
         "user_id": "1",
@@ -164,7 +164,7 @@
         { "name": "search", "value": "", "disabled": true },
         { "name": "sortBy", "value": "createdAt", "disabled": true, "description": "createdAt | startDate | endDate | name | status" },
         { "name": "sortOrder", "value": "DESC", "disabled": true, "description": "ASC | DESC" },
-        { "name": "startDateFrom", "value": "2026-01-01", "disabled": true },
+        { "name": "startDateFrom", "value": "2026-07-01", "disabled": true },
         { "name": "startDateTo", "value": "2026-12-31", "disabled": true }
       ],
       "headers": [],
@@ -222,8 +222,8 @@
           { "id": "p_desc", "name": "description", "value": "Описание конкурса", "description": "Опциональное. Макс 5000 символов", "disabled": false, "type": "text" },
           { "id": "p_strategy", "name": "winnerStrategy", "value": "random", "description": "random | manual", "disabled": false, "type": "text" },
           { "id": "p_places", "name": "prizePlaces", "value": "1", "description": "Мин 1", "disabled": false, "type": "text" },
-          { "id": "p_start", "name": "startDate", "value": "2026-06-09T10:00:00", "description": "ISO дата в будущем", "disabled": false, "type": "text" },
-          { "id": "p_end", "name": "endDate", "value": "2026-06-10T10:00:00", "description": "ISO дата в будущем, позже startDate", "disabled": false, "type": "text" },
+          { "id": "p_start", "name": "startDate", "value": "2026-07-08T10:00:00", "description": "ISO дата в будущем", "disabled": false, "type": "text" },
+          { "id": "p_end", "name": "endDate", "value": "2026-07-09T10:00:00", "description": "ISO дата в будущем, позже startDate", "disabled": false, "type": "text" },
           { "id": "p_pub", "name": "publishChannelIds", "value": "[-1001234567890]", "description": "JSON массив telegramId каналов для публикации", "disabled": false, "type": "text" },
           { "id": "p_req", "name": "requiredChannelIds", "value": "[]", "description": "JSON массив telegramId обязательных каналов", "disabled": true, "type": "text" },
           { "id": "p_post", "name": "postText", "value": "Текст поста конкурса", "description": "Опциональное. Макс 5000 символов", "disabled": true, "type": "text" },
@@ -283,8 +283,8 @@
           { "id": "u_desc", "name": "description", "value": "Новое описание", "description": "Опциональное", "disabled": false, "type": "text" },
           { "id": "u_strategy", "name": "winnerStrategy", "value": "manual", "description": "random | manual", "disabled": true, "type": "text" },
           { "id": "u_places", "name": "prizePlaces", "value": "1", "description": "Опциональное", "disabled": true, "type": "text" },
-          { "id": "u_start", "name": "startDate", "value": "2026-06-09T10:00:00", "description": "Нельзя менять для ACTIVE конкурса", "disabled": true, "type": "text" },
-          { "id": "u_end", "name": "endDate", "value": "2026-06-11T10:00:00", "description": "Опциональное", "disabled": true, "type": "text" },
+          { "id": "u_start", "name": "startDate", "value": "2026-07-08T10:00:00", "description": "Нельзя менять для ACTIVE конкурса", "disabled": true, "type": "text" },
+          { "id": "u_end", "name": "endDate", "value": "2026-07-10T10:00:00", "description": "Опциональное", "disabled": true, "type": "text" },
           { "id": "u_pub", "name": "publishChannelIds", "value": "[-1001234567890]", "description": "Опциональное", "disabled": true, "type": "text" },
           { "id": "u_req", "name": "requiredChannelIds", "value": "[]", "description": "Опциональное", "disabled": true, "type": "text" },
           { "id": "u_winners", "name": "winners", "value": "[123456789]", "description": "Только для winnerStrategy=manual. JSON массив telegramId", "disabled": true, "type": "text" },

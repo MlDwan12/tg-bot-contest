@@ -19,4 +19,4 @@ RUN yarn install --production
 
 COPY --from=builder /app/dist ./dist
 
-CMD ["node", "dist/main.js"]
+CMD ["node", "--dns-result-order=ipv4first", "dist/main.js"]
