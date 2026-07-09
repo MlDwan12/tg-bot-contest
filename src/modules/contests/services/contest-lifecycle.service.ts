@@ -195,10 +195,44 @@ export class ContestLifecycleService {
       throw new BadRequestException('Нельзя завершить конкурс до его старта');
     }
 
-    await this.contestWinnerService.resolveAndSaveWinners(contest);
+    // Пустой конкурс завершается успешно, без победителей — как автозавершение
+    // (finishContestIdempotent). «Нет победителей» тут валидный исход, не ошибка.
+    // participants уже загружены findByIdWithRelations — без лишнего запроса.
+    const hasParticipants = (contest.participants?.length ?? 0) > 0;
 
+    // F1: атомарные ворота против гонки завершения (двойной клик по «Завершить»).
+    // updateStatusIfNotCompleted делает ACTIVE→COMPLETED одним атомарным
+    // UPDATE ... WHERE status != COMPLETED. При двух одновременных завершениях
+    // ровно ОДИН получит affected=1 (claimed=true) и разыграет победителя;
+    // проигравший гонку получит false и выйдет БЕЗ повторного розыгрыша.
+    // Раньше оба проходили reuse-guard (existingWinners=0, read-then-write без
+    // блокировки) до записи и разыгрывали дважды — это и была residual race F1.
+    const claimed = await this.contestWriteRepo.updateStatusIfNotCompleted(
+      contest.id,
+    );
+    if (!claimed) {
+      throw new BadRequestException('Конкурс уже завершён');
+    }
+
+    if (hasParticipants) {
+      try {
+        await this.contestWinnerService.resolveAndSaveWinners(contest);
+      } catch (err) {
+        // Розыгрыш не удался (MANUAL без заранее выбранных победителей,
+        // участников меньше призовых мест и т.п.): откатываем ворота из
+        // COMPLETED обратно в прежний статус, чтобы конкурс не завис
+        // завершённым без победителей и завершение можно было повторить.
+        await this.contestWriteRepo.updateStatusIfCurrent(
+          contest.id,
+          ContestStatus.COMPLETED,
+          contest.status,
+        );
+        throw err;
+      }
+    }
+
+    // Статус уже COMPLETED (ворота выше) — здесь только текст кнопки.
     await this.contestWriteRepo.update(contest.id, {
-      status: ContestStatus.COMPLETED,
       buttonText: 'Конкурс завершён',
     });
 
