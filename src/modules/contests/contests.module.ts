@@ -10,6 +10,7 @@ import {
   ContestParticipation,
   ContestPublication,
   ContestWinner,
+  ContestWinnerAudit,
 } from './entities';
 import {
   ContestParticipationReadRepository,
@@ -17,6 +18,7 @@ import {
   ContestReadRepository,
   ContestWinnerReadRepository,
   ContestWinnerWriteRepository,
+  ContestWinnerAuditWriteRepository,
   ContestWriteRepository,
 } from './repositories';
 import {
@@ -42,6 +44,7 @@ import { ContestCountersProcessor } from './jobs/processors';
       Contest,
       ContestParticipation,
       ContestWinner,
+      ContestWinnerAudit,
       ContestPublication,
       BotMessage,
       Channel,
@@ -67,6 +70,7 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestParticipationWriteRepository,
     ContestWinnerReadRepository,
     ContestWinnerWriteRepository,
+    ContestWinnerAuditWriteRepository,
     {
       provide: CONTEST_READ_REPOSITORY,
       useExisting: ContestReadRepository,

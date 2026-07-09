@@ -18,7 +18,15 @@ import {
   ContestWinnerReadRepository,
   ContestWinnerWriteRepository,
 } from '../interfaces';
-import { ContestParticipationWriteRepository } from '../repositories';
+import {
+  ContestParticipationWriteRepository,
+  ContestWinnerAuditWriteRepository,
+} from '../repositories';
+import {
+  DRAW_ALGORITHM,
+  generateSeed,
+  seededShuffle,
+} from './seeded-draw.util';
 
 @Injectable()
 export class ContestWinnerService {
@@ -34,6 +42,8 @@ export class ContestWinnerService {
 
     @Inject(CONTEST_PARTICIPATE_WRITE_REPOSITORY)
     private readonly contestParticipationWriteRepo: ContestParticipationWriteRepository,
+
+    private readonly contestWinnerAuditWriteRepo: ContestWinnerAuditWriteRepository,
   ) {}
 
   async getContestWinners(contestId: number) {
@@ -113,9 +123,26 @@ export class ContestWinnerService {
       );
     }
 
-    const shuffledUsers = this.shuffleArray(uniqueUsers);
+    // Provably-fair: канонический порядок пула (по userId) → детерминированный
+    // shuffle от крипто-случайного seed. Порядок строк в БД на результат не влияет.
+    const pool = [...uniqueUsers].sort((a, b) => a.id - b.id);
+    const seed = generateSeed();
+    const winners = seededShuffle(pool, seed).slice(0, contest.prizePlaces);
 
-    return shuffledUsers.slice(0, contest.prizePlaces);
+    // Неизменяемый след: любой пересчитает winners = shuffle(seed, pool) и
+    // убедится, что розыгрыш не подкручен. Fail-closed: если след не записался,
+    // розыгрыш не состоится (для дорогих призов «нет аудита — нет розыгрыша»).
+    await this.contestWinnerAuditWriteRepo.record({
+      contestId: contest.id,
+      strategy: contest.winnerStrategy,
+      prizePlaces: contest.prizePlaces,
+      winnerUserIds: winners.map((user) => user.id),
+      seed,
+      algorithm: DRAW_ALGORITHM,
+      participantUserIds: pool.map((user) => user.id),
+    });
+
+    return winners;
   }
 
   // private async resolveManualWinners(contest: Contest): Promise<User[]> {
@@ -249,17 +276,6 @@ export class ContestWinnerService {
         `Место победителя должно быть в диапазоне от 1 до ${prizePlaces}`,
       );
     }
-  }
-
-  private shuffleArray<T>(items: T[]): T[] {
-    const array = [...items];
-
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-
-    return array;
   }
 
   async resolveAndSaveWinners(contest: Contest): Promise<void> {

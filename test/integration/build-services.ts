@@ -3,6 +3,7 @@ import { Contest } from 'src/modules/contests/entities/contest.entity';
 import { ContestParticipation } from 'src/modules/contests/entities/contest-participation.entity';
 import { ContestPublication } from 'src/modules/contests/entities/contest-publications.entity';
 import { ContestWinner } from 'src/modules/contests/entities/contest-winner.entity';
+import { ContestWinnerAudit } from 'src/modules/contests/entities/contest-winner-audit.entity';
 import { Channel } from 'src/modules/channels/entities/channel.entity';
 import { ContestReadRepository } from 'src/modules/contests/repositories/contest-read.repository';
 import { ContestWriteRepository } from 'src/modules/contests/repositories/contest-write.repository';
@@ -10,6 +11,7 @@ import { ContestParticipationReadRepository } from 'src/modules/contests/reposit
 import { ContestParticipationWriteRepository } from 'src/modules/contests/repositories/contest-participate-write.repository';
 import { ContestWinnerReadRepository } from 'src/modules/contests/repositories/contest-winner-read.repository';
 import { ContestWinnerWriteRepository } from 'src/modules/contests/repositories/contest-winner-write.repository';
+import { ContestWinnerAuditWriteRepository } from 'src/modules/contests/repositories/contest-winner-audit-write.repository';
 import { ContestWinnerService } from 'src/modules/contests/services/contest-winner.service';
 import { ContestLifecycleService } from 'src/modules/contests/services/contest-lifecycle.service';
 
@@ -43,6 +45,9 @@ export function buildContestRepos(ds: DataSource) {
     winnerWrite: new ContestWinnerWriteRepository(
       ds.getRepository(ContestWinner),
     ),
+    winnerAudit: new ContestWinnerAuditWriteRepository(
+      ds.getRepository(ContestWinnerAudit),
+    ),
   };
 }
 
@@ -58,6 +63,7 @@ export function buildWinnerService(ds: DataSource): ContestWinnerService {
     repos.winnerWrite,
     repos.participationRead,
     repos.participationWrite,
+    repos.winnerAudit,
   );
 }
 
@@ -76,6 +82,7 @@ export function buildLifecycleService(ds: DataSource) {
     repos.winnerWrite,
     repos.participationRead,
     repos.participationWrite,
+    repos.winnerAudit,
   );
 
   const noop = async () => undefined;
