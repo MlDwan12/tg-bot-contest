@@ -7,7 +7,6 @@ import cookieParser from 'cookie-parser';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as Sentry from '@sentry/node';
-import { SentryFilter } from './common/filters/sentry.filter';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ExpressAdapter as BullBoardExpressAdapter } from '@bull-board/express';
@@ -105,10 +104,11 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  // app.useGlobalFilters(new SentryFilter());
 
   app.useGlobalInterceptors(new ResponseInterceptor());
 
+  // AllExceptionsFilter — единый глобальный фильтр: единый конверт ответа
+  // + отправка 5xx/необработанных в Sentry (см. сам фильтр).
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Разрешённые origin'ы — из env (CORS_ORIGINS, список через запятую).

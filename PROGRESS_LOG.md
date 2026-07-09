@@ -7,10 +7,11 @@
 
 ## 📍 СЕЙЧАС (читать первым при старте сессии)
 - **Ветка:** `refactor` (= чистая точка от прода).
-- **Статус:** **Фазы 0, 2, 3, 7 ЗАКРЫТЫ.** **18 тестов, 10 сьютов, ВСЕ зелёные, exit 0, `yarn build` чистый.** Сеть безопасности (3 горячих пути); F1-гонка закрыта воротами `updateStatusIfNotCompleted` (+ сторож); пустой конкурс штатно завершается; **RANDOM provably-fair** (crypto-seed + детерминированный shuffle, `Math.random` удалён, пересчёт из seed воспроизводит победителей); **MANUAL-аудит** (кто/кого/когда назначил, история не затирается) — обе стратегии в единой `contest_winner_audit`.
+- **Статус:** **Фазы 0, 2, 3, 4, 7 ЗАКРЫТЫ.** **18 инт-тестов (10 сьютов) + 3 юнита фильтра — ВСЕ зелёные, `yarn build` чистый.** Сеть безопасности (3 горячих пути); F1-гонка закрыта воротами `updateStatusIfNotCompleted` (+ сторож); пустой конкурс штатно завершается; **RANDOM provably-fair** (crypto-seed + детерминированный shuffle, `Math.random` удалён, пересчёт из seed воспроизводит победителей); **MANUAL-аудит** (кто/кого/когда назначил, история не затирается) — обе стратегии в единой `contest_winner_audit`.
 - **Фаза 1 (initData) — ОТЛОЖЕНА решением пользователя (2026-07-09): «сейчас ни на что не влияет».** Нюанс на будущее: заблокирован только БОЕВОЙ щелчок роута (старый фронт без `initData` сломается при переключении). Сам валидатор HMAC + guard + тесты можно написать НЕЗАВИСИМО от фронта (в тесте генерим валидный `initData` тест-токеном). Возвращаться, когда будет актуально / появится координация с фронтендером.
-- **⏭️ ТОЧНЫЙ СЛЕДУЮЩИЙ ШАГ (продолжить отсюда): Фаза 4 — Sentry (🟡)** по порядку плана (⓿→1 initData[отложена]→2 F1✅→3 аудит✅→**4 Sentry**→5 bcrypt→6 TelegramTransport→7 быстрые победы✅). `@sentry/node` уже инициализируется в `main.ts:132` (`Sentry.init`), но `SentryFilter` закомментирован (`main.ts:108`), а `@sentry/tracing` удалён в Фазе 7. Проверить: ловятся ли ошибки, нужен ли фильтр/трейсинг. Детали согласовать перед кодом.
-  - Прочие остатки-кандидаты (🟢): типизировать `findByIdWithRelations: Promise<any>` (уберёт флот `no-unsafe-*` в `contests.service.ts`); MANUAL-очистка победителей в аудит (`contests.service.ts:294/343` — clear без следа); helmet «до роутеров» НЕ делать (сломает Bull Board CSP).
+- **⏭️ ТОЧНЫЙ СЛЕДУЮЩИЙ ШАГ (продолжить отсюда): Фаза 5 — bcrypt (🟡).** В deps сразу и `bcrypt`, и `bcryptjs` — вероятно дубль. Разобраться: где хешируются/сверяются пароли (auth), какой пакет реально используется, убрать лишний, проверить совместимость хешей. Разведка → правило → 🟢/🔴 перед кодом.
+  - **Опция (Sentry trace):** авто-инструментирование v10 (`instrument.ts` в самом верху main) НЕ включено — упирается в загрузку env ДО `Sentry.init` (иначе DSN=undefined). Отдельный аккуратный шаг с переносом dotenv, если понадобится трейсинг.
+  - Прочие остатки-кандидаты (🟢): типизировать `findByIdWithRelations: Promise<any>`; MANUAL-очистка победителей в аудит (`contests.service.ts:294/343`); helmet НЕ трогать (Bull Board CSP).
 - **Как гонять тесты:** `yarn test:db:up` (если контейнеры погашены) → `yarn test:int`. Погасить: `yarn test:db:down`.
 - **Харнесс:** testcontainers НЕ используем (segfault на Node 22) → `docker-compose.test.yml` (PG 5433 / Redis 6380, проект `tg-bot-test`), конфиг `.env.test` (база `tg_bot_test`).
 - **Метод тестов:** «ручная сборка» — реальный репозиторий/сервис (`build-services.ts`) + реальная тест-БД + фейки внешнего мира (Telegram/очереди/logger `as any`), без bootstrap Nest/Telegraf. Фикстуры — `fixtures.ts`. Verbose + `console.log('[наблюдение] …')` с реальными данными Postgres.
@@ -49,7 +50,7 @@
 - [ ] Фаза 1 — initData-аутентификация 🔴🔴
 - [x] Фаза 2 — F1 (гонка завершения) ✅ (CAS-ворота в completeContest + сторож)
 - [x] Фаза 3 — аудит (MANUAL-лог + crypto-rng + seed) ✅ (provably-fair RANDOM + MANUAL who/when)
-- [ ] Фаза 4 — Sentry 🟡
+- [x] Фаза 4 — Sentry ✅ (5xx/не-HTTP → Sentry в AllExceptionsFilter, 4xx нет)
 - [ ] Фаза 5 — bcrypt 🟡
 - [ ] Фаза 6 — infra/telegram + разрыв циклов 🟡
 - [x] Фаза 7 — быстрые победы ✅ (мёртвые deps, jsonwebtoken/CORS в deps/env)
@@ -149,3 +150,11 @@
 - **Проверка:** `yarn install` (чисто, минус 4 пакета/плюс jsonwebtoken), `yarn build` чисто, `yarn test:int` → **18/18 зелёных** (харнесс на docker-compose, testcontainers не задет).
 - **Откат:** вернуть удалённые строки в `package.json` + `yarn install`; вернуть захардкоженный CORS.
 - **Следующий шаг:** Фаза 4 (Sentry) — см. блок «СЕЙЧАС».
+
+### [2026-07-09] Фаза 4 — Sentry (перехват ошибок)
+- **Дыра:** `AllExceptionsFilter` (единственный активный глобальный фильтр) логировал 5xx, но в Sentry НЕ слал. `SentryFilter` (ручной `captureException`) был закомментирован — и не мог сосуществовать: другой формат ответа (`{message}`) ломал бы единый конверт `{success,status,data}`.
+- **Сделано (прод):** в `AllExceptionsFilter` добавлен `Sentry.captureException` для **5xx** и **необработанных не-HTTP**; **4xx НЕ шлём** (ожидаемый клиентский шум). Формат ответа не тронут. Удалён мёртвый `src/common/filters/sentry.filter.ts` + его импорт/закомментированная строка в `main.ts`.
+- **НЕ тронуто осознанно:** `Sentry.init` (`main.ts`) оставлен ПОСЛЕ `NestFactory.create` — там `ConfigModule` уже загрузил `SENTRY_DSN` в env; перенос наверх (для v10 авто-инструментирования) сломал бы DSN. Трейсинг/instrument.ts — опция на потом.
+- **Тест:** `src/common/filters/allExceptionsFilter.spec.ts` (юнит, `jest.mock('@sentry/node')`): 5xx→capture+конверт 500; 4xx→не capture; не-HTTP→capture. Bootstrap-уровень — вне интеграционного HTTP-харнесса, поэтому юнит. `yarn build` чист, `yarn test allExceptionsFilter` → **3/3**. (`@sentry/tracing`/`@testcontainers` — уже удалены в Фазе 7; здесь только `@sentry/node`.)
+- **Откат:** убрать capture-вызовы из фильтра; вернуть `sentry.filter.ts` при желании.
+- **Следующий шаг:** Фаза 5 (bcrypt) — см. блок «СЕЙЧАС».

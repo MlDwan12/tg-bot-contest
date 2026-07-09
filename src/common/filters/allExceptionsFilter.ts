@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
+import * as Sentry from '@sentry/node';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -13,6 +14,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost) {
     if (host.getType() !== 'http') {
+      // Необработанное исключение вне HTTP (фон/очереди/жизненный цикл) —
+      // это всегда «неожиданно», шлём в Sentry.
+      Sentry.captureException(exception);
       this.logger.error(
         {
           error: exception instanceof Error ? exception.message : String(exception),
@@ -36,6 +40,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : 'Internal server error';
 
     if (status >= 500) {
+      // Только серверные ошибки (5xx) идут в Sentry. Клиентские 4xx
+      // (валидация, 401/403/404 и т.п.) — ожидаемы, их не шлём, чтобы
+      // не засорять Sentry шумом.
+      Sentry.captureException(exception);
       this.logger.error(
         {
           method: request.method,
