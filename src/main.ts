@@ -111,14 +111,22 @@ async function bootstrap() {
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
+  // Разрешённые origin'ы — из env (CORS_ORIGINS, список через запятую).
+  // Фолбэк на прежний захардкоженный список, чтобы поведение не менялось,
+  // если переменная не задана.
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [
+        'https://rollcu.ru',
+        'https://rollcu.online',
+        'https://www.rollcu.ru',
+        'https://www.rollcu.online',
+      ];
+
   app.enableCors({
-    origin: [
-      'https://rollcu.ru',
-      'https://rollcu.online',
-      'https://www.rollcu.ru',
-      'https://www.rollcu.online',
-    ],
-    // origin: true,
+    origin: corsOrigins,
     credentials: true,
   });
 
