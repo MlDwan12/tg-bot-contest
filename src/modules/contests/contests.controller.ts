@@ -79,9 +79,10 @@ export class ContestsController {
   updateContest(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateContestDto,
+    @UserId() actorUserId: number,
     @UploadedFile() image?: Express.Multer.File,
   ): Promise<Contest> {
-    return this.contestsService.updateContest(id, dto, image);
+    return this.contestsService.updateContest(id, dto, image, actorUserId);
   }
 
   @Post(':contestId/participate')

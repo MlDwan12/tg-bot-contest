@@ -31,6 +31,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.helper';
 import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
 import { ContestPublicationService } from './contest-publication.service';
+import { ContestWinnerService } from './contest-winner.service';
 
 @Injectable()
 export class ContestsService {
@@ -49,6 +50,7 @@ export class ContestsService {
     private readonly contestJobsService: ContestJobsService,
     private readonly contestPublicationService: ContestPublicationService,
     private readonly usersService: UsersService,
+    private readonly contestWinnerService: ContestWinnerService,
   ) {}
 
   async createContest(
@@ -171,6 +173,7 @@ export class ContestsService {
     contestId: number,
     dto: UpdateContestDto,
     image?: Express.Multer.File,
+    actorUserId?: number,
   ): Promise<Contest> {
     const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
 
@@ -333,6 +336,23 @@ export class ContestsService {
                 place: index + 1,
               })),
             );
+
+            // Аудит подотчётности (Q5.2), best-effort: назначение уже
+            // выполнено выше — если запись следа упадёт, не ломаем операцию,
+            // только громко логируем.
+            try {
+              await this.contestWinnerService.recordManualAssignment(
+                contestId,
+                orderedWinners.map((winner) => winner.id),
+                nextPrizePlaces,
+                actorUserId,
+              );
+            } catch (error) {
+              this.logger.error(
+                { err: error, contestId, actorUserId },
+                'Не удалось записать аудит MANUAL-назначения победителей',
+              );
+            }
           }
         }
       } else {

@@ -50,6 +50,27 @@ export class ContestWinnerService {
     return this.contestWinnerReadRepo.findByContestId(contestId);
   }
 
+  /**
+   * Пишет неизменяемый след подотчётности MANUAL-назначения: КТО (actorUserId)
+   * назначил КАКИХ победителей и КОГДА. У MANUAL нет алгоритмической честности
+   * (выбирает человек) — доказываем легитимность записью. Только аудит, без
+   * персиста победителей: тот делает вызывающий код своим рабочим путём.
+   */
+  async recordManualAssignment(
+    contestId: number,
+    winnerUserIds: number[],
+    prizePlaces: number,
+    actorUserId?: number,
+  ): Promise<void> {
+    await this.contestWinnerAuditWriteRepo.record({
+      contestId,
+      strategy: WinnerStrategy.MANUAL,
+      prizePlaces,
+      winnerUserIds,
+      assignedByUserId: actorUserId ?? null,
+    });
+  }
+
   async resolveWinners(contest: Contest): Promise<User[]> {
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
