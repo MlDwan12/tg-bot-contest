@@ -5,7 +5,6 @@ import { BotUpdate } from './bot.update';
 import { validationSchema } from 'src/config';
 import { TelegramService } from './bot.service';
 import { ContestsModule } from '../contests/contests.module';
-import { ChannelsModule } from '../channels/channels.module';
 
 @Module({
   imports: [
@@ -25,7 +24,9 @@ import { ChannelsModule } from '../channels/channels.module';
       },
     }),
     forwardRef(() => ContestsModule),
-    forwardRef(() => ChannelsModule),
+    // ChannelsModule НЕ импортируем: bot ничего из channels не использует
+    // (был мёртвый импорт, замыкал прямой цикл bot↔channels). Обратная связь
+    // channels→bot (TelegramService) остаётся — она реальна.
   ],
   providers: [BotUpdate, TelegramService],
   exports: [BotUpdate, TelegramService],
