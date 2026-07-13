@@ -144,7 +144,10 @@ export class ContestPublicationService {
   }
 
   async cancelContestPublications(contestId: number): Promise<void> {
-    await this.telegramService.deleteContestPublications(contestId);
+    // Публикации берём здесь (в домене contests) и ПЕРЕДАЁМ боту. Раньше bot
+    // дёргал этот же сервис обратно (round-trip) — это и держало цикл bot↔contests.
+    const publications = await this.getPublicationsByContestId(contestId);
+    await this.telegramService.deletePublicationMessages(publications);
     await this.contestWriteRepo.cancelPendingPublications(contestId);
   }
 

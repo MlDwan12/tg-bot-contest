@@ -1,10 +1,9 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { BotUpdate } from './bot.update';
 import { validationSchema } from 'src/config';
 import { TelegramService } from './bot.service';
-import { ContestsModule } from '../contests/contests.module';
 
 @Module({
   imports: [
@@ -23,10 +22,10 @@ import { ContestsModule } from '../contests/contests.module';
         return { token };
       },
     }),
-    forwardRef(() => ContestsModule),
-    // ChannelsModule НЕ импортируем: bot ничего из channels не использует
-    // (был мёртвый импорт, замыкал прямой цикл bot↔channels). Обратная связь
-    // channels→bot (TelegramService) остаётся — она реальна.
+    // bot — ЛИСТ графа: не импортирует ни contests, ни channels.
+    // bot↔contests разорван (ContestPublicationService больше не инъектится:
+    // deletePublicationMessages принимает данные параметром). Обратные связи
+    // *→bot (TelegramService) реальны и односторонни.
   ],
   providers: [BotUpdate, TelegramService],
   exports: [BotUpdate, TelegramService],
