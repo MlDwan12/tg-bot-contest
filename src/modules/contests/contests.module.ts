@@ -28,7 +28,7 @@ import {
   CONTEST_WINNER_READ_REPOSITORY,
   CONTEST_WINNER_WRITE_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import { Channel } from '../channels/entities';
 import { UsersModule } from '../users/users.module';
 import { ChannelsModule } from '../channels/channels.module';

@@ -11,7 +11,7 @@ import {
 } from 'typeorm';
 import { ContestParticipation } from './contest-participation.entity';
 import { User } from 'src/modules/users/entities';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestWinner } from '.';
 import { Channel } from 'src/modules/channels/entities';
 import { ContestPublication } from './contest-publications.entity';

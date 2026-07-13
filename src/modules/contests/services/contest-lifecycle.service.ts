@@ -13,9 +13,9 @@ import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import { Contest } from '../entities';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from '../jobs/services';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestPublicationService } from './contest-publication.service';

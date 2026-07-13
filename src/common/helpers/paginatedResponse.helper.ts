@@ -1,4 +1,4 @@
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 
 export function buildPaginatedResponse<T>(params: {
   items: T[];

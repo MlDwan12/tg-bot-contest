@@ -6,8 +6,8 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from './users.service';
 import { User } from '../entities';
-import { UserRole } from 'src/shared/enums/user';
-import { CreateUserAdmin } from 'src/shared/types/users';
+import { UserRole } from 'src/common/enums/user';
+import { CreateUserAdmin } from 'src/modules/users/types';
 
 @Injectable()
 export class AdminService {

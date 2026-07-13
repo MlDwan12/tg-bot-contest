@@ -1,7 +1,7 @@
-import { ContestStatus, PublicationStatus } from 'src/shared/enums/contest';
+import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Contest, ContestParticipation, ContestPublication } from '../entities';
 import { IContestReadFilters } from './contest-filter.interface';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 
 export interface IContestReadRepository {
   findById(id: number): Promise<Contest | null>;

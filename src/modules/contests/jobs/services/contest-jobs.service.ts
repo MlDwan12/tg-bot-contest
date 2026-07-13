@@ -1,8 +1,8 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { ContestStatus } from 'src/shared/enums/contest';
-import { CONTEST_READ_REPOSITORY } from 'src/shared/commons/constants';
+import { ContestStatus } from 'src/common/enums/contest';
+import { CONTEST_READ_REPOSITORY } from 'src/common/constants';
 import type { IContestReadRepository } from '../../interfaces';
 
 @Injectable()

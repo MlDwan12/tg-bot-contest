@@ -1,5 +1,5 @@
 import { ContestParticipation } from 'src/modules/contests/entities/contest-participation.entity';
-import { UserRole } from 'src/shared/enums/user';
+import { UserRole } from 'src/common/enums/user';
 import {
   PrimaryGeneratedColumn,
   Column,

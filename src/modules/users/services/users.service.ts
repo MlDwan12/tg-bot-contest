@@ -4,7 +4,7 @@ import { User } from '../entities';
 import { FindOptionsWhere } from 'typeorm';
 import { UserListItemDto } from '../dto/user-list-item.dto';
 import { UserDetailsDto } from '../dto/get-user-details.dto';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
 import { getPaginationParams } from 'src/common/helpers/paginationParams.helper';
 

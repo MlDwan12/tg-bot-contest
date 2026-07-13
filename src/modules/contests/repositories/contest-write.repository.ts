@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Contest } from '../entities/contest.entity';
-import { ContestStatus, PublicationStatus } from 'src/shared/enums/contest';
+import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { IContestWriteRepository } from '../interfaces';
 import { ContestPublication, ContestWinner } from '../entities';

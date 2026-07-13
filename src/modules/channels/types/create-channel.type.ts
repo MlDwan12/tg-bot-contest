@@ -1,4 +1,4 @@
-import { ChannelType } from 'src/shared/enums/channel';
+import { ChannelType } from 'src/common/enums/channel';
 
 export type CreateChannel = {
   id: number;

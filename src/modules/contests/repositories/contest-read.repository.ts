@@ -8,10 +8,10 @@ import {
   SelectQueryBuilder,
 } from 'typeorm';
 import { Contest } from '../entities/contest.entity';
-import { ContestStatus, PublicationStatus } from 'src/shared/enums/contest';
+import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { IContestReadFilters, IContestReadRepository } from '../interfaces';
 import { ContestPublication, ContestParticipation } from '../entities';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
 import { ContestDetails } from '../dto/contest-info.dto';
 

@@ -12,7 +12,7 @@ import {
   CONTEST_PARTICIPATE_WRITE_REPOSITORY,
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import {
   ContestParticipationReadRepository,
   ContestParticipationWriteRepository,
@@ -22,7 +22,7 @@ import {
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ContestParticipation } from '../entities';
-import { ContestStatus } from 'src/shared/enums/contest';
+import { ContestStatus } from 'src/common/enums/contest';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';

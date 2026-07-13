@@ -11,9 +11,9 @@ import {
   ArrayUnique,
   MaxLength,
 } from 'class-validator';
-import { WinnerStrategy } from 'src/shared/enums/contest';
-import { CreateContest } from 'src/shared/types/contests';
-import { IsFutureDate } from 'src/shared/validators/is-future-date.validator';
+import { WinnerStrategy } from 'src/common/enums/contest';
+import { CreateContest } from 'src/modules/contests/types';
+import { IsFutureDate } from 'src/common/validators/is-future-date.validator';
 import { BadRequestException } from '@nestjs/common';
 
 export function toNumberArray(value: unknown): number[] | undefined {

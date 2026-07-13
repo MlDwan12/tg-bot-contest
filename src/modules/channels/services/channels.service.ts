@@ -8,14 +8,14 @@ import {
 import {
   CHANNEL_READ_REPOSITORY,
   CHANNEL_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 
-import { ChannelType } from 'src/shared/enums/channel';
+import { ChannelType } from 'src/common/enums/channel';
 import { Channel } from '../entities';
 import { ChannelReadRepository, ChannelWriteRepository } from '../repositories';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { Logger } from 'nestjs-pino';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
 import { getPaginationParams } from 'src/common/helpers/paginationParams.helper';
 import { FindOptionsWhere } from 'typeorm';

@@ -7,7 +7,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { ChannelType } from 'src/shared/enums/channel';
+import { ChannelType } from 'src/common/enums/channel';
 
 export class GetChannelsQueryDto {
   @IsOptional()

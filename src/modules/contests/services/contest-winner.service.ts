@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { Contest, ContestParticipation } from '../entities';
 import { User } from 'src/modules/users/entities';
-import { WinnerStrategy } from 'src/shared/enums/contest';
+import { WinnerStrategy } from 'src/common/enums/contest';
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_PARTICIPATE_WRITE_REPOSITORY,
   CONTEST_WINNER_READ_REPOSITORY,
   CONTEST_WINNER_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import {
   ContestParticipationReadRepository,
   ContestWinnerReadRepository,

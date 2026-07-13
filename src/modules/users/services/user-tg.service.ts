@@ -7,7 +7,7 @@ import {
 import { TelegramError } from 'telegraf';
 import { UsersService } from './users.service';
 import { User } from '../entities';
-import { UserRole } from 'src/shared/enums/user';
+import { UserRole } from 'src/common/enums/user';
 import { TelegramService } from 'src/modules/bot/bot.service';
 
 @Injectable()

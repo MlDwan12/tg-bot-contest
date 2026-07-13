@@ -1,5 +1,5 @@
 import { Contest } from '../entities/contest.entity';
-import { ContestStatus } from '../../../shared/enums/contest/contest-status.enum';
+import { ContestStatus } from 'src/common/enums/contest';
 import { ContestPublication } from '../entities';
 
 export abstract class IContestWriteRepository {

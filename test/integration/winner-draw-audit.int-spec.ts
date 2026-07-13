@@ -8,7 +8,7 @@ import {
   DRAW_ALGORITHM,
   seededShuffle,
 } from 'src/modules/contests/services/seeded-draw.util';
-import { WinnerStrategy } from 'src/shared/enums/contest';
+import { WinnerStrategy } from 'src/common/enums/contest';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 3) — provably-fair след розыгрыша RANDOM.

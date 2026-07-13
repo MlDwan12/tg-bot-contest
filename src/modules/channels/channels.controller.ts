@@ -12,7 +12,7 @@ import {
 import { ChannelsService } from './services/channels.service';
 import { Channel } from './entities';
 import { CreateChannelDto, GetChannelsQueryDto } from './dto';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { JwtAuthGuard } from '../auth/guards';
 
 @Controller('channels')

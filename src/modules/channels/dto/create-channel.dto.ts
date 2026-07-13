@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsOptional, IsString, IsEnum, IsNumber } from 'class-validator';
-import { ChannelType } from 'src/shared/enums/channel';
-import { CreateChannel } from 'src/shared/types/channel';
+import { ChannelType } from 'src/common/enums/channel';
+import { CreateChannel } from 'src/modules/channels/types';
 
 export class CreateChannelDto implements Omit<
   CreateChannel,

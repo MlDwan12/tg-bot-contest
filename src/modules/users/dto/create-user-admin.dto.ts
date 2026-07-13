@@ -1,7 +1,7 @@
 import { IsString, MinLength, MaxLength, Matches } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { CreateUserAdmin } from 'src/shared/types/users';
+import { CreateUserAdmin } from 'src/modules/users/types';
 
 export class CreateUserAdminDto implements CreateUserAdmin {
   @ApiProperty({

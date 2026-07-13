@@ -11,7 +11,7 @@ import {
   BotMessageContentType,
   BotMessageStatus,
   BotMessageType,
-} from 'src/shared/enums/bot';
+} from 'src/common/enums/bot';
 
 @Entity('bot_messages')
 export class BotMessage {

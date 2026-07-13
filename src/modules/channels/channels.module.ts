@@ -6,7 +6,7 @@ import { Channel } from './entities/channel.entity';
 import {
   CHANNEL_READ_REPOSITORY,
   CHANNEL_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import { ChannelReadRepository, ChannelWriteRepository } from './repositories';
 import { BotModule } from '../bot/bot.module';
 import { AuthModule } from '../auth/auth.module';

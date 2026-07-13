@@ -1,4 +1,4 @@
-import { PublicationStatus } from 'src/shared/enums/contest';
+import { PublicationStatus } from 'src/common/enums/contest';
 import {
   Entity,
   Unique,

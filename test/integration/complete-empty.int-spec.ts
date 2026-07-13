@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { initTestDb, truncateAll, closeTestDb } from './harness';
 import { createUser, createContest } from './fixtures';
 import { buildLifecycleService } from './build-services';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 2) — завершение ПУСТОГО конкурса.

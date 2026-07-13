@@ -11,16 +11,16 @@ import {
 import {
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
-import { CreateContest } from 'src/shared/types/contests';
+} from 'src/common/constants';
+import { CreateContest } from 'src/modules/contests/types';
 import { Contest } from '../entities';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
 import { ContestJobsService } from '../jobs/services';
 import { GetContestsQueryDto } from '../dto/get-contests-query.dto';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { ContestShortInfoDto } from '../dto/contest-short-info.dto';
 import { UpdateContestDto } from '../dto';
 import { In } from 'typeorm';

@@ -1,7 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateContestDto } from './create-contest.dto';
 import { IsOptional, IsEnum, IsArray, IsInt } from 'class-validator';
-import { ContestStatus } from 'src/shared/enums/contest';
+import { ContestStatus } from 'src/common/enums/contest';
 import { Transform } from 'class-transformer';
 
 export class UpdateContestDto extends PartialType(CreateContestDto) {

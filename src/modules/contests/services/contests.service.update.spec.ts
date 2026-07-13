@@ -18,15 +18,15 @@ import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 
 import {
   ContestStatus,
   PublicationStatus,
   WinnerStrategy,
-} from 'src/shared/enums/contest';
-import { UserRole } from 'src/shared/enums/user';
-import { ChannelType } from 'src/shared/enums/channel';
+} from 'src/common/enums/contest';
+import { UserRole } from 'src/common/enums/user';
+import { ChannelType } from 'src/common/enums/channel';
 
 describe('ContestsService.updateContest', () => {
   let service: ContestsService;

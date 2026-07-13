@@ -25,9 +25,9 @@ import { UserId } from 'src/common/decorators';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ParticipateContestDto } from './dto/participate-contest.dto';
 import { GetContestsQueryDto } from './dto/get-contests-query.dto';
-import { Paginated } from 'src/shared/commons/response/paginated.type';
+import { Paginated } from 'src/common/response/paginated.type';
 import { ContestShortInfoDto } from './dto/contest-short-info.dto';
-import { contestImageUploadOptions } from './commons/contest-image.interceptor';
+import { contestImageUploadOptions } from './interceptors/contest-image.interceptor';
 import { JwtAuthGuard } from '../auth/guards';
 
 @Controller('contest')

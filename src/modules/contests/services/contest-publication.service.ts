@@ -18,9 +18,9 @@ import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_READ_REPOSITORY,
   CONTEST_WRITE_REPOSITORY,
-} from 'src/shared/commons/constants';
+} from 'src/common/constants';
 import { Contest, ContestPublication } from '../entities';
-import { ContestStatus, PublicationStatus } from 'src/shared/enums/contest';
+import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
 

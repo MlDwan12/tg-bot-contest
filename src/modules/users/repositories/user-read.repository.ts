@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 import { User } from '../entities';
 import { IUserReadRepository } from '../interfaces';
-import { UserRole } from 'src/shared/enums/user';
+import { UserRole } from 'src/common/enums/user';
 import { UserListItemDto } from '../dto/user-list-item.dto';
 import { UserDetailsDto } from '../dto/get-user-details.dto';
 import { Channel } from 'src/modules/channels/entities';

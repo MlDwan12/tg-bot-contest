@@ -1,4 +1,4 @@
-import { WinnerStrategy } from 'src/shared/enums/contest';
+import { WinnerStrategy } from 'src/common/enums/contest';
 
 export type CreateContest = {
   // Контент для Telegram

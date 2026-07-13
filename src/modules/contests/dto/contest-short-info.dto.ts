@@ -1,4 +1,4 @@
-import { ContestStatus } from 'src/shared/enums/contest';
+import { ContestStatus } from 'src/common/enums/contest';
 
 export class ContestShortInfoDto {
   id: number;

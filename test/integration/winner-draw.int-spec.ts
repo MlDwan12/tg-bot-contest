@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { initTestDb, truncateAll, closeTestDb } from './harness';
 import { createUser, createContest, addParticipant } from './fixtures';
 import { buildWinnerService } from './build-services';
-import { WinnerStrategy } from 'src/shared/enums/contest';
+import { WinnerStrategy } from 'src/common/enums/contest';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 0.2) — розыгрыш победителей.

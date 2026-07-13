@@ -8,7 +8,7 @@
 //   IsUrl,
 //   ValidateIf,
 // } from 'class-validator';
-// import { UserMailingType } from 'src/shared/enums/user/user-mailing-type.enum';
+// import { UserMailingType } from 'src/common/enums/user/user-mailing-type.enum';
 
 // export class SendUsersMailingDto {
 //   @IsEnum(UserMailingType)
@@ -59,7 +59,7 @@ import {
   IsOptional,
   IsUrl,
 } from 'class-validator';
-import { UserMailingType } from 'src/shared/enums/user/user-mailing-type.enum';
+import { UserMailingType } from 'src/common/enums/user/user-mailing-type.enum';
 
 export class SendUsersMailingDto {
   @IsEnum(UserMailingType)

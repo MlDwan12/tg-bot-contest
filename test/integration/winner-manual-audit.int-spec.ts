@@ -4,7 +4,7 @@ import { initTestDb, truncateAll, closeTestDb } from './harness';
 import { createUser, createContest } from './fixtures';
 import { buildWinnerService } from './build-services';
 import { ContestWinnerAudit } from 'src/modules/contests/entities/contest-winner-audit.entity';
-import { WinnerStrategy } from 'src/shared/enums/contest';
+import { WinnerStrategy } from 'src/common/enums/contest';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 3) — MANUAL-аудит назначения победителей (Q5.2).

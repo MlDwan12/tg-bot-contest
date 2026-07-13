@@ -6,11 +6,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ContestParticipation } from 'src/modules/contests/entities/contest-participation.entity';
-import { UserRole } from 'src/shared/enums/user';
+import { UserRole } from 'src/common/enums/user';
 import { User } from '../entities';
 import { SendUsersMailingDto } from '../dto/send-users-mailing.dto';
 import { TelegramService } from 'src/modules/bot/bot.service';
-import { UserMailingType } from 'src/shared/enums/user/user-mailing-type.enum';
+import { UserMailingType } from 'src/common/enums/user/user-mailing-type.enum';
 import { ContestPublicationService } from '../../contests/services/contest-publication.service';
 import { Logger } from 'nestjs-pino';
 import { ContestPublication } from 'src/modules/contests/entities';

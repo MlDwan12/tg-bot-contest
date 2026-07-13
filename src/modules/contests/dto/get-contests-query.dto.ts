@@ -9,7 +9,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 
 export enum ContestSortBy {
   CREATED_AT = 'createdAt',

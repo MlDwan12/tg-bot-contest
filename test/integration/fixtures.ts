@@ -2,8 +2,8 @@ import { DataSource } from 'typeorm';
 import { User } from 'src/modules/users/entities/user.entity';
 import { Contest } from 'src/modules/contests/entities/contest.entity';
 import { ContestParticipation } from 'src/modules/contests/entities/contest-participation.entity';
-import { UserRole } from 'src/shared/enums/user';
-import { ContestStatus, WinnerStrategy } from 'src/shared/enums/contest';
+import { UserRole } from 'src/common/enums/user';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 
 // Счётчик для уникальных значений (telegramId — unique-колонка).
 let seq = 0;

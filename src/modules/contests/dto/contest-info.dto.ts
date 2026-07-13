@@ -1,4 +1,4 @@
-import { WinnerStrategy, ContestStatus } from 'src/shared/enums/contest';
+import { WinnerStrategy, ContestStatus } from 'src/common/enums/contest';
 
 type ContestRelationChannel = {
   telegramId: number | null;
