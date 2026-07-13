@@ -16,7 +16,7 @@ import {
 } from 'src/common/constants';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
-import { ContestJobsService } from '../jobs/services';
+import { ContestJobsService } from './contest-jobs.service';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestPublicationService } from './contest-publication.service';
 import { TelegramService } from 'src/modules/bot/bot.service';

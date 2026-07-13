@@ -18,7 +18,7 @@ import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
-import { ContestJobsService } from '../jobs/services';
+import { ContestJobsService } from './contest-jobs.service';
 import { GetContestsQueryDto } from '../dto/get-contests-query.dto';
 import { Paginated } from 'src/common/response/paginated.type';
 import { ContestShortInfoDto } from '../dto/contest-short-info.dto';

@@ -32,9 +32,12 @@ import {
 import { Channel } from '../channels/entities';
 import { UsersModule } from '../users/users.module';
 import { ChannelsModule } from '../channels/channels.module';
-import { ContestsJobsModule } from './jobs/contest-jobs.module';
 import { QueuesModule } from 'src/queues';
-import { ContestsParticipateService, ContestWinnerService } from './services';
+import {
+  ContestsParticipateService,
+  ContestWinnerService,
+  ContestJobsService,
+} from './services';
 import { BotModule } from '../bot/bot.module';
 import { ContestCountersProcessor } from './jobs/processors';
 
@@ -53,7 +56,8 @@ import { ContestCountersProcessor } from './jobs/processors';
     forwardRef(() => ChannelsModule),
     QueuesModule,
     forwardRef(() => BotModule),
-    forwardRef(() => ContestsJobsModule),
+    // ContestsJobsModule НЕ импортируем: producer ContestJobsService переехал
+    // сюда (в providers), больше брать у jobs нечего. Цикл contests↔jobs разорван.
   ],
   controllers: [ContestsController],
   providers: [
@@ -62,6 +66,7 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestLifecycleService,
     ContestsParticipateService,
     ContestWinnerService,
+    ContestJobsService,
     ContestCountersProcessor,
 
     ContestReadRepository,

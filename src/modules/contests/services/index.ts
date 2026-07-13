@@ -1,3 +1,4 @@
+export * from './contest-jobs.service';
 export * from './contest-lifecycle.service';
 export * from './contest-participate.service';
 export * from './contest-publication.service';

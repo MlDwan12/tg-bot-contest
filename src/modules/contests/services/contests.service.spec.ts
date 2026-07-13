@@ -8,7 +8,7 @@ import { Logger } from 'nestjs-pino';
 import { ContestsService } from './contests.service';
 import { AdminService } from 'src/modules/users/services';
 import { ChannelsService } from 'src/modules/channels/services';
-import { ContestJobsService } from '../jobs/services';
+import { ContestJobsService } from './contest-jobs.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestsParticipateService } from './contest-participate.service';
