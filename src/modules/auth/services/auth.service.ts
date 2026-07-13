@@ -1,6 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from 'src/modules/users/services';
-import * as bcrypt from 'bcrypt';
+// Консолидировано на bcryptjs (как в user-admin.service): один пакет на
+// hash+compare, без нативной сборки. Хеши кросс-совместимы — не разлогинит.
+import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
