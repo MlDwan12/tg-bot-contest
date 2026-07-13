@@ -2,20 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 import { User } from '../entities';
-import { IUserReadRepository } from '../interfaces';
 import { UserRole } from 'src/common/enums/user';
 import { UserListItemDto } from '../dto/user-list-item.dto';
 import { UserDetailsDto } from '../dto/get-user-details.dto';
 import { Channel } from 'src/modules/channels/entities';
 import { Logger } from 'nestjs-pino';
+import { IUserRepository } from '../interfaces';
 
+/**
+ * Единый репозиторий агрегата User (Фаза 9 — слиты read/write).
+ * Подключается через токен USER_REPOSITORY, сервисы зависят от IUserRepository.
+ */
 @Injectable()
-export class UserReadRepository implements IUserReadRepository {
+export class UserRepository implements IUserRepository {
   constructor(
     @InjectRepository(User)
     private readonly repo: Repository<User>,
     private readonly logger: Logger,
   ) {}
+
+  // --- чтение ---
 
   findById(id: number): Promise<User | null> {
     return this.repo.findOne({ where: { id } });
@@ -159,5 +165,24 @@ export class UserReadRepository implements IUserReadRepository {
       groups: uniqueGroups,
       contests: Array.from(uniqueContestsMap.values()),
     };
+  }
+
+  // --- запись ---
+
+  create(user: Partial<User>): Promise<User> {
+    return this.repo.save(this.repo.create(user));
+  }
+
+  save(user: User): Promise<User> {
+    return this.repo.save(user);
+  }
+
+  async remove(user: User): Promise<void> {
+    await this.repo.remove(user);
+  }
+
+  async update(id: number, data: Partial<User>): Promise<User> {
+    await this.repo.update(id, data);
+    return await this.repo.findOneByOrFail({ id });
   }
 }

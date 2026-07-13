@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { UserReadRepository, UserWriteRepository } from '../repositories';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import type { IUserRepository } from '../interfaces';
+import { USER_REPOSITORY } from 'src/common/constants';
 import { User } from '../entities';
 import { FindOptionsWhere } from 'typeorm';
 import { UserListItemDto } from '../dto/user-list-item.dto';
@@ -11,43 +12,43 @@ import { getPaginationParams } from 'src/common/helpers/paginationParams.helper'
 @Injectable()
 export class UsersService {
   constructor(
-    private readonly readRepo: UserReadRepository,
-    private readonly writeRepo: UserWriteRepository,
+    @Inject(USER_REPOSITORY)
+    private readonly userRepo: IUserRepository,
   ) {}
 
   findById(id: number): Promise<User | null> {
-    return this.readRepo.findById(id);
+    return this.userRepo.findById(id);
   }
 
   findByLogin(login: string): Promise<User | null> {
-    return this.readRepo.findByLogin(login);
+    return this.userRepo.findByLogin(login);
   }
 
   findByTelegramId(telegramId: string): Promise<User | null> {
-    return this.readRepo.findByTelegramId(telegramId);
+    return this.userRepo.findByTelegramId(telegramId);
   }
 
   findOne(filters: FindOptionsWhere<User>): Promise<User | null> {
-    return this.readRepo.findOne(filters);
+    return this.userRepo.findOne(filters);
   }
   findAllByParams(params: FindOptionsWhere<User>): Promise<User[]> {
-    return this.readRepo.findAllByParams(params);
+    return this.userRepo.findAllByParams(params);
   }
 
   findAll(): Promise<User[]> {
-    return this.readRepo.findAll();
+    return this.userRepo.findAll();
   }
 
   create(user: Partial<User>): Promise<User> {
-    return this.writeRepo.create(user);
+    return this.userRepo.create(user);
   }
 
   save(user: User): Promise<User> {
-    return this.writeRepo.save(user);
+    return this.userRepo.save(user);
   }
 
   remove(user: User): Promise<void> {
-    return this.writeRepo.remove(user);
+    return this.userRepo.remove(user);
   }
 
   async findAllUsersWithParticipationCount(query: {
@@ -62,7 +63,7 @@ export class UsersService {
     );
 
     const [items, total] =
-      await this.readRepo.findAllUsersWithParticipationCount({
+      await this.userRepo.findAllUsersWithParticipationCount({
         skip,
         take,
         group: query.group,
@@ -78,7 +79,7 @@ export class UsersService {
   }
 
   async findUserDetailsById(id: number): Promise<UserDetailsDto> {
-    const userDetails = await this.readRepo.findUserDetailsById(id);
+    const userDetails = await this.userRepo.findUserDetailsById(id);
 
     if (!userDetails) {
       throw new NotFoundException(`User with id=${id} not found`);

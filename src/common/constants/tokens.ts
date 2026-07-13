@@ -16,3 +16,7 @@ export const CONTEST_WINNER_WRITE_REPOSITORY =
 export const CHANNEL_READ_REPOSITORY = 'CHANNEL_READ_REPOSITORY';
 
 export const CHANNEL_WRITE_REPOSITORY = 'CHANNEL_WRITE_REPOSITORY';
+
+// Фаза 9: единый репозиторий на агрегат (токен+интерфейс). Пока сосуществует
+// с раздвоенными read/write выше — их сливаем агрегат за агрегатом.
+export const USER_REPOSITORY = 'USER_REPOSITORY';
