@@ -9,14 +9,14 @@ import {
 } from 'src/common/constants';
 import { ChannelReadRepository, ChannelWriteRepository } from './repositories';
 import { BotModule } from '../bot/bot.module';
-import { AuthModule } from '../auth/auth.module';
 import { ChannelHealthService } from './services/health.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Channel]),
     forwardRef(() => BotModule),
-    forwardRef(() => AuthModule),
+    // AuthModule НЕ импортируем: он @Global, JwtAuthGuard доступен глобально
+    // (как в contests.controller). Импорт был избыточен и замыкал ложный цикл.
   ],
   controllers: [ChannelsController],
   providers: [

@@ -11,7 +11,6 @@ import { UsersMailingService } from './services/users-mailing.service';
 import { ContestsModule } from '../contests/contests.module';
 import { MailingProcessor } from './jobs/mailing.processor';
 import { BullModule } from '@nestjs/bullmq';
-import { AuthModule } from '../auth/auth.module';
 import { MailingMessageEntity } from './entities/mailing-message.entity';
 import { MailingCleanupService } from './services/mailing-cleanup.service';
 import { MailingJobEntity } from './entities/mailing-jobs.entity';
@@ -27,7 +26,8 @@ import { MailingJobEntity } from './entities/mailing-jobs.entity';
     forwardRef(() => BotModule),
     ContestsModule,
     BullModule.registerQueue({ name: 'user-mailing' }),
-    forwardRef(() => AuthModule),
+    // AuthModule НЕ импортируем: он @Global, JwtAuthGuard доступен глобально
+    // (как в contests.controller). Импорт был избыточен и замыкал ложный цикл.
   ],
   controllers: [UsersController],
   providers: [
