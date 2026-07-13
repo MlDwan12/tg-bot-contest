@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ChannelsService } from './services/channels.service';
 import { ChannelsController } from './channels.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -14,7 +14,7 @@ import { ChannelHealthService } from './services/health.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Channel]),
-    forwardRef(() => BotModule),
+    BotModule,
     // AuthModule НЕ импортируем: он @Global, JwtAuthGuard доступен глобально
     // (как в contests.controller). Импорт был избыточен и замыкал ложный цикл.
   ],

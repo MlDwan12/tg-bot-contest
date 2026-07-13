@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { UsersService } from './services/users.service';
 import { UsersController } from './users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -23,7 +23,7 @@ import { MailingJobEntity } from './entities/mailing-jobs.entity';
       MailingMessageEntity,
       MailingJobEntity,
     ]),
-    forwardRef(() => BotModule),
+    BotModule,
     ContestsModule,
     BullModule.registerQueue({ name: 'user-mailing' }),
     // AuthModule НЕ импортируем: он @Global, JwtAuthGuard доступен глобально

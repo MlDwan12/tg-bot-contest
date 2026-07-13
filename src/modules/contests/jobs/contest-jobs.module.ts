@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { QueuesModule } from 'src/queues/queues.module';
 import { ContestsModule } from '../contests.module';
 import { BotModule } from 'src/modules/bot/bot.module';
@@ -15,7 +15,7 @@ import {
     // ContestJobsService переехал в ContestsModule, jobs зависит от contests
     // односторонне (процессоры-потребители тянут сервисы contests).
     ContestsModule,
-    forwardRef(() => BotModule),
+    BotModule,
   ],
   providers: [
     ContestPublishProcessor,

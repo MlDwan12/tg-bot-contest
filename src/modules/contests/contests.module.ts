@@ -53,9 +53,9 @@ import { ContestCountersProcessor } from './jobs/processors';
       Channel,
     ]),
     forwardRef(() => UsersModule),
-    forwardRef(() => ChannelsModule),
+    ChannelsModule,
     QueuesModule,
-    forwardRef(() => BotModule),
+    BotModule,
     // ContestsJobsModule НЕ импортируем: producer ContestJobsService переехал
     // сюда (в providers), больше брать у jobs нечего. Цикл contests↔jobs разорван.
   ],
