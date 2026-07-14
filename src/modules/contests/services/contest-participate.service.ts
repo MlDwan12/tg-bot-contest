@@ -17,12 +17,20 @@ import type {
 } from '../interfaces';
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
-import { ContestParticipation } from '../entities';
+import { Contest, ContestParticipation } from '../entities';
 import { ContestStatus } from 'src/common/enums/contest';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
+
+type ParticipateInput = {
+  telegramId: string;
+  groupId: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+};
 
 @Injectable()
 export class ContestsParticipateService {
@@ -43,42 +51,50 @@ export class ContestsParticipateService {
     private readonly logger: Logger,
   ) {}
 
-  async participate(
-    contestId: number,
-    tgData: {
-      telegramId: string;
-      groupId: string;
-      username?: string;
-      firstName?: string;
-      lastName?: string;
-    },
-  ) {
-    const contest = await this.contestRepo.findByParams({
-      id: contestId,
-    });
+  /**
+   * Оркестрация участия. Порядок шагов сохранён 1:1 с прежней реализацией
+   * (закреплён характеризацией Ф10.1): найден/не отменён → завершён отдаёт
+   * победителей → активен → подписка на обязательные каналы → запись участия.
+   */
+  async participate(contestId: number, tgData: ParticipateInput) {
+    const contest = await this.contestRepo.findByParams({ id: contestId });
 
+    this.assertContestFound(contest);
+
+    if (contest.status === ContestStatus.COMPLETED) {
+      return this.getCompletedContestWinners(contestId);
+    }
+
+    this.assertContestActive(contest);
+
+    const user = await this.userTgService.ensureUser(tgData);
+
+    await this.assertUserSubscribedToRequiredChannels(
+      contest,
+      tgData.telegramId,
+    );
+
+    return this.persistParticipation(contest, user, tgData);
+  }
+
+  /**
+   * Конкурс должен существовать и не быть отменённым/черновиком — иначе для
+   * участника он «не найден». После вызова TS знает, что contest не null.
+   */
+  private assertContestFound(
+    contest: Contest | null,
+  ): asserts contest is Contest {
     if (
       !contest ||
-      contest?.status === ContestStatus.CANCELLED ||
-      contest?.status === ContestStatus.DRAFT
+      contest.status === ContestStatus.CANCELLED ||
+      contest.status === ContestStatus.DRAFT
     ) {
       throw new NotFoundException('Конкурс не найден');
     }
+  }
 
-    if (contest.status === ContestStatus.COMPLETED) {
-      const winners =
-        await this.contestWinnerService.getContestWinners(contestId);
-
-      const w = winners.map((w) => ({
-        place: w.place,
-        telegramId: w.user?.telegramId ?? null,
-        userId: w.userId,
-        username: w.user?.username ?? null,
-      }));
-
-      return w;
-    }
-
+  /** Активный конкурс: до старта → 400; любой иной не-ACTIVE → 404. */
+  private assertContestActive(contest: Contest): void {
     if (contest.status === ContestStatus.PENDING) {
       throw new BadRequestException('Конкурс ещё не начался');
     }
@@ -86,43 +102,65 @@ export class ContestsParticipateService {
     if (contest.status !== ContestStatus.ACTIVE) {
       throw new NotFoundException('Конкурс не найден');
     }
+  }
 
-    const user = await this.userTgService.ensureUser(tgData);
+  /** Завершённый конкурс: participate возвращает победителей, а не участие. */
+  private async getCompletedContestWinners(contestId: number) {
+    const winners =
+      await this.contestWinnerService.getContestWinners(contestId);
 
+    return winners.map((w) => ({
+      place: w.place,
+      telegramId: w.user?.telegramId ?? null,
+      userId: w.userId,
+      username: w.user?.username ?? null,
+    }));
+  }
+
+  /**
+   * Участие запрещено, пока пользователь не подписан на обязательные каналы.
+   * Нет обязательных каналов (или у них нет telegramId) → проверка пропускается.
+   */
+  private async assertUserSubscribedToRequiredChannels(
+    contest: Contest,
+    telegramId: string,
+  ): Promise<void> {
     const requiredChannels = contest.requiredChannels ?? [];
+    if (requiredChannels.length === 0) return;
 
-    if (requiredChannels.length > 0) {
-      const channelIds = requiredChannels
-        .map((c) => c.telegramId)
-        .filter((id): id is number => id != null);
+    const channelIds = requiredChannels
+      .map((c) => c.telegramId)
+      .filter((id): id is number => id != null);
+    if (channelIds.length === 0) return;
 
-      if (channelIds.length > 0) {
-        const { passed, missingChannels } =
-          await this.telegramService.checkUserInChannels(
-            tgData.telegramId,
-            channelIds,
-          );
+    const { passed, missingChannels } =
+      await this.telegramService.checkUserInChannels(telegramId, channelIds);
+    if (passed) return;
 
-        if (!passed) {
-          const usernames = requiredChannels
-            .filter(
-              (c) =>
-                c.telegramId != null && missingChannels.includes(c.telegramId),
-            )
-            .map((c) =>
-              c.telegramUsername
-                ? `@${c.telegramUsername}`
-                : `id:${c.telegramId}`,
-            )
-            .join(', ');
+    const usernames = requiredChannels
+      .filter(
+        (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
+      )
+      .map((c) =>
+        c.telegramUsername ? `@${c.telegramUsername}` : `id:${c.telegramId}`,
+      )
+      .join(', ');
 
-          throw new ForbiddenException(
-            `Необходимо подписаться на обязательные каналы: ${usernames}`,
-          );
-        }
-      }
-    }
+    throw new ForbiddenException(
+      `Необходимо подписаться на обязательные каналы: ${usernames}`,
+    );
+  }
 
+  /**
+   * Пишет участие + ставит джоб пересчёта счётчика. Идемпотентность: при гонке
+   * дублей (уникальный индекс [contestId, userId], код 23505) возвращает уже
+   * существующее участие, а не падает.
+   */
+  private async persistParticipation(
+    contest: Contest,
+    user: { id: number },
+    tgData: ParticipateInput,
+  ): Promise<ContestParticipation> {
     try {
       const participation =
         await this.contestParticipationRepo.createParticipation({
@@ -159,17 +197,15 @@ export class ContestsParticipateService {
         // Пользователь мог прийти из другого чата (другой groupId), но участие
         // уже существует. Ищем только по userId+contestId, иначе findOne
         // вернёт null и клиент получит 500 вместо своей записи.
-        const existing = await this.contestParticipationRepo.findOneByParam(
-          {
-            userId: user.id,
-            contestId: contest.id,
-          },
-        );
+        const existing = await this.contestParticipationRepo.findOneByParam({
+          userId: user.id,
+          contestId: contest.id,
+        });
         if (existing) return existing; // ← тоже 200
       }
 
       this.logger.error(
-        { err: error, contestId, tgData },
+        { err: error, contestId: contest.id, tgData },
         'Ошибка при участии в конкурсе',
       );
       throw error;
