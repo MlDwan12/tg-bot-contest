@@ -9,16 +9,12 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import {
-  ContestParticipationReadRepository,
-  ContestReadRepository,
-  ContestWriteRepository,
-} from '../repositories';
+import { ContestParticipationReadRepository } from '../repositories';
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_READ_REPOSITORY,
-  CONTEST_WRITE_REPOSITORY,
+  CONTEST_REPOSITORY,
 } from 'src/common/constants';
+import type { IContestRepository } from '../interfaces';
 import { Contest, ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
@@ -27,11 +23,8 @@ import { TelegramService } from 'src/modules/bot/bot.service';
 @Injectable()
 export class ContestPublicationService {
   constructor(
-    @Inject(CONTEST_READ_REPOSITORY)
-    private readonly contestReadRepo: ContestReadRepository,
-
-    @Inject(CONTEST_WRITE_REPOSITORY)
-    private readonly contestWriteRepo: ContestWriteRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
 
     @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
     private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
@@ -48,7 +41,7 @@ export class ContestPublicationService {
   ) {}
 
   async getPendingPublicationIds(contestId: number): Promise<number[]> {
-    return this.contestReadRepo.getPublicationIdsByStatus(
+    return this.contestRepo.getPublicationIdsByStatus(
       contestId,
       PublicationStatus.PENDING,
     );
@@ -57,21 +50,21 @@ export class ContestPublicationService {
   async claimPublication(
     publicationId: number,
   ): Promise<ContestPublication | null> {
-    return this.contestWriteRepo.claimPublication(publicationId);
+    return this.contestRepo.claimPublication(publicationId);
   }
 
   async markPublicationPublished(
     publicationId: number,
     messageId: number,
   ): Promise<void> {
-    await this.contestWriteRepo.markPublicationPublished(publicationId, {
+    await this.contestRepo.markPublicationPublished(publicationId, {
       telegramMessageId: messageId,
       publishedAt: new Date(),
     });
   }
 
   async failPublication(publicationId: number, error: string): Promise<void> {
-    await this.contestWriteRepo.markPublicationFailed(publicationId, {
+    await this.contestRepo.markPublicationFailed(publicationId, {
       error: error.slice(0, 4000),
     });
   }
@@ -80,7 +73,7 @@ export class ContestPublicationService {
     publicationId: number,
     error: string,
   ): Promise<void> {
-    await this.contestWriteRepo.bumpPublicationError(publicationId, {
+    await this.contestRepo.bumpPublicationError(publicationId, {
       error: error.slice(0, 4000),
     });
   }
@@ -89,7 +82,7 @@ export class ContestPublicationService {
     contestId: number,
   ): Promise<ContestPublication> {
     const publication =
-      await this.contestReadRepo.findPublicationByContestId(contestId);
+      await this.contestRepo.findPublicationByContestId(contestId);
 
     if (!publication) {
       throw new NotFoundException('Публикация конкурса не найдена');
@@ -101,14 +94,14 @@ export class ContestPublicationService {
   async getPublicationsByContestId(
     contestId: number,
   ): Promise<ContestPublication[]> {
-    return this.contestReadRepo.findPublicationsByContestId(contestId);
+    return this.contestRepo.findPublicationsByContestId(contestId);
   }
 
   async getPublishedPublicationIdsForContest(
     contestId: number,
   ): Promise<number[]> {
     return (
-      await this.contestReadRepo.findPublishedPublicationIdsForContest(
+      await this.contestRepo.findPublishedPublicationIdsForContest(
         contestId,
       )
     ).map((pub) => pub.id);
@@ -120,7 +113,7 @@ export class ContestPublicationService {
     ContestPublication,
     'id' | 'contestId' | 'chatId' | 'telegramMessageId'
   > | null> {
-    return this.contestReadRepo.findPublicationForButtonUpdate(publicationId);
+    return this.contestRepo.findPublicationForButtonUpdate(publicationId);
   }
 
   async recreatePendingPublications(params: {
@@ -131,7 +124,7 @@ export class ContestPublicationService {
     buttonText?: string;
     imagePath?: string;
   }): Promise<void> {
-    await this.contestWriteRepo.deletePendingPublicationsByContestId(
+    await this.contestRepo.deletePendingPublicationsByContestId(
       params.contestId,
     );
 
@@ -140,7 +133,7 @@ export class ContestPublicationService {
     }
 
     const publicationTasks = this.buildPublicationTasks(params);
-    await this.contestWriteRepo.createPublications(publicationTasks);
+    await this.contestRepo.createPublications(publicationTasks);
   }
 
   async cancelContestPublications(contestId: number): Promise<void> {
@@ -148,12 +141,12 @@ export class ContestPublicationService {
     // дёргал этот же сервис обратно (round-trip) — это и держало цикл bot↔contests.
     const publications = await this.getPublicationsByContestId(contestId);
     await this.telegramService.deletePublicationMessages(publications);
-    await this.contestWriteRepo.cancelPendingPublications(contestId);
+    await this.contestRepo.cancelPendingPublications(contestId);
   }
 
   async syncPublishedPosts(contest: Contest): Promise<void> {
     const publishedPublications =
-      await this.contestReadRepo.findPublishedPublicationIdsForContest(
+      await this.contestRepo.findPublishedPublicationIdsForContest(
         contest.id,
       );
 
@@ -219,7 +212,7 @@ export class ContestPublicationService {
   }
 
   async syncParticipantsCounter(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     if (!contest) {
       this.logger.warn(
@@ -240,7 +233,7 @@ export class ContestPublicationService {
     );
 
     const publications =
-      await this.contestWriteRepo.findPublishedPublicationsByContestId(
+      await this.contestRepo.findPublishedPublicationsByContestId(
         contestId,
       );
 
@@ -279,7 +272,7 @@ export class ContestPublicationService {
           buttonUrl: payload.buttonUrl,
         });
 
-        await this.contestWriteRepo.updatePublication(publication.id, {
+        await this.contestRepo.updatePublication(publication.id, {
           payload: {
             text:
               payload.text ?? `${contest.name}\n\n${contest.description || ''}`,

@@ -1,6 +1,8 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Inject } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
-import { ContestWriteRepository } from '../../repositories';
+import { CONTEST_REPOSITORY } from 'src/common/constants';
+import type { IContestRepository } from '../../interfaces';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
 
@@ -9,7 +11,8 @@ type MaintenanceJobData = { staleMinutes?: number } | { batchSize?: number };
 @Processor('contest-maintenance')
 export class ContestMaintenanceProcessor extends WorkerHost {
   constructor(
-    private readonly contestWriteRepo: ContestWriteRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
     @InjectQueue('contest-publication')
     private readonly publicationQueue: Queue,
     private readonly logger: Logger,
@@ -32,7 +35,7 @@ export class ContestMaintenanceProcessor extends WorkerHost {
 
       try {
         const affected =
-          await this.contestWriteRepo.requeueStalePublications(staleMinutes);
+          await this.contestRepo.requeueStalePublications(staleMinutes);
 
         if (affected > 0) {
           this.logger.warn(
@@ -68,7 +71,7 @@ export class ContestMaintenanceProcessor extends WorkerHost {
       );
 
       const ids =
-        await this.contestWriteRepo.findPendingPublicationIdsForActiveContests(
+        await this.contestRepo.findPendingPublicationIdsForActiveContests(
           batchSize,
         );
 

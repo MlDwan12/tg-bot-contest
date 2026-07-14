@@ -4,16 +4,12 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import { DataSource } from 'typeorm';
-import {
-  ContestParticipationReadRepository,
-  ContestReadRepository,
-  ContestWriteRepository,
-} from '../repositories';
+import { ContestParticipationReadRepository } from '../repositories';
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_READ_REPOSITORY,
-  CONTEST_WRITE_REPOSITORY,
+  CONTEST_REPOSITORY,
 } from 'src/common/constants';
+import type { IContestRepository } from '../interfaces';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
@@ -27,11 +23,8 @@ const WINNER_SELECTION_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000;
 @Injectable()
 export class ContestLifecycleService {
   constructor(
-    @Inject(CONTEST_READ_REPOSITORY)
-    private readonly contestReadRepo: ContestReadRepository,
-
-    @Inject(CONTEST_WRITE_REPOSITORY)
-    private readonly contestWriteRepo: ContestWriteRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
 
     @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
     private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
@@ -50,7 +43,7 @@ export class ContestLifecycleService {
   ) {}
 
   async activateContestIfDue(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
+    const contest = await this.contestRepo.findByParams({ id: contestId });
     if (!contest) return;
 
     if (contest.status !== ContestStatus.PENDING) return;
@@ -58,7 +51,7 @@ export class ContestLifecycleService {
     const now = new Date();
     if (contest.startDate > now) return;
 
-    await this.contestWriteRepo.updateStatusIfCurrent(
+    await this.contestRepo.updateStatusIfCurrent(
       contestId,
       ContestStatus.PENDING,
       ContestStatus.ACTIVE,
@@ -66,7 +59,7 @@ export class ContestLifecycleService {
   }
 
   async isContestCompleted(contestId: number): Promise<boolean> {
-    const contest = await this.contestReadRepo.findByParams({ id: contestId });
+    const contest = await this.contestRepo.findByParams({ id: contestId });
     return !!contest && contest.status === ContestStatus.COMPLETED;
   }
 
@@ -96,7 +89,7 @@ export class ContestLifecycleService {
 
     try {
       const contest =
-        await this.contestReadRepo.findByIdWithRelations(contestId);
+        await this.contestRepo.findByIdWithRelations(contestId);
       if (!contest) return;
 
       if (contest.status === ContestStatus.COMPLETED) return;
@@ -126,7 +119,7 @@ export class ContestLifecycleService {
               'finishContestIdempotent: MANUAL-стратегия без выбранного победителя, откладываем завершение',
             );
 
-            await this.contestWriteRepo.update(contest.id, {
+            await this.contestRepo.update(contest.id, {
               endDate: extendedEndDate,
             });
             await this.contestJobsService.scheduleFinishRetry(
@@ -148,7 +141,7 @@ export class ContestLifecycleService {
       }
 
       const changed =
-        await this.contestWriteRepo.updateStatusIfNotCompleted(contestId);
+        await this.contestRepo.updateStatusIfNotCompleted(contestId);
       if (!changed) return;
 
       const publicationIds =
@@ -177,7 +170,7 @@ export class ContestLifecycleService {
   }
 
   async completeContest(contestId: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
@@ -207,7 +200,7 @@ export class ContestLifecycleService {
     // проигравший гонку получит false и выйдет БЕЗ повторного розыгрыша.
     // Раньше оба проходили reuse-guard (existingWinners=0, read-then-write без
     // блокировки) до записи и разыгрывали дважды — это и была residual race F1.
-    const claimed = await this.contestWriteRepo.updateStatusIfNotCompleted(
+    const claimed = await this.contestRepo.updateStatusIfNotCompleted(
       contest.id,
     );
     if (!claimed) {
@@ -222,7 +215,7 @@ export class ContestLifecycleService {
         // участников меньше призовых мест и т.п.): откатываем ворота из
         // COMPLETED обратно в прежний статус, чтобы конкурс не завис
         // завершённым без победителей и завершение можно было повторить.
-        await this.contestWriteRepo.updateStatusIfCurrent(
+        await this.contestRepo.updateStatusIfCurrent(
           contest.id,
           ContestStatus.COMPLETED,
           contest.status,
@@ -232,11 +225,11 @@ export class ContestLifecycleService {
     }
 
     // Статус уже COMPLETED (ворота выше) — здесь только текст кнопки.
-    await this.contestWriteRepo.update(contest.id, {
+    await this.contestRepo.update(contest.id, {
       buttonText: 'Конкурс завершён',
     });
 
-    const updatedContest = await this.contestReadRepo.findByIdWithRelations(
+    const updatedContest = await this.contestRepo.findByIdWithRelations(
       contest.id,
     );
 
@@ -250,7 +243,7 @@ export class ContestLifecycleService {
   }
 
   async cancelContest(id: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(id);
+    const contest = await this.contestRepo.findByIdWithRelations(id);
 
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
@@ -275,11 +268,11 @@ export class ContestLifecycleService {
     await this.contestJobsService.removeContestJobs(contest.id);
     await this.contestPublicationService.cancelContestPublications(contest.id);
 
-    await this.contestWriteRepo.update(contest.id, {
+    await this.contestRepo.update(contest.id, {
       status: ContestStatus.CANCELLED,
     });
 
-    const updatedContest = await this.contestReadRepo.findByIdWithRelations(id);
+    const updatedContest = await this.contestRepo.findByIdWithRelations(id);
 
     if (!updatedContest) {
       throw new NotFoundException('Конкурс не найден после отмены');

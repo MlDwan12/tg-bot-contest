@@ -16,8 +16,7 @@ import { UsersService } from 'src/modules/users/services/users.service';
 
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_READ_REPOSITORY,
-  CONTEST_WRITE_REPOSITORY,
+  CONTEST_REPOSITORY,
 } from 'src/common/constants';
 
 import {
@@ -135,12 +134,9 @@ describe('ContestsService.updateContest', () => {
       providers: [
         ContestsService,
         {
-          provide: CONTEST_READ_REPOSITORY,
-          useValue: contestReadRepo,
-        },
-        {
-          provide: CONTEST_WRITE_REPOSITORY,
-          useValue: contestWriteRepo,
+          // Фаза 9: единый репозиторий агрегата — объединяем read+write моки.
+          provide: CONTEST_REPOSITORY,
+          useValue: { ...contestReadRepo, ...contestWriteRepo },
         },
         {
           provide: CONTEST_PARTICIPATE_READ_REPOSITORY,

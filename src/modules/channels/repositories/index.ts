@@ -1,2 +1,1 @@
-export * from './channel-read.repository';
-export * from './channel-write.repository';
+export * from './channel.repository';

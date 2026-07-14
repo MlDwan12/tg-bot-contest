@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  DataSource,
   FindOptionsWhere,
+  In,
   IsNull,
   Not,
   Repository,
@@ -9,20 +11,33 @@ import {
 } from 'typeorm';
 import { Contest } from '../entities/contest.entity';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
-import { IContestReadFilters, IContestReadRepository } from '../interfaces';
-import { ContestPublication, ContestParticipation } from '../entities';
+import { Channel } from 'src/modules/channels/entities';
+import { IContestReadFilters, IContestRepository } from '../interfaces';
+import { ContestPublication, ContestWinner } from '../entities';
 import { Paginated } from 'src/common/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
-import { ContestDetails } from '../dto/contest-info.dto';
 
+/**
+ * Единый репозиторий агрегата Contest (Фаза 9 — слиты read+write).
+ * Подключается через токен CONTEST_REPOSITORY, сервисы зависят от IContestRepository.
+ */
 @Injectable()
-export class ContestReadRepository implements IContestReadRepository {
+export class ContestRepository implements IContestRepository {
   constructor(
     @InjectRepository(Contest)
     private readonly repo: Repository<Contest>,
+
     @InjectRepository(ContestPublication)
     private readonly pubRepo: Repository<ContestPublication>,
+
+    @InjectRepository(Channel)
+    private readonly channelRepo: Repository<Channel>,
+
+    private readonly dataSource: DataSource,
   ) {}
+
+  // ── чтение: публикации ─────────────────────────────────────────────────────
+
   findPublicationById(id: number): Promise<ContestPublication | null> {
     return this.pubRepo.findOne({
       where: { id },
@@ -52,19 +67,7 @@ export class ContestReadRepository implements IContestReadRepository {
     });
   }
 
-  async findPublishedPublicationsByContestId(
-    contestId: number,
-  ): Promise<ContestPublication[]> {
-    return this.pubRepo.find({
-      where: {
-        contestId,
-        status: PublicationStatus.PUBLISHED,
-      },
-      relations: {
-        contest: true,
-      },
-    });
-  }
+  // ── чтение: конкурс ─────────────────────────────────────────────────────────
 
   findById(id: number): Promise<Contest | null> {
     return this.repo.findOne({
@@ -222,10 +225,8 @@ export class ContestReadRepository implements IContestReadRepository {
 
     if (Array.isArray(contestIdOrIds)) {
       qb.andWhere('p.contestId IN (:...ids)', { ids: contestIdOrIds });
-      // либо если у тебя snake_case в БД: qb.andWhere('p.contest_id IN (:...ids)', ...)
     } else {
       qb.andWhere('p.contestId = :id', { id: contestIdOrIds });
-      // либо: qb.andWhere('p.contest_id = :id', { id: contestIdOrIds })
     }
 
     const rows = await qb.orderBy('p.id', 'ASC').getRawMany<{ id: number }>();
@@ -275,17 +276,6 @@ export class ContestReadRepository implements IContestReadRepository {
       },
       order: { id: 'ASC' },
     });
-    // const rows = await this.pubRepo
-    //   .createQueryBuilder('publication')
-    //   // .select('p.id', 'id')
-    //   .where('publication.contestId = :contestId', { contestId })
-    //   .andWhere('publication.status = :status', {
-    //     status: PublicationStatus.PUBLISHED,
-    //   })
-    //   .andWhere('publication.telegramMessageId IS NOT NULL')
-    //   .orderBy('publication.id', 'ASC')
-    //   .getRawMany<ContestPublication>();
-    // return rows;
   }
 
   async findManyShortInfo(
@@ -326,7 +316,303 @@ export class ContestReadRepository implements IContestReadRepository {
     });
   }
 
-  // --------------------
+  // ── запись: конкурс ─────────────────────────────────────────────────────────
+
+  async create(data: Partial<Contest>): Promise<Contest> {
+    const contest = this.repo.create(data);
+    return this.repo.save(contest);
+  }
+
+  async update(id: number, data: Partial<Contest>): Promise<Contest> {
+    await this.ensureExists(id);
+
+    await this.repo.update(id, data);
+
+    return this.repo.findOneByOrFail({ id });
+  }
+
+  async delete(id: number): Promise<void> {
+    await this.ensureExists(id);
+    await this.repo.delete(id);
+  }
+
+  async setStatus(id: number, status: ContestStatus): Promise<void> {
+    await this.ensureExists(id);
+
+    await this.repo.update(id, { status });
+  }
+
+  /**
+   * Идемпотентный апдейт статуса: обновит только если текущий статус совпадает.
+   * Возвращает true если реально обновил, false если нет.
+   */
+  async updateStatusIfCurrent(
+    contestId: number,
+    current: ContestStatus,
+    next: ContestStatus,
+  ): Promise<boolean> {
+    const res = await this.repo
+      .createQueryBuilder()
+      .update(Contest)
+      .set({ status: next })
+      .where('"id" = :id', { id: contestId })
+      .andWhere('"status" = :current', { current })
+      .execute();
+
+    return (res.affected ?? 0) > 0;
+  }
+
+  /**
+   * Переводит в COMPLETED, только если ещё не COMPLETED.
+   * Возвращает true если обновил.
+   */
+  async updateStatusIfNotCompleted(contestId: number): Promise<boolean> {
+    const res = await this.repo
+      .createQueryBuilder()
+      .update(Contest)
+      .set({ status: ContestStatus.COMPLETED })
+      .where('"id" = :id', { id: contestId })
+      .andWhere('"status" != :completed', {
+        completed: ContestStatus.COMPLETED,
+      })
+      .execute();
+
+    return (res.affected ?? 0) > 0;
+  }
+
+  async setPublishChannels(
+    contestId: number,
+    channelIds: number[],
+  ): Promise<void> {
+    const contest = await this.repo.findOne({
+      where: { id: contestId },
+      relations: { publishChannels: true },
+    });
+
+    if (!contest) {
+      throw new NotFoundException('Contest not found');
+    }
+
+    const uniqueIds = [...new Set(channelIds)];
+    const channels = uniqueIds.length
+      ? await this.channelRepo.find({
+          where: { id: In(uniqueIds) },
+        })
+      : [];
+
+    if (channels.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more publish channels not found');
+    }
+
+    contest.publishChannels = channels;
+    await this.repo.save(contest);
+  }
+
+  async setRequiredChannels(
+    contestId: number,
+    channelIds: number[],
+  ): Promise<void> {
+    const contest = await this.repo.findOne({
+      where: { id: contestId },
+      relations: { requiredChannels: true },
+    });
+
+    if (!contest) {
+      throw new NotFoundException('Contest not found');
+    }
+
+    const uniqueIds = [...new Set(channelIds)];
+    const channels = uniqueIds.length
+      ? await this.channelRepo.find({
+          where: { id: In(uniqueIds) },
+        })
+      : [];
+
+    if (channels.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more required channels not found');
+    }
+
+    contest.requiredChannels = channels;
+    await this.repo.save(contest);
+  }
+
+  async replaceWinners(
+    contestId: number,
+    winners: Array<{
+      contestId: number;
+      userId: number;
+      place: number;
+    }>,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      // удалить старых победителей
+      await manager.delete(ContestWinner, { contestId });
+
+      // если передали новых — вставить
+      if (winners.length) {
+        await manager.insert(ContestWinner, winners);
+      }
+    });
+  }
+
+  // ── запись: публикации ──────────────────────────────────────────────────────
+
+  async createPublications(data: Partial<ContestPublication>[]): Promise<void> {
+    if (!data.length) return;
+
+    await this.pubRepo.insert(data);
+  }
+
+  /**
+   * Атомарно "забирает" публикацию в обработку: PENDING -> PROCESSING.
+   * Если запись уже забрал другой воркер/не PENDING, вернёт null.
+   */
+  async claimPublication(
+    publicationId: number,
+  ): Promise<ContestPublication | null> {
+    const res = await this.pubRepo
+      .createQueryBuilder()
+      .update(ContestPublication)
+      .set({
+        status: PublicationStatus.PROCESSING,
+        attempts: () => `"attempts" + 1`,
+        processingStartedAt: () => 'NOW()',
+      })
+      .where('"id" = :id', { id: publicationId })
+      .andWhere('"status" = :st', { st: PublicationStatus.PENDING })
+      .returning('*')
+      .execute();
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+    return res.raw?.[0] ?? null;
+  }
+
+  async markPublicationPublished(
+    publicationId: number,
+    data: { telegramMessageId: number; publishedAt: Date },
+  ): Promise<void> {
+    await this.pubRepo.update(publicationId, {
+      status: PublicationStatus.PUBLISHED,
+      telegramMessageId: data.telegramMessageId,
+      publishedAt: data.publishedAt,
+      error: undefined,
+    });
+  }
+
+  async markPublicationFailed(
+    publicationId: number,
+    data: { error: string },
+  ): Promise<void> {
+    await this.pubRepo.update(publicationId, {
+      status: PublicationStatus.FAILED,
+      error: data.error,
+    });
+  }
+
+  /**
+   * Обновляет error и возвращает публикацию обратно в PENDING (для retry).
+   */
+  async bumpPublicationError(
+    publicationId: number,
+    data: { error: string },
+  ): Promise<void> {
+    await this.pubRepo.update(publicationId, {
+      status: PublicationStatus.PENDING,
+      error: data.error,
+      processingStartedAt: undefined,
+    });
+  }
+
+  async requeueStalePublications(staleMinutes: number): Promise<number> {
+    const res = await this.pubRepo
+      .createQueryBuilder()
+      .update(ContestPublication)
+      .set({
+        status: PublicationStatus.PENDING,
+        processingStartedAt: undefined,
+      })
+      .where('"status" = :st', { st: PublicationStatus.PROCESSING })
+      .andWhere('"processingStartedAt" IS NOT NULL')
+      .andWhere(
+        `"processingStartedAt" < NOW() - (:mins * INTERVAL '1 minute')`,
+        {
+          mins: staleMinutes,
+        },
+      )
+      .execute();
+
+    return res.affected ?? 0;
+  }
+
+  async findPendingPublicationIdsForActiveContests(
+    limit: number,
+  ): Promise<number[]> {
+    const rows = await this.pubRepo
+      .createQueryBuilder('p')
+      .select('p.id', 'id')
+      .innerJoin('p.contest', 'c')
+      .where('p.status = :pst', { pst: PublicationStatus.PENDING })
+      .andWhere('c.status = :cst', { cst: ContestStatus.ACTIVE })
+      .orderBy('p.id', 'ASC')
+      .limit(Math.max(1, Math.min(limit, 5000)))
+      .getRawMany<{ id: number }>();
+
+    return rows.map((r) => Number(r.id));
+  }
+
+  async cancelPendingPublications(contestId: number): Promise<void> {
+    await this.pubRepo
+      .createQueryBuilder()
+      .update(ContestPublication)
+      .set({ status: PublicationStatus.CANCELLED })
+      .where('"contestId" = :contestId', { contestId })
+      .andWhere('status IN (:...statuses)', {
+        statuses: [
+          PublicationStatus.PENDING,
+          PublicationStatus.FAILED,
+          PublicationStatus.PUBLISHED,
+        ],
+      })
+      .execute();
+  }
+
+  async deletePendingPublicationsByContestId(contestId: number): Promise<void> {
+    await this.pubRepo.delete({
+      contestId,
+      status: PublicationStatus.PENDING,
+    });
+  }
+
+  async findPublishedPublicationsByContestId(
+    contestId: number,
+  ): Promise<ContestPublication[]> {
+    return this.pubRepo.find({
+      where: {
+        contestId,
+        status: PublicationStatus.PUBLISHED,
+      },
+      relations: {
+        channel: true,
+      },
+    });
+  }
+
+  async updatePublication(
+    publicationId: number,
+    data: Partial<ContestPublication>,
+  ): Promise<void> {
+    await this.pubRepo.update(publicationId, data);
+  }
+
+  // ── приватное ───────────────────────────────────────────────────────────────
+
+  private async ensureExists(id: number): Promise<void> {
+    const exists = await this.repo.findOne({ where: { id } });
+
+    if (!exists) {
+      throw new NotFoundException(`Contest with id=${id} not found`);
+    }
+  }
 
   private applyFilters(
     qb: SelectQueryBuilder<Contest>,

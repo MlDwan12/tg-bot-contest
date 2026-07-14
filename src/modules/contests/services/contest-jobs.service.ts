@@ -2,8 +2,8 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestStatus } from 'src/common/enums/contest';
-import { CONTEST_READ_REPOSITORY } from 'src/common/constants';
-import type { IContestReadRepository } from '../interfaces';
+import { CONTEST_REPOSITORY } from 'src/common/constants';
+import type { IContestRepository } from '../interfaces';
 
 @Injectable()
 export class ContestJobsService implements OnModuleInit {
@@ -12,8 +12,8 @@ export class ContestJobsService implements OnModuleInit {
     @InjectQueue('contest-finish') private readonly finishQueue: Queue,
     @InjectQueue('contest-maintenance')
     private readonly maintenanceQueue: Queue,
-    @Inject(CONTEST_READ_REPOSITORY)
-    private readonly contestReadRepo: IContestReadRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
   ) {}
 
   async onModuleInit() {
@@ -96,7 +96,7 @@ export class ContestJobsService implements OnModuleInit {
     );
   }
   private async rescheduleFromDb() {
-    const pending = await this.contestReadRepo.findByStatus(
+    const pending = await this.contestRepo.findByStatus(
       ContestStatus.PENDING,
     );
 
@@ -124,7 +124,7 @@ export class ContestJobsService implements OnModuleInit {
       }
     }
 
-    const active = await this.contestReadRepo.findByStatus(
+    const active = await this.contestRepo.findByStatus(
       ContestStatus.ACTIVE,
     );
 

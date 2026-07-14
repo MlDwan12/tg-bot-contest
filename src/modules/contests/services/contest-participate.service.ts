@@ -10,15 +10,13 @@ import {
 import {
   CONTEST_PARTICIPATE_READ_REPOSITORY,
   CONTEST_PARTICIPATE_WRITE_REPOSITORY,
-  CONTEST_READ_REPOSITORY,
-  CONTEST_WRITE_REPOSITORY,
+  CONTEST_REPOSITORY,
 } from 'src/common/constants';
 import {
   ContestParticipationReadRepository,
   ContestParticipationWriteRepository,
-  ContestReadRepository,
-  ContestWriteRepository,
 } from '../repositories';
+import type { IContestRepository } from '../interfaces';
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ContestParticipation } from '../entities';
@@ -31,11 +29,8 @@ import { TelegramService } from 'src/modules/bot/bot.service';
 @Injectable()
 export class ContestsParticipateService {
   constructor(
-    @Inject(CONTEST_READ_REPOSITORY)
-    private readonly contestReadRepo: ContestReadRepository,
-
-    @Inject(CONTEST_WRITE_REPOSITORY)
-    private readonly contestWriteRepo: ContestWriteRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
 
     @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
     private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
@@ -63,7 +58,7 @@ export class ContestsParticipateService {
       lastName?: string;
     },
   ) {
-    const contest = await this.contestReadRepo.findByParams({
+    const contest = await this.contestRepo.findByParams({
       id: contestId,
     });
 

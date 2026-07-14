@@ -4,14 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ContestReadRepository,
-  ContestWriteRepository,
-} from '../repositories';
-import {
-  CONTEST_READ_REPOSITORY,
-  CONTEST_WRITE_REPOSITORY,
-} from 'src/common/constants';
+import { CONTEST_REPOSITORY } from 'src/common/constants';
+import type { IContestRepository } from '../interfaces';
 import { CreateContest } from 'src/modules/contests/types';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
@@ -38,11 +32,8 @@ export class ContestsService {
   private readonly APP_TIME_ZONE = 'Europe/Moscow';
 
   constructor(
-    @Inject(CONTEST_READ_REPOSITORY)
-    private readonly contestReadRepo: ContestReadRepository,
-
-    @Inject(CONTEST_WRITE_REPOSITORY)
-    private readonly contestWriteRepo: ContestWriteRepository,
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
 
     private readonly adminService: AdminService,
     private readonly logger: Logger,
@@ -103,7 +94,7 @@ export class ContestsService {
 
       const imagePath = this.resolveContestImagePath(image);
 
-      const contest = await this.contestWriteRepo.create({
+      const contest = await this.contestRepo.create({
         name: dto.name.trim(),
         description: dto.description?.trim(),
         winnerStrategy: dto.winnerStrategy,
@@ -116,12 +107,12 @@ export class ContestsService {
         buttonText,
       });
 
-      await this.contestWriteRepo.setPublishChannels(
+      await this.contestRepo.setPublishChannels(
         contest.id,
         publishChannels.map((channel) => channel.id),
       );
 
-      await this.contestWriteRepo.setRequiredChannels(
+      await this.contestRepo.setRequiredChannels(
         contest.id,
         requiredChannels.map((channel) => channel.id),
       );
@@ -141,7 +132,7 @@ export class ContestsService {
         contest.endDate,
       );
 
-      const createdContest = await this.contestReadRepo.findByIdWithRelations(
+      const createdContest = await this.contestRepo.findByIdWithRelations(
         contest.id,
       );
 
@@ -175,7 +166,7 @@ export class ContestsService {
     image?: Express.Multer.File,
     actorUserId?: number,
   ): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
 
@@ -294,7 +285,7 @@ export class ContestsService {
           }
 
           if (dto.winners.length === 0) {
-            await this.contestWriteRepo.replaceWinners(contestId, []);
+            await this.contestRepo.replaceWinners(contestId, []);
           } else {
             const uniqueWinnerIds = [...new Set(dto.winners)];
 
@@ -328,7 +319,7 @@ export class ContestsService {
 
             const orderedWinners = resolved as User[];
 
-            await this.contestWriteRepo.replaceWinners(
+            await this.contestRepo.replaceWinners(
               contestId,
               orderedWinners.map((winner, index) => ({
                 contestId,
@@ -360,11 +351,11 @@ export class ContestsService {
           dto.winnerStrategy !== undefined &&
           dto.winnerStrategy !== WinnerStrategy.MANUAL
         ) {
-          await this.contestWriteRepo.replaceWinners(contestId, []);
+          await this.contestRepo.replaceWinners(contestId, []);
         }
       }
 
-      await this.contestWriteRepo.update(contestId, {
+      await this.contestRepo.update(contestId, {
         name: nextName,
         description: nextDescription,
         winnerStrategy: nextWinnerStrategy,
@@ -378,21 +369,21 @@ export class ContestsService {
       contestUpdated = true;
 
       if (publishChannels !== null) {
-        await this.contestWriteRepo.setPublishChannels(
+        await this.contestRepo.setPublishChannels(
           contestId,
           publishChannels.map((channel) => channel.id),
         );
       }
 
       if (requiredChannels !== null) {
-        await this.contestWriteRepo.setRequiredChannels(
+        await this.contestRepo.setRequiredChannels(
           contestId,
           requiredChannels.map((channel) => channel.id),
         );
       }
 
       const updatedContest =
-        await this.contestReadRepo.findByIdWithRelations(contestId);
+        await this.contestRepo.findByIdWithRelations(contestId);
 
       if (!updatedContest) {
         throw new NotFoundException('Конкурс не найден после обновления');
@@ -499,7 +490,7 @@ export class ContestsService {
   async getAllContests(
     query: GetContestsQueryDto,
   ): Promise<Paginated<Contest>> {
-    return this.contestReadRepo.findMany({
+    return this.contestRepo.findMany({
       status: query.status,
       creatorId: query.creatorId,
       winnerStrategy: query.winnerStrategy,
@@ -520,7 +511,7 @@ export class ContestsService {
   async getAllContestsShortInfo(
     query: GetContestsQueryDto,
   ): Promise<Paginated<ContestShortInfoDto>> {
-    const result = await this.contestReadRepo.findManyShortInfo({
+    const result = await this.contestRepo.findManyShortInfo({
       status: query.status,
       creatorId: query.creatorId,
       winnerStrategy: query.winnerStrategy,
@@ -552,7 +543,7 @@ export class ContestsService {
   }
 
   async getContestById(contestId: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByIdWithRelations(contestId);
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
@@ -562,11 +553,11 @@ export class ContestsService {
   }
 
   async getByStatus(status: ContestStatus): Promise<Paginated<Contest>> {
-    return this.contestReadRepo.findMany({ status });
+    return this.contestRepo.findMany({ status });
   }
 
   async getActiveContestById(contestId: number): Promise<Contest> {
-    const contest = await this.contestReadRepo.findByParams({
+    const contest = await this.contestRepo.findByParams({
       id: contestId,
       status: ContestStatus.ACTIVE,
     });
@@ -579,7 +570,7 @@ export class ContestsService {
   }
 
   async removeContest(contestId: number): Promise<void> {
-    const contest = await this.contestReadRepo.findById(contestId);
+    const contest = await this.contestRepo.findById(contestId);
 
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
@@ -589,7 +580,7 @@ export class ContestsService {
       throw new BadRequestException('Невозможно удалить активный конкурс');
     }
 
-    await this.contestWriteRepo.delete(contestId);
+    await this.contestRepo.delete(contestId);
   }
 
   private async getChannelsByTelegramIds(

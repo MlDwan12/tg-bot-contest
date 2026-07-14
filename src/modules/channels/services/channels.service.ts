@@ -5,14 +5,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  CHANNEL_READ_REPOSITORY,
-  CHANNEL_WRITE_REPOSITORY,
-} from 'src/common/constants';
+import { CHANNEL_REPOSITORY } from 'src/common/constants';
 
 import { ChannelType } from 'src/common/enums/channel';
 import { Channel } from '../entities';
-import { ChannelReadRepository, ChannelWriteRepository } from '../repositories';
+import type { IChannelRepository } from '../interfaces';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { Logger } from 'nestjs-pino';
 import { Paginated } from 'src/common/response/paginated.type';
@@ -23,11 +20,8 @@ import { FindOptionsWhere } from 'typeorm';
 @Injectable()
 export class ChannelsService {
   constructor(
-    @Inject(CHANNEL_READ_REPOSITORY)
-    private readonly readRepo: ChannelReadRepository,
-
-    @Inject(CHANNEL_WRITE_REPOSITORY)
-    private readonly writeRepo: ChannelWriteRepository,
+    @Inject(CHANNEL_REPOSITORY)
+    private readonly channelRepo: IChannelRepository,
 
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
@@ -50,7 +44,7 @@ export class ChannelsService {
       }
 
       if (data.telegramId) {
-        const exists = await this.readRepo.findByTelegramId(data.telegramId);
+        const exists = await this.channelRepo.findByTelegramId(data.telegramId);
 
         if (exists) {
           throw new BadRequestException(
@@ -81,7 +75,7 @@ export class ChannelsService {
           'Bot must be administrator in the channel/group',
         );
       }
-      const channel = await this.writeRepo.create({
+      const channel = await this.channelRepo.create({
         telegramId: tgCheck.chat?.id,
         telegramUsername: tgCheck.chat?.username,
         name: tgCheck.chat?.title ?? data.name,
@@ -124,7 +118,7 @@ export class ChannelsService {
       isActive: query.isActive,
     };
 
-    const [items, total] = await this.readRepo.findMany(filters, {
+    const [items, total] = await this.channelRepo.findMany(filters, {
       skip,
       take,
     });
@@ -140,19 +134,19 @@ export class ChannelsService {
   async getChannelsByIds(ids: number[]): Promise<Channel[]> {
     this.logger.debug({ ids }, 'Get channels by ids request');
 
-    return this.readRepo.findManyByIds(ids);
+    return this.channelRepo.findManyByIds(ids);
   }
 
   async getActiveChannels(): Promise<Channel[]> {
     this.logger.debug('Get active channels request');
 
-    return this.readRepo.findActive();
+    return this.channelRepo.findActive();
   }
 
   async getChannelById(id: number): Promise<Channel> {
     this.logger.debug({ id }, 'Get channel by id');
 
-    const channel = await this.readRepo.findById(id);
+    const channel = await this.channelRepo.findById(id);
 
     if (!channel) {
       this.logger.warn({ id }, 'Channel not found');
@@ -168,7 +162,7 @@ export class ChannelsService {
   ): Promise<Channel[]> {
     this.logger.debug({ params }, 'Get channels by parameters request');
 
-    const a = await this.readRepo.findManyByParams(params);
+    const a = await this.channelRepo.findManyByParams(params);
     return a;
   }
 
@@ -183,7 +177,7 @@ export class ChannelsService {
   ): Promise<Channel> {
     this.logger.debug({ id, data }, 'updateChannel: start');
 
-    const updated = await this.writeRepo.update(id, data);
+    const updated = await this.channelRepo.update(id, data);
 
     this.logger.log(
       { id, updatedFields: Object.keys(data) },
@@ -196,12 +190,12 @@ export class ChannelsService {
   async setChannelActive(id: number, isActive: boolean): Promise<void> {
     this.logger.log({ id, isActive }, 'setChannelActive');
 
-    return this.writeRepo.setActive(id, isActive);
+    return this.channelRepo.setActive(id, isActive);
   }
 
   async deleteChannelById(id: number): Promise<void> {
     try {
-      await this.writeRepo.delete(id);
+      await this.channelRepo.delete(id);
       this.logger.log({ id }, 'deleteChannelById: done');
     } catch (error) {
       this.logger.error({ id, err: error }, 'deleteChannelById: failed');
@@ -210,7 +204,7 @@ export class ChannelsService {
   }
 
   async deleteChannelByTelegramId(telegramId: number): Promise<void> {
-    await this.writeRepo.deleteByTelegramId(telegramId);
+    await this.channelRepo.deleteByTelegramId(telegramId);
     this.logger.log({ telegramId }, 'deleteChannelByTelegramId: done');
   }
 }

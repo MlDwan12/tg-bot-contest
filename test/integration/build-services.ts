@@ -5,8 +5,7 @@ import { ContestPublication } from 'src/modules/contests/entities/contest-public
 import { ContestWinner } from 'src/modules/contests/entities/contest-winner.entity';
 import { ContestWinnerAudit } from 'src/modules/contests/entities/contest-winner-audit.entity';
 import { Channel } from 'src/modules/channels/entities/channel.entity';
-import { ContestReadRepository } from 'src/modules/contests/repositories/contest-read.repository';
-import { ContestWriteRepository } from 'src/modules/contests/repositories/contest-write.repository';
+import { ContestRepository } from 'src/modules/contests/repositories/contest.repository';
 import { ContestParticipationReadRepository } from 'src/modules/contests/repositories/contest-participate-read.repository';
 import { ContestParticipationWriteRepository } from 'src/modules/contests/repositories/contest-participate-write.repository';
 import { ContestWinnerReadRepository } from 'src/modules/contests/repositories/contest-winner-read.repository';
@@ -22,14 +21,11 @@ import { ContestLifecycleService } from 'src/modules/contests/services/contest-l
  */
 export function buildContestRepos(ds: DataSource) {
   return {
-    contestRead: new ContestReadRepository(
+    // Фаза 9: единый репозиторий агрегата Contest (слиты read+write).
+    contest: new ContestRepository(
       ds.getRepository(Contest),
       ds.getRepository(ContestPublication),
-    ),
-    contestWrite: new ContestWriteRepository(
-      ds.getRepository(Contest),
       ds.getRepository(Channel),
-      ds.getRepository(ContestPublication),
       ds,
     ),
     participationRead: new ContestParticipationReadRepository(
@@ -96,8 +92,7 @@ export function buildLifecycleService(ds: DataSource) {
   const fakeTelegram = {} as any;
 
   const service = new ContestLifecycleService(
-    repos.contestRead,
-    repos.contestWrite,
+    repos.contest,
     repos.participationRead,
     fakeQueue,
     fakeJobs,

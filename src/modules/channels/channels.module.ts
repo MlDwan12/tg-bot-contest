@@ -3,11 +3,8 @@ import { ChannelsService } from './services/channels.service';
 import { ChannelsController } from './channels.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Channel } from './entities/channel.entity';
-import {
-  CHANNEL_READ_REPOSITORY,
-  CHANNEL_WRITE_REPOSITORY,
-} from 'src/common/constants';
-import { ChannelReadRepository, ChannelWriteRepository } from './repositories';
+import { CHANNEL_REPOSITORY } from 'src/common/constants';
+import { ChannelRepository } from './repositories';
 import { BotModule } from '../bot/bot.module';
 import { ChannelHealthService } from './services/health.service';
 
@@ -22,12 +19,8 @@ import { ChannelHealthService } from './services/health.service';
   providers: [
     ChannelsService,
     {
-      provide: CHANNEL_READ_REPOSITORY,
-      useClass: ChannelReadRepository,
-    },
-    {
-      provide: CHANNEL_WRITE_REPOSITORY,
-      useClass: ChannelWriteRepository,
+      provide: CHANNEL_REPOSITORY,
+      useClass: ChannelRepository,
     },
     ChannelHealthService,
   ],

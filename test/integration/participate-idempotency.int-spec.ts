@@ -44,8 +44,7 @@ describe('характеризация: идемпотентность participa
     const fakeLogger = { debug() {}, error() {}, log() {} } as any;
 
     const service = new ContestsParticipateService(
-      repos.contestRead,
-      repos.contestWrite,
+      repos.contest,
       repos.participationRead,
       repos.participationWrite,
       fakeQueue,
