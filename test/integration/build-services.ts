@@ -6,8 +6,7 @@ import { ContestWinner } from 'src/modules/contests/entities/contest-winner.enti
 import { ContestWinnerAudit } from 'src/modules/contests/entities/contest-winner-audit.entity';
 import { Channel } from 'src/modules/channels/entities/channel.entity';
 import { ContestRepository } from 'src/modules/contests/repositories/contest.repository';
-import { ContestParticipationReadRepository } from 'src/modules/contests/repositories/contest-participate-read.repository';
-import { ContestParticipationWriteRepository } from 'src/modules/contests/repositories/contest-participate-write.repository';
+import { ContestParticipationRepository } from 'src/modules/contests/repositories/contest-participate.repository';
 import { ContestWinnerReadRepository } from 'src/modules/contests/repositories/contest-winner-read.repository';
 import { ContestWinnerWriteRepository } from 'src/modules/contests/repositories/contest-winner-write.repository';
 import { ContestWinnerAuditWriteRepository } from 'src/modules/contests/repositories/contest-winner-audit-write.repository';
@@ -28,10 +27,8 @@ export function buildContestRepos(ds: DataSource) {
       ds.getRepository(Channel),
       ds,
     ),
-    participationRead: new ContestParticipationReadRepository(
-      ds.getRepository(ContestParticipation),
-    ),
-    participationWrite: new ContestParticipationWriteRepository(
+    // Фаза 9: единый репозиторий агрегата ContestParticipation (слиты read+write).
+    participation: new ContestParticipationRepository(
       ds.getRepository(ContestParticipation),
       ds,
     ),
@@ -57,8 +54,7 @@ export function buildWinnerService(ds: DataSource): ContestWinnerService {
   return new ContestWinnerService(
     repos.winnerRead,
     repos.winnerWrite,
-    repos.participationRead,
-    repos.participationWrite,
+    repos.participation,
     repos.winnerAudit,
   );
 }
@@ -76,8 +72,7 @@ export function buildLifecycleService(ds: DataSource) {
   const winnerService = new ContestWinnerService(
     repos.winnerRead,
     repos.winnerWrite,
-    repos.participationRead,
-    repos.participationWrite,
+    repos.participation,
     repos.winnerAudit,
   );
 
@@ -93,7 +88,7 @@ export function buildLifecycleService(ds: DataSource) {
 
   const service = new ContestLifecycleService(
     repos.contest,
-    repos.participationRead,
+    repos.participation,
     fakeQueue,
     fakeJobs,
     winnerService,

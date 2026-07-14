@@ -8,15 +8,13 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_PARTICIPATE_WRITE_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
 } from 'src/common/constants';
-import {
-  ContestParticipationReadRepository,
-  ContestParticipationWriteRepository,
-} from '../repositories';
-import type { IContestRepository } from '../interfaces';
+import type {
+  IContestParticipationRepository,
+  IContestRepository,
+} from '../interfaces';
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ContestParticipation } from '../entities';
@@ -32,11 +30,8 @@ export class ContestsParticipateService {
     @Inject(CONTEST_REPOSITORY)
     private readonly contestRepo: IContestRepository,
 
-    @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
-    private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
-
-    @Inject(CONTEST_PARTICIPATE_WRITE_REPOSITORY)
-    private readonly contestParticipationWriteRepo: ContestParticipationWriteRepository,
+    @Inject(CONTEST_PARTICIPATE_REPOSITORY)
+    private readonly contestParticipationRepo: IContestParticipationRepository,
 
     @InjectQueue('contest-counters')
     private readonly contestCountersQueue: Queue,
@@ -130,7 +125,7 @@ export class ContestsParticipateService {
 
     try {
       const participation =
-        await this.contestParticipationWriteRepo.createParticipation({
+        await this.contestParticipationRepo.createParticipation({
           contestId: contest.id,
           userId: user.id,
           groupId: tgData.groupId,
@@ -164,7 +159,7 @@ export class ContestsParticipateService {
         // Пользователь мог прийти из другого чата (другой groupId), но участие
         // уже существует. Ищем только по userId+contestId, иначе findOne
         // вернёт null и клиент получит 500 вместо своей записи.
-        const existing = await this.contestParticipationReadRepo.findOneByParam(
+        const existing = await this.contestParticipationRepo.findOneByParam(
           {
             userId: user.id,
             contestId: contest.id,
@@ -184,7 +179,7 @@ export class ContestsParticipateService {
   async findManyByContestId(
     contestId: number,
   ): Promise<ContestParticipation[]> {
-    return this.contestParticipationReadRepo.findManyByContestId(contestId);
+    return this.contestParticipationRepo.findManyByContestId(contestId);
   }
 
   async syncParticipantsWithWinners(
@@ -194,7 +189,7 @@ export class ContestsParticipateService {
     // Сброс и простановка флагов в одной транзакции: если между reset и mark
     // придёт параллельный читатель, он увидит либо старые данные, либо новые —
     // никогда не увидит состояние "все сброшены, ни один не отмечен победителем".
-    await this.contestParticipationWriteRepo.syncWinnerFlagsInTransaction(
+    await this.contestParticipationRepo.syncWinnerFlagsInTransaction(
       contestId,
       winners,
     );

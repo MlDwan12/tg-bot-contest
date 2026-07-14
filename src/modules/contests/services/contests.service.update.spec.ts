@@ -15,7 +15,7 @@ import { ContestsParticipateService } from './contest-participate.service';
 import { UsersService } from 'src/modules/users/services/users.service';
 
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
 } from 'src/common/constants';
 
@@ -139,7 +139,7 @@ describe('ContestsService.updateContest', () => {
           useValue: { ...contestReadRepo, ...contestWriteRepo },
         },
         {
-          provide: CONTEST_PARTICIPATE_READ_REPOSITORY,
+          provide: CONTEST_PARTICIPATE_REPOSITORY,
           useValue: contestParticipationReadRepo,
         },
         {

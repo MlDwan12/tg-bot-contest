@@ -9,12 +9,14 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import { ContestParticipationReadRepository } from '../repositories';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
 } from 'src/common/constants';
-import type { IContestRepository } from '../interfaces';
+import type {
+  IContestParticipationRepository,
+  IContestRepository,
+} from '../interfaces';
 import { Contest, ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
@@ -26,8 +28,8 @@ export class ContestPublicationService {
     @Inject(CONTEST_REPOSITORY)
     private readonly contestRepo: IContestRepository,
 
-    @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
-    private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
+    @Inject(CONTEST_PARTICIPATE_REPOSITORY)
+    private readonly contestParticipationRepo: IContestParticipationRepository,
 
     @InjectQueue('contest-publication')
     private readonly publicationQueue: Queue,
@@ -223,7 +225,7 @@ export class ContestPublicationService {
     }
 
     const participantsCount =
-      await this.contestParticipationReadRepo.countUniqueUsersByContestId(
+      await this.contestParticipationRepo.countUniqueUsersByContestId(
         contestId,
       );
 

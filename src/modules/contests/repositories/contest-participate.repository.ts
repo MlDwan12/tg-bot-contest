@@ -1,16 +1,69 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
-import { IContestParticipationWriteRepository } from '../interfaces';
+import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import { ContestParticipation } from '../entities';
+import { IContestParticipationRepository } from '../interfaces';
 
+/**
+ * Единый репозиторий агрегата ContestParticipation (Фаза 9 — слиты read+write).
+ * Подключается через токен CONTEST_PARTICIPATE_REPOSITORY, сервисы зависят
+ * от IContestParticipationRepository.
+ */
 @Injectable()
-export class ContestParticipationWriteRepository implements IContestParticipationWriteRepository {
+export class ContestParticipationRepository
+  implements IContestParticipationRepository
+{
   constructor(
     @InjectRepository(ContestParticipation)
     private readonly repo: Repository<ContestParticipation>,
     private readonly dataSource: DataSource,
   ) {}
+
+  // ── чтение ──────────────────────────────────────────────────────────────
+
+  async findOneByParam(
+    param: FindOptionsWhere<ContestParticipation>,
+  ): Promise<ContestParticipation | null> {
+    return await this.repo.findOne({
+      where: param,
+    });
+  }
+
+  async findAllByContestId(contestId: number): Promise<ContestParticipation[]> {
+    return await this.repo.find({
+      where: { contestId },
+      relations: ['user'],
+    });
+  }
+
+  async countParticipants(contestId: number): Promise<number> {
+    return await this.repo.count({
+      where: { contestId },
+    });
+  }
+
+  async findManyByContestId(
+    contestId: number,
+  ): Promise<ContestParticipation[]> {
+    return this.repo.find({
+      where: { contestId },
+      relations: {
+        user: true,
+      },
+    });
+  }
+
+  async countUniqueUsersByContestId(contestId: number): Promise<number> {
+    const result = await this.repo
+      .createQueryBuilder('participation')
+      .select('COUNT(DISTINCT participation.userId)', 'count')
+      .where('participation.contestId = :contestId', { contestId })
+      .getRawOne<{ count: string }>();
+
+    return Number(result?.count ?? 0);
+  }
+
+  // ── запись ──────────────────────────────────────────────────────────────
 
   async createParticipation(data: {
     contestId: number;
@@ -22,10 +75,7 @@ export class ContestParticipationWriteRepository implements IContestParticipatio
   }
 
   async resetWinnerFlags(contestId: number): Promise<void> {
-    await this.repo.update(
-      { contestId },
-      { isWinner: false, prizePlace: null },
-    );
+    await this.repo.update({ contestId }, { isWinner: false, prizePlace: null });
   }
 
   async markAsWinner(

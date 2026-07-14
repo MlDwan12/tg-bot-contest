@@ -4,12 +4,14 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import { DataSource } from 'typeorm';
-import { ContestParticipationReadRepository } from '../repositories';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
 } from 'src/common/constants';
-import type { IContestRepository } from '../interfaces';
+import type {
+  IContestParticipationRepository,
+  IContestRepository,
+} from '../interfaces';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
@@ -26,8 +28,8 @@ export class ContestLifecycleService {
     @Inject(CONTEST_REPOSITORY)
     private readonly contestRepo: IContestRepository,
 
-    @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
-    private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
+    @Inject(CONTEST_PARTICIPATE_REPOSITORY)
+    private readonly contestParticipationRepo: IContestParticipationRepository,
 
     @InjectQueue('contest-publication')
     private readonly publicationQueue: Queue,
@@ -98,7 +100,7 @@ export class ContestLifecycleService {
       if (contest.endDate > now) return;
 
       const participants =
-        await this.contestParticipationReadRepo.findManyByContestId(contest.id);
+        await this.contestParticipationRepo.findManyByContestId(contest.id);
       const hasParticipants = participants.length > 0;
 
       if (hasParticipants) {

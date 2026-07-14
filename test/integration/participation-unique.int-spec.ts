@@ -3,25 +3,25 @@ import { DataSource } from 'typeorm';
 import { initTestDb, truncateAll, closeTestDb } from './harness';
 import { createUser, createContest } from './fixtures';
 import { ContestParticipation } from 'src/modules/contests/entities/contest-participation.entity';
-import { ContestParticipationWriteRepository } from 'src/modules/contests/repositories/contest-participate-write.repository';
+import { ContestParticipationRepository } from 'src/modules/contests/repositories/contest-participate.repository';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 0.2).
  * Бизнес-правило (подтверждено): один пользователь может участвовать в конкретном
  * конкурсе ТОЛЬКО ОДИН РАЗ. Классификация ревью: 🟢 «сделано правильно» — закрепляем.
  *
- * Проверяем реальный продовый класс ContestParticipationWriteRepository против
+ * Проверяем реальный продовый класс ContestParticipationRepository против
  * реального уникального индекса (contestId, userId) в настоящем Postgres.
  * На этом поведении держится идемпотентность participate() (перехват ошибки 23505).
  */
 describe('характеризация: уникальность участия (contestId, userId)', () => {
   let ds: DataSource;
-  let repo: ContestParticipationWriteRepository;
+  let repo: ContestParticipationRepository;
 
   beforeAll(async () => {
     ds = await initTestDb();
     // «Ручная сборка»: реальный репозиторий + реальное подключение, без NestJS DI.
-    repo = new ContestParticipationWriteRepository(
+    repo = new ContestParticipationRepository(
       ds.getRepository(ContestParticipation),
       ds,
     );

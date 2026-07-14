@@ -13,16 +13,14 @@ import {
   ContestWinnerAudit,
 } from './entities';
 import {
-  ContestParticipationReadRepository,
-  ContestParticipationWriteRepository,
+  ContestParticipationRepository,
   ContestRepository,
   ContestWinnerReadRepository,
   ContestWinnerWriteRepository,
   ContestWinnerAuditWriteRepository,
 } from './repositories';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_PARTICIPATE_WRITE_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
   CONTEST_WINNER_READ_REPOSITORY,
   CONTEST_WINNER_WRITE_REPOSITORY,
@@ -67,8 +65,6 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestJobsService,
     ContestCountersProcessor,
 
-    ContestParticipationReadRepository,
-    ContestParticipationWriteRepository,
     ContestWinnerReadRepository,
     ContestWinnerWriteRepository,
     ContestWinnerAuditWriteRepository,
@@ -77,12 +73,8 @@ import { ContestCountersProcessor } from './jobs/processors';
       useClass: ContestRepository,
     },
     {
-      provide: CONTEST_PARTICIPATE_READ_REPOSITORY,
-      useExisting: ContestParticipationReadRepository,
-    },
-    {
-      provide: CONTEST_PARTICIPATE_WRITE_REPOSITORY,
-      useExisting: ContestParticipationWriteRepository,
+      provide: CONTEST_PARTICIPATE_REPOSITORY,
+      useClass: ContestParticipationRepository,
     },
     {
       provide: CONTEST_WINNER_READ_REPOSITORY,
@@ -98,8 +90,7 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestPublicationService,
     ContestLifecycleService,
     CONTEST_REPOSITORY,
-    CONTEST_PARTICIPATE_READ_REPOSITORY,
-    CONTEST_PARTICIPATE_WRITE_REPOSITORY,
+    CONTEST_PARTICIPATE_REPOSITORY,
   ],
 })
 export class ContestsModule {}

@@ -8,20 +8,16 @@ import { Contest, ContestParticipation } from '../entities';
 import { User } from 'src/modules/users/entities';
 import { WinnerStrategy } from 'src/common/enums/contest';
 import {
-  CONTEST_PARTICIPATE_READ_REPOSITORY,
-  CONTEST_PARTICIPATE_WRITE_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_WINNER_READ_REPOSITORY,
   CONTEST_WINNER_WRITE_REPOSITORY,
 } from 'src/common/constants';
 import {
-  ContestParticipationReadRepository,
   ContestWinnerReadRepository,
   ContestWinnerWriteRepository,
 } from '../interfaces';
-import {
-  ContestParticipationWriteRepository,
-  ContestWinnerAuditWriteRepository,
-} from '../repositories';
+import type { IContestParticipationRepository } from '../interfaces';
+import { ContestWinnerAuditWriteRepository } from '../repositories';
 import {
   DRAW_ALGORITHM,
   generateSeed,
@@ -37,11 +33,8 @@ export class ContestWinnerService {
     @Inject(CONTEST_WINNER_WRITE_REPOSITORY)
     private readonly contestWinnerWriteRepo: ContestWinnerWriteRepository,
 
-    @Inject(CONTEST_PARTICIPATE_READ_REPOSITORY)
-    private readonly contestParticipationReadRepo: ContestParticipationReadRepository,
-
-    @Inject(CONTEST_PARTICIPATE_WRITE_REPOSITORY)
-    private readonly contestParticipationWriteRepo: ContestParticipationWriteRepository,
+    @Inject(CONTEST_PARTICIPATE_REPOSITORY)
+    private readonly contestParticipationRepo: IContestParticipationRepository,
 
     private readonly contestWinnerAuditWriteRepo: ContestWinnerAuditWriteRepository,
   ) {}
@@ -122,7 +115,7 @@ export class ContestWinnerService {
 
   private async resolveAutomaticWinners(contest: Contest): Promise<User[]> {
     const participants =
-      await this.contestParticipationReadRepo.findManyByContestId(contest.id);
+      await this.contestParticipationRepo.findManyByContestId(contest.id);
 
     if (!participants.length) {
       throw new BadRequestException(
@@ -325,7 +318,7 @@ export class ContestWinnerService {
       place: index + 1,
     }));
 
-    await this.contestParticipationWriteRepo.syncWinnerFlagsInTransaction(
+    await this.contestParticipationRepo.syncWinnerFlagsInTransaction(
       contestId,
       winners,
     );

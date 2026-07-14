@@ -45,8 +45,7 @@ describe('характеризация: идемпотентность participa
 
     const service = new ContestsParticipateService(
       repos.contest,
-      repos.participationRead,
-      repos.participationWrite,
+      repos.participation,
       fakeQueue,
       fakeUserTg,
       fakeTelegram,
@@ -59,7 +58,7 @@ describe('характеризация: идемпотентность participa
     const first: any = await service.participate(contest.id, tgData);
     const second: any = await service.participate(contest.id, tgData); // дубль
 
-    const count = await repos.participationRead.countParticipants(contest.id);
+    const count = await repos.participation.countParticipants(contest.id);
 
     console.log(
       `[наблюдение] participate ×2: first.id=${first.id}, second.id=${second.id} ` +
