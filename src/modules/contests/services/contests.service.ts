@@ -56,93 +56,16 @@ export class ContestsService {
 
     const buttonText = dto.buttonText?.trim() || 'Участвовать';
 
-    if (startDate >= endDate) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('startDate must be before endDate');
-    }
-
-    if (startDate <= now) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('startDate must be in the future');
-    }
-
-    if (endDate <= now) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('endDate must be in the future');
-    }
+    await this.assertCreatableContestDates(startDate, endDate, now, image);
 
     try {
-      const creator = await this.adminService.findById(dto.creatorId);
-
-      if (!creator) {
-        throw new NotFoundException('Creator not found');
-      }
-
-      const publishChannels = await this.getChannelsByTelegramIds(
-        dto.publishChannelIds,
-        'Один или несколько каналов публикации не найдены',
-      );
-
-      const requiredChannels = await this.getChannelsByTelegramIds(
-        dto.requiredChannelIds,
-        'Один или несколько обязательных каналов не найдены',
-      );
-
-      await this.contestPublicationService.validateBotPermissionsForPublishChannels(
-        publishChannels,
-      );
-
-      const imagePath = this.resolveContestImagePath(image);
-
-      const contest = await this.contestRepo.create({
-        name: dto.name.trim(),
-        description: dto.description?.trim(),
-        winnerStrategy: dto.winnerStrategy,
-        prizePlaces: dto.prizePlaces,
+      return await this.persistNewContest(
+        dto,
+        image,
         startDate,
         endDate,
-        status: ContestStatus.PENDING,
-        creatorId: dto.creatorId,
-        imagePath,
         buttonText,
-      });
-
-      await this.contestRepo.setPublishChannels(
-        contest.id,
-        publishChannels.map((channel) => channel.id),
       );
-
-      await this.contestRepo.setRequiredChannels(
-        contest.id,
-        requiredChannels.map((channel) => channel.id),
-      );
-
-      await this.contestPublicationService.recreatePendingPublications({
-        contestId: contest.id,
-        channels: publishChannels,
-        name: dto.name.trim(),
-        description: dto.description?.trim(),
-        buttonText,
-        imagePath,
-      });
-
-      await this.contestJobsService.scheduleContest(
-        contest.id,
-        contest.startDate,
-        contest.endDate,
-      );
-
-      const createdContest = await this.contestRepo.findByIdWithRelations(
-        contest.id,
-      );
-
-      if (!createdContest) {
-        throw new NotFoundException(
-          `Созданный конкурс id=${contest.id} не удалось прочитать`,
-        );
-      }
-
-      return createdContest;
     } catch (error) {
       await deleteUploadedContestImage(image);
 
@@ -175,26 +98,6 @@ export class ContestsService {
       throw new NotFoundException('Конкурс не найден');
     }
 
-    if (contest.status === ContestStatus.COMPLETED) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('Нельзя редактировать завершённый конкурс');
-    }
-
-    if (contest.status === ContestStatus.CANCELLED) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('Нельзя редактировать отменённый конкурс');
-    }
-
-    if (
-      dto.startDate !== undefined &&
-      contest.status === ContestStatus.ACTIVE
-    ) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException(
-        'Нельзя изменить дату начала активного конкурса',
-      );
-    }
-
     const nextStartDate = dto.startDate
       ? this.parseContestDate(dto.startDate)
       : contest.startDate;
@@ -204,30 +107,15 @@ export class ContestsService {
       : contest.endDate;
 
     const now = new Date();
-    if (dto.endDate !== undefined && nextEndDate <= now) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('endDate must be in the future');
-    }
 
-    if (dto.startDate !== undefined && nextStartDate <= now) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('startDate must be in the future');
-    }
-
-    if (nextStartDate >= nextEndDate) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException('startDate must be before endDate');
-    }
-
-    if (
-      dto.publishChannelIds !== undefined &&
-      contest.status !== ContestStatus.PENDING
-    ) {
-      await deleteUploadedContestImage(image);
-      throw new BadRequestException(
-        'Нельзя менять каналы публикации после запуска конкурса',
-      );
-    }
+    await this.assertContestEditable(
+      contest,
+      dto,
+      nextStartDate,
+      nextEndDate,
+      now,
+      image,
+    );
 
     const datesChanged =
       nextStartDate.getTime() !== new Date(contest.startDate).getTime() ||
@@ -266,94 +154,14 @@ export class ContestsService {
             )
           : null;
 
-      if (
-        dto.winners !== undefined &&
-        dto.winners.length > 0 &&
-        nextWinnerStrategy !== WinnerStrategy.MANUAL
-      ) {
-        throw new BadRequestException(
-          'Нельзя назначить победителей вручную при стратегии, отличной от manual',
-        );
-      }
-
-      if (nextWinnerStrategy === WinnerStrategy.MANUAL) {
-        if (dto.winners !== undefined) {
-          if (contest.status === ContestStatus.PENDING) {
-            throw new BadRequestException(
-              'Нельзя назначить победителей до старта конкурса',
-            );
-          }
-
-          if (dto.winners.length === 0) {
-            await this.contestRepo.replaceWinners(contestId, []);
-          } else {
-            const uniqueWinnerIds = [...new Set(dto.winners)];
-
-            if (uniqueWinnerIds.length !== dto.winners.length) {
-              throw new BadRequestException(
-                'Список победителей содержит дубликаты',
-              );
-            }
-
-            if (uniqueWinnerIds.length !== nextPrizePlaces) {
-              throw new BadRequestException(
-                'Количество победителей должно соответствовать количеству призовых мест',
-              );
-            }
-
-            const resolved = await Promise.all(
-              uniqueWinnerIds.map((winnerId) =>
-                this.usersService.findByTelegramId(winnerId.toString()),
-              ),
-            );
-
-            const notFoundWinnerIds = uniqueWinnerIds.filter(
-              (_, index) => !resolved[index],
-            );
-
-            if (notFoundWinnerIds.length) {
-              throw new NotFoundException(
-                `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
-              );
-            }
-
-            const orderedWinners = resolved as User[];
-
-            await this.contestRepo.replaceWinners(
-              contestId,
-              orderedWinners.map((winner, index) => ({
-                contestId,
-                userId: winner.id,
-                place: index + 1,
-              })),
-            );
-
-            // Аудит подотчётности (Q5.2), best-effort: назначение уже
-            // выполнено выше — если запись следа упадёт, не ломаем операцию,
-            // только громко логируем.
-            try {
-              await this.contestWinnerService.recordManualAssignment(
-                contestId,
-                orderedWinners.map((winner) => winner.id),
-                nextPrizePlaces,
-                actorUserId,
-              );
-            } catch (error) {
-              this.logger.error(
-                { err: error, contestId, actorUserId },
-                'Не удалось записать аудит MANUAL-назначения победителей',
-              );
-            }
-          }
-        }
-      } else {
-        if (
-          dto.winnerStrategy !== undefined &&
-          dto.winnerStrategy !== WinnerStrategy.MANUAL
-        ) {
-          await this.contestRepo.replaceWinners(contestId, []);
-        }
-      }
+      await this.applyManualWinnersUpdate(
+        contestId,
+        contest,
+        dto,
+        nextWinnerStrategy,
+        nextPrizePlaces,
+        actorUserId,
+      );
 
       await this.contestRepo.update(contestId, {
         name: nextName,
@@ -581,6 +389,267 @@ export class ContestsService {
     }
 
     await this.contestRepo.delete(contestId);
+  }
+
+  /** Валидация дат нового конкурса (до старта транзакции). Очистка картинки 1:1. */
+  private async assertCreatableContestDates(
+    startDate: Date,
+    endDate: Date,
+    now: Date,
+    image?: Express.Multer.File,
+  ): Promise<void> {
+    if (startDate >= endDate) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be before endDate');
+    }
+
+    if (startDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be in the future');
+    }
+
+    if (endDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('endDate must be in the future');
+    }
+  }
+
+  /** Создание конкурса + каналы + публикации + джобы. Тело прежнего try 1:1. */
+  private async persistNewContest(
+    dto: CreateContest,
+    image: Express.Multer.File | undefined,
+    startDate: Date,
+    endDate: Date,
+    buttonText: string,
+  ): Promise<Contest> {
+    const creator = await this.adminService.findById(dto.creatorId);
+
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    const publishChannels = await this.getChannelsByTelegramIds(
+      dto.publishChannelIds,
+      'Один или несколько каналов публикации не найдены',
+    );
+
+    const requiredChannels = await this.getChannelsByTelegramIds(
+      dto.requiredChannelIds,
+      'Один или несколько обязательных каналов не найдены',
+    );
+
+    await this.contestPublicationService.validateBotPermissionsForPublishChannels(
+      publishChannels,
+    );
+
+    const imagePath = this.resolveContestImagePath(image);
+
+    const contest = await this.contestRepo.create({
+      name: dto.name.trim(),
+      description: dto.description?.trim(),
+      winnerStrategy: dto.winnerStrategy,
+      prizePlaces: dto.prizePlaces,
+      startDate,
+      endDate,
+      status: ContestStatus.PENDING,
+      creatorId: dto.creatorId,
+      imagePath,
+      buttonText,
+    });
+
+    await this.contestRepo.setPublishChannels(
+      contest.id,
+      publishChannels.map((channel) => channel.id),
+    );
+
+    await this.contestRepo.setRequiredChannels(
+      contest.id,
+      requiredChannels.map((channel) => channel.id),
+    );
+
+    await this.contestPublicationService.recreatePendingPublications({
+      contestId: contest.id,
+      channels: publishChannels,
+      name: dto.name.trim(),
+      description: dto.description?.trim(),
+      buttonText,
+      imagePath,
+    });
+
+    await this.contestJobsService.scheduleContest(
+      contest.id,
+      contest.startDate,
+      contest.endDate,
+    );
+
+    const createdContest = await this.contestRepo.findByIdWithRelations(
+      contest.id,
+    );
+
+    if (!createdContest) {
+      throw new NotFoundException(
+        `Созданный конкурс id=${contest.id} не удалось прочитать`,
+      );
+    }
+
+    return createdContest;
+  }
+
+  /**
+   * Гварды редактируемости конкурса (существование проверяется у вызывающего).
+   * Каждый отказ чистит загруженную картинку — поведение прежних inline-гвардов 1:1.
+   */
+  private async assertContestEditable(
+    contest: Contest,
+    dto: UpdateContestDto,
+    nextStartDate: Date,
+    nextEndDate: Date,
+    now: Date,
+    image?: Express.Multer.File,
+  ): Promise<void> {
+    if (contest.status === ContestStatus.COMPLETED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать завершённый конкурс');
+    }
+
+    if (contest.status === ContestStatus.CANCELLED) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('Нельзя редактировать отменённый конкурс');
+    }
+
+    if (dto.startDate !== undefined && contest.status === ContestStatus.ACTIVE) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Нельзя изменить дату начала активного конкурса',
+      );
+    }
+
+    if (dto.endDate !== undefined && nextEndDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('endDate must be in the future');
+    }
+
+    if (dto.startDate !== undefined && nextStartDate <= now) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be in the future');
+    }
+
+    if (nextStartDate >= nextEndDate) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException('startDate must be before endDate');
+    }
+
+    if (
+      dto.publishChannelIds !== undefined &&
+      contest.status !== ContestStatus.PENDING
+    ) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Нельзя менять каналы публикации после запуска конкурса',
+      );
+    }
+  }
+
+  /**
+   * MANUAL-назначение победителей при обновлении (характеризовано Ф10.3).
+   * Тело прежнего winners-блока перенесено 1:1.
+   */
+  private async applyManualWinnersUpdate(
+    contestId: number,
+    contest: Contest,
+    dto: UpdateContestDto,
+    nextWinnerStrategy: WinnerStrategy,
+    nextPrizePlaces: number,
+    actorUserId?: number,
+  ): Promise<void> {
+    if (
+      dto.winners !== undefined &&
+      dto.winners.length > 0 &&
+      nextWinnerStrategy !== WinnerStrategy.MANUAL
+    ) {
+      throw new BadRequestException(
+        'Нельзя назначить победителей вручную при стратегии, отличной от manual',
+      );
+    }
+
+    if (nextWinnerStrategy === WinnerStrategy.MANUAL) {
+      if (dto.winners !== undefined) {
+        if (contest.status === ContestStatus.PENDING) {
+          throw new BadRequestException(
+            'Нельзя назначить победителей до старта конкурса',
+          );
+        }
+
+        if (dto.winners.length === 0) {
+          await this.contestRepo.replaceWinners(contestId, []);
+        } else {
+          const uniqueWinnerIds = [...new Set(dto.winners)];
+
+          if (uniqueWinnerIds.length !== dto.winners.length) {
+            throw new BadRequestException(
+              'Список победителей содержит дубликаты',
+            );
+          }
+
+          if (uniqueWinnerIds.length !== nextPrizePlaces) {
+            throw new BadRequestException(
+              'Количество победителей должно соответствовать количеству призовых мест',
+            );
+          }
+
+          const resolved = await Promise.all(
+            uniqueWinnerIds.map((winnerId) =>
+              this.usersService.findByTelegramId(winnerId.toString()),
+            ),
+          );
+
+          const notFoundWinnerIds = uniqueWinnerIds.filter(
+            (_, index) => !resolved[index],
+          );
+
+          if (notFoundWinnerIds.length) {
+            throw new NotFoundException(
+              `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
+            );
+          }
+
+          const orderedWinners = resolved as User[];
+
+          await this.contestRepo.replaceWinners(
+            contestId,
+            orderedWinners.map((winner, index) => ({
+              contestId,
+              userId: winner.id,
+              place: index + 1,
+            })),
+          );
+
+          // Аудит подотчётности (Q5.2), best-effort: назначение уже
+          // выполнено выше — если запись следа упадёт, не ломаем операцию,
+          // только громко логируем.
+          try {
+            await this.contestWinnerService.recordManualAssignment(
+              contestId,
+              orderedWinners.map((winner) => winner.id),
+              nextPrizePlaces,
+              actorUserId,
+            );
+          } catch (error) {
+            this.logger.error(
+              { err: error, contestId, actorUserId },
+              'Не удалось записать аудит MANUAL-назначения победителей',
+            );
+          }
+        }
+      }
+    } else {
+      if (
+        dto.winnerStrategy !== undefined &&
+        dto.winnerStrategy !== WinnerStrategy.MANUAL
+      ) {
+        await this.contestRepo.replaceWinners(contestId, []);
+      }
+    }
   }
 
   private async getChannelsByTelegramIds(
