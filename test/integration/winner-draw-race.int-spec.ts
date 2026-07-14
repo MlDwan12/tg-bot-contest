@@ -30,7 +30,7 @@ import { WinnerStrategy } from 'src/common/enums/contest';
  * СТАТУС: ✅ ЗАКРЫТ (Фаза 2). В completeContest добавлены атомарные ворота
  * updateStatusIfNotCompleted (CAS ACTIVE→COMPLETED): гонку выигрывает один,
  * он и разыгрывает; проигравший отсекается ДО розыгрыша (throw «уже завершён»)
- * и до winnerRead.findByContestId не доходит — барьер разжимается по таймауту.
+ * и до winner.findByContestId не доходит — барьер разжимается по таймауту.
  * Розыгрыш ровно один. Тест — регрессионный сторож: если ворота уберут,
  * снова станет красным.
  */
@@ -92,9 +92,9 @@ describe('F1 (закрыт): ворота completeContest — розыгрыш �
     // Барьер форсирует worst-case порядок: оба завершения читают «победителей
     // нет» ДО того, как любой из них запишет. Подменяем только тайминг чтения.
     const barrier = makeBarrier(2, 500);
-    const realFind = repos.winnerRead.findByContestId.bind(repos.winnerRead);
+    const realFind = repos.winner.findByContestId.bind(repos.winner);
     jest
-      .spyOn(repos.winnerRead, 'findByContestId')
+      .spyOn(repos.winner, 'findByContestId')
       .mockImplementation(async (cid: number) => {
         const res = await realFind(cid); // реальное чтение (call-through)
         await barrier(); // держим, пока оба не прочитают пусто
@@ -102,7 +102,7 @@ describe('F1 (закрыт): ворота completeContest — розыгрыш �
       });
 
     // Шпион за каждым сохранённым розыгрышем: один replace = один розыгрыш.
-    const replaceSpy = jest.spyOn(repos.winnerWrite, 'replace');
+    const replaceSpy = jest.spyOn(repos.winner, 'replace');
 
     // Двойной клик: два одновременных ручных завершения одного конкурса.
     const results = await Promise.allSettled([

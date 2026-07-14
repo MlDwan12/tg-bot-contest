@@ -15,15 +15,13 @@ import {
 import {
   ContestParticipationRepository,
   ContestRepository,
-  ContestWinnerReadRepository,
-  ContestWinnerWriteRepository,
+  ContestWinnerRepository,
   ContestWinnerAuditWriteRepository,
 } from './repositories';
 import {
   CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
-  CONTEST_WINNER_READ_REPOSITORY,
-  CONTEST_WINNER_WRITE_REPOSITORY,
+  CONTEST_WINNER_REPOSITORY,
 } from 'src/common/constants';
 import { Channel } from '../channels/entities';
 import { UsersModule } from '../users/users.module';
@@ -65,8 +63,6 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestJobsService,
     ContestCountersProcessor,
 
-    ContestWinnerReadRepository,
-    ContestWinnerWriteRepository,
     ContestWinnerAuditWriteRepository,
     {
       provide: CONTEST_REPOSITORY,
@@ -77,12 +73,8 @@ import { ContestCountersProcessor } from './jobs/processors';
       useClass: ContestParticipationRepository,
     },
     {
-      provide: CONTEST_WINNER_READ_REPOSITORY,
-      useExisting: ContestWinnerReadRepository,
-    },
-    {
-      provide: CONTEST_WINNER_WRITE_REPOSITORY,
-      useExisting: ContestWinnerWriteRepository,
+      provide: CONTEST_WINNER_REPOSITORY,
+      useClass: ContestWinnerRepository,
     },
   ],
   exports: [

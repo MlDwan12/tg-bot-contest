@@ -42,11 +42,11 @@ describe('характеризация: завершение пустого ко
     const { service: lifecycle, repos } = buildLifecycleService(ds);
 
     // Розыгрыша быть не должно — шпион это докажет.
-    const replaceSpy = jest.spyOn(repos.winnerWrite, 'replace');
+    const replaceSpy = jest.spyOn(repos.winner, 'replace');
 
     const result = await lifecycle.completeContest(contest.id);
 
-    const winners = await repos.winnerRead.findByContestId(contest.id);
+    const winners = await repos.winner.findByContestId(contest.id);
 
     console.log(
       `[наблюдение] пустой конкурс завершён: статус=${result.status} ` +

@@ -1,10 +1,4 @@
-export const CONTEST_WINNER_READ_REPOSITORY = 'CONTEST_WINNER_READ_REPOSITORY';
-
-export const CONTEST_WINNER_WRITE_REPOSITORY =
-  'CONTEST_WINNER_WRITE_REPOSITORY';
-
-// Фаза 9: единый репозиторий на агрегат (токен+интерфейс). Пока сосуществует
-// с раздвоенными read/write выше — их сливаем агрегат за агрегатом.
+// Фаза 9: единый репозиторий на агрегат (токен+интерфейс).
 export const USER_REPOSITORY = 'USER_REPOSITORY';
 
 export const CHANNEL_REPOSITORY = 'CHANNEL_REPOSITORY';
@@ -12,3 +6,5 @@ export const CHANNEL_REPOSITORY = 'CHANNEL_REPOSITORY';
 export const CONTEST_REPOSITORY = 'CONTEST_REPOSITORY';
 
 export const CONTEST_PARTICIPATE_REPOSITORY = 'CONTEST_PARTICIPATE_REPOSITORY';
+
+export const CONTEST_WINNER_REPOSITORY = 'CONTEST_WINNER_REPOSITORY';

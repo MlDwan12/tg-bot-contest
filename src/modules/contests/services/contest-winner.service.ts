@@ -9,14 +9,12 @@ import { User } from 'src/modules/users/entities';
 import { WinnerStrategy } from 'src/common/enums/contest';
 import {
   CONTEST_PARTICIPATE_REPOSITORY,
-  CONTEST_WINNER_READ_REPOSITORY,
-  CONTEST_WINNER_WRITE_REPOSITORY,
+  CONTEST_WINNER_REPOSITORY,
 } from 'src/common/constants';
-import {
-  ContestWinnerReadRepository,
-  ContestWinnerWriteRepository,
+import type {
+  IContestParticipationRepository,
+  IContestWinnerRepository,
 } from '../interfaces';
-import type { IContestParticipationRepository } from '../interfaces';
 import { ContestWinnerAuditWriteRepository } from '../repositories';
 import {
   DRAW_ALGORITHM,
@@ -27,11 +25,8 @@ import {
 @Injectable()
 export class ContestWinnerService {
   constructor(
-    @Inject(CONTEST_WINNER_READ_REPOSITORY)
-    private readonly contestWinnerReadRepo: ContestWinnerReadRepository,
-
-    @Inject(CONTEST_WINNER_WRITE_REPOSITORY)
-    private readonly contestWinnerWriteRepo: ContestWinnerWriteRepository,
+    @Inject(CONTEST_WINNER_REPOSITORY)
+    private readonly contestWinnerRepo: IContestWinnerRepository,
 
     @Inject(CONTEST_PARTICIPATE_REPOSITORY)
     private readonly contestParticipationRepo: IContestParticipationRepository,
@@ -40,7 +35,7 @@ export class ContestWinnerService {
   ) {}
 
   async getContestWinners(contestId: number) {
-    return this.contestWinnerReadRepo.findByContestId(contestId);
+    return this.contestWinnerRepo.findByContestId(contestId);
   }
 
   /**
@@ -90,7 +85,7 @@ export class ContestWinnerService {
   ): Promise<void> {
     const rows = this.toWinnerRows(contestId, users);
     this.validateWinnerRows(rows, prizePlaces);
-    await this.contestWinnerWriteRepo.replace(contestId, rows);
+    await this.contestWinnerRepo.replace(contestId, rows);
   }
 
   async replaceManualWinners(
@@ -103,7 +98,7 @@ export class ContestWinnerService {
   ): Promise<void> {
     this.validateWinnerRows(winners, prizePlaces);
 
-    await this.contestWinnerWriteRepo.replace(
+    await this.contestWinnerRepo.replace(
       contestId,
       winners.map((winner) => ({
         contestId,
@@ -162,7 +157,7 @@ export class ContestWinnerService {
   // private async resolveManualWinners(contest: Contest): Promise<User[]> {
   //   const winners = contest.winners?.length
   //     ? contest.winners
-  //     : await this.contestWinnerReadRepo.findByContestId(contest.id);
+  //     : await this.contestWinnerRepo.findByContestId(contest.id);
 
   //   if (!winners.length) {
   //     throw new BadRequestException(
@@ -192,7 +187,7 @@ export class ContestWinnerService {
   private async resolveManualWinners(contest: Contest): Promise<User[]> {
     const winners = contest.winners?.length
       ? contest.winners
-      : await this.contestWinnerReadRepo.findByContestId(contest.id);
+      : await this.contestWinnerRepo.findByContestId(contest.id);
 
     if (!winners.length) {
       throw new BadRequestException(
@@ -293,7 +288,7 @@ export class ContestWinnerService {
   }
 
   async resolveAndSaveWinners(contest: Contest): Promise<void> {
-    const existingWinners = await this.contestWinnerReadRepo.findByContestId(
+    const existingWinners = await this.contestWinnerRepo.findByContestId(
       contest.id,
     );
     if (existingWinners.length > 0) {
