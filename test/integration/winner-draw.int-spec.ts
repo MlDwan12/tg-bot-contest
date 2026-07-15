@@ -88,7 +88,8 @@ describe('характеризация: розыгрыш победителей 
     const firstWinner = (await service.getContestWinners(contest.id))[0].userId;
 
     await service.resolveAndSaveWinners(contest); // повторный запуск
-    const secondWinner = (await service.getContestWinners(contest.id))[0].userId;
+    const secondWinner = (await service.getContestWinners(contest.id))[0]
+      .userId;
 
     console.log(
       `[наблюдение] розыгрыш ×2 при 10 участниках на 1 место: ` +
@@ -96,5 +97,34 @@ describe('характеризация: розыгрыш победителей 
     );
 
     expect(secondWinner).toBe(firstWinner); // тот же победитель, не перевыбран
+  });
+
+  // Правило 3 (🟢): MANUAL без заранее выбранных победителей → 400. Закрепляет
+  // упрощение resolveManualWinners (читает победителей из БД, а не из
+  // переданного объекта; мёртвая ветка contest.winners удалена).
+  it('MANUAL без назначенных победителей → 400 «должны быть заранее указаны»', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    // Участники есть, но победители вручную НЕ назначены (в contest_winners пусто).
+    await addParticipant(ds, contest.id);
+
+    const service = buildWinnerService(ds);
+
+    let err: any;
+    try {
+      await service.resolveAndSaveWinners(contest);
+    } catch (e) {
+      err = e;
+    }
+
+    console.log(
+      `[наблюдение] MANUAL без победителей: ${err?.constructor?.name} "${err?.message}"`,
+    );
+
+    expect(err).toBeDefined();
+    expect(err.message).toContain('должны быть заранее указаны');
   });
 });

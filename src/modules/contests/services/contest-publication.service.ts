@@ -17,10 +17,25 @@ import type {
   IContestParticipationRepository,
   IContestRepository,
 } from '../interfaces';
-import { Contest, ContestPublication } from '../entities';
+import { ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
+
+/**
+ * Минимальный контекст для синхронизации опубликованных постов — только поля,
+ * что реально читает syncPublishedPosts. Структурно подходят и entity Contest,
+ * и обогащённый ContestWithRelations (из findByIdWithRelations).
+ */
+export interface ContestForPublishSync {
+  id: number;
+  name: string;
+  description: string | null | undefined;
+  imagePath: string | null | undefined;
+  buttonText: string | null | undefined;
+  status: ContestStatus;
+  participants: ReadonlyArray<unknown>;
+}
 
 @Injectable()
 export class ContestPublicationService {
@@ -103,9 +118,7 @@ export class ContestPublicationService {
     contestId: number,
   ): Promise<number[]> {
     return (
-      await this.contestRepo.findPublishedPublicationIdsForContest(
-        contestId,
-      )
+      await this.contestRepo.findPublishedPublicationIdsForContest(contestId)
     ).map((pub) => pub.id);
   }
 
@@ -146,11 +159,9 @@ export class ContestPublicationService {
     await this.contestRepo.cancelPendingPublications(contestId);
   }
 
-  async syncPublishedPosts(contest: Contest): Promise<void> {
+  async syncPublishedPosts(contest: ContestForPublishSync): Promise<void> {
     const publishedPublications =
-      await this.contestRepo.findPublishedPublicationIdsForContest(
-        contest.id,
-      );
+      await this.contestRepo.findPublishedPublicationIdsForContest(contest.id);
 
     if (!publishedPublications.length) {
       this.logger.debug(
@@ -230,14 +241,12 @@ export class ContestPublicationService {
       );
 
     const nextButtonText = this.buildParticipantsButtonText(
-      contest.buttonText,
+      contest.buttonText ?? undefined,
       participantsCount,
     );
 
     const publications =
-      await this.contestRepo.findPublishedPublicationsByContestId(
-        contestId,
-      );
+      await this.contestRepo.findPublishedPublicationsByContestId(contestId);
 
     if (!publications.length) {
       this.logger.debug(

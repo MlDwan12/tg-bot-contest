@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { CONTEST_REPOSITORY } from 'src/common/constants';
 import type { IContestRepository } from '../interfaces';
-import { CreateContest } from 'src/modules/contests/types';
+import {
+  CreateContest,
+  ContestWithRelations,
+} from 'src/modules/contests/types';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { AdminService } from 'src/modules/users/services';
@@ -47,7 +50,7 @@ export class ContestsService {
   async createContest(
     dto: CreateContest,
     image?: Express.Multer.File,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     this.logger.debug('createContest: start');
 
     const startDate = fromZonedTime(dto.startDate, this.APP_TIME_ZONE);
@@ -88,7 +91,7 @@ export class ContestsService {
     dto: UpdateContestDto,
     image?: Express.Multer.File,
     actorUserId?: number,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
@@ -123,14 +126,17 @@ export class ContestsService {
 
     const nextPrizePlaces = dto.prizePlaces ?? contest.prizePlaces;
     const nextWinnerStrategy = dto.winnerStrategy ?? contest.winnerStrategy;
-    const imagePath = this.resolveContestImagePath(image, contest.imagePath);
+    const imagePath = this.resolveContestImagePath(
+      image,
+      contest.imagePath ?? undefined,
+    );
     const oldImagePath = contest.imagePath;
 
     const nextName = dto.name?.trim() || contest.name;
     const nextDescription =
       dto.description !== undefined
         ? dto.description?.trim() || undefined
-        : contest.description;
+        : (contest.description ?? undefined);
     const nextButtonText =
       dto.buttonText !== undefined
         ? dto.buttonText.trim() || 'Участвовать'
@@ -263,9 +269,9 @@ export class ContestsService {
             contestId,
             channels,
             name: updatedContest.name,
-            description: updatedContest.description,
-            buttonText: updatedContest.buttonText,
-            imagePath: updatedContest.imagePath,
+            description: updatedContest.description ?? undefined,
+            buttonText: updatedContest.buttonText ?? undefined,
+            imagePath: updatedContest.imagePath ?? undefined,
           });
         } catch (error) {
           this.logger.error(
@@ -350,7 +356,7 @@ export class ContestsService {
     };
   }
 
-  async getContestById(contestId: number): Promise<Contest> {
+  async getContestById(contestId: number): Promise<ContestWithRelations> {
     const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     if (!contest) {
@@ -421,7 +427,7 @@ export class ContestsService {
     startDate: Date,
     endDate: Date,
     buttonText: string,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     const creator = await this.adminService.findById(dto.creatorId);
 
     if (!creator) {
@@ -500,7 +506,7 @@ export class ContestsService {
    * Каждый отказ чистит загруженную картинку — поведение прежних inline-гвардов 1:1.
    */
   private async assertContestEditable(
-    contest: Contest,
+    contest: ContestWithRelations,
     dto: UpdateContestDto,
     nextStartDate: Date,
     nextEndDate: Date,
@@ -517,7 +523,10 @@ export class ContestsService {
       throw new BadRequestException('Нельзя редактировать отменённый конкурс');
     }
 
-    if (dto.startDate !== undefined && contest.status === ContestStatus.ACTIVE) {
+    if (
+      dto.startDate !== undefined &&
+      contest.status === ContestStatus.ACTIVE
+    ) {
       await deleteUploadedContestImage(image);
       throw new BadRequestException(
         'Нельзя изменить дату начала активного конкурса',
@@ -556,7 +565,7 @@ export class ContestsService {
    */
   private async applyManualWinnersUpdate(
     contestId: number,
-    contest: Contest,
+    contest: ContestWithRelations,
     dto: UpdateContestDto,
     nextWinnerStrategy: WinnerStrategy,
     nextPrizePlaces: number,

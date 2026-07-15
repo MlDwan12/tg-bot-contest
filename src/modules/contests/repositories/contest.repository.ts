@@ -13,6 +13,7 @@ import { Contest } from '../entities/contest.entity';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { IContestReadFilters, IContestRepository } from '../interfaces';
+import { ContestWithRelations } from '../types';
 import { ContestPublication, ContestWinner } from '../entities';
 import { Paginated } from 'src/common/response/paginated.type';
 import { buildPaginatedResponse } from 'src/common/helpers/paginatedResponse.helper';
@@ -82,7 +83,9 @@ export class ContestRepository implements IContestRepository {
     });
   }
 
-  async findByIdWithRelations(id: number): Promise<any | null> {
+  async findByIdWithRelations(
+    id: number,
+  ): Promise<ContestWithRelations | null> {
     const contest = await this.repo
       .createQueryBuilder('contest')
       .leftJoinAndSelect('contest.creator', 'creator')

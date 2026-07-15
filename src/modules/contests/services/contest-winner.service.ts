@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Contest, ContestParticipation } from '../entities';
+import { ContestParticipation } from '../entities';
 import { User } from 'src/modules/users/entities';
 import { WinnerStrategy } from 'src/common/enums/contest';
 import {
@@ -21,6 +21,17 @@ import {
   generateSeed,
   seededShuffle,
 } from './seeded-draw.util';
+
+/**
+ * Минимальный контекст розыгрыша/сохранения победителей — только те поля, что
+ * реально читает winner-сервис. Структурно ему подходят и entity Contest, и
+ * обогащённый ContestWithRelations (из findByIdWithRelations).
+ */
+export interface WinnerDrawContext {
+  id: number;
+  prizePlaces: number;
+  winnerStrategy: WinnerStrategy;
+}
 
 @Injectable()
 export class ContestWinnerService {
@@ -68,7 +79,7 @@ export class ContestWinnerService {
     });
   }
 
-  async resolveWinners(contest: Contest): Promise<User[]> {
+  async resolveWinners(contest: WinnerDrawContext): Promise<User[]> {
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
     }
@@ -117,7 +128,9 @@ export class ContestWinnerService {
     );
   }
 
-  private async resolveAutomaticWinners(contest: Contest): Promise<User[]> {
+  private async resolveAutomaticWinners(
+    contest: WinnerDrawContext,
+  ): Promise<User[]> {
     const participants =
       await this.contestParticipationRepo.findManyByContestId(contest.id);
 
@@ -163,40 +176,17 @@ export class ContestWinnerService {
     return winners;
   }
 
-  // private async resolveManualWinners(contest: Contest): Promise<User[]> {
-  //   const winners = contest.winners?.length
-  //     ? contest.winners
-  //     : await this.contestWinnerRepo.findByContestId(contest.id);
-
-  //   if (!winners.length) {
-  //     throw new BadRequestException(
-  //       'Для manual-стратегии у конкурса должны быть заранее указаны победители',
-  //     );
-  //   }
-
-  //   this.validateWinnerRows(
-  //     winners.map((winner) => ({
-  //       userId: winner.userId,
-  //       place: winner.place,
-  //     })),
-  //     contest.prizePlaces,
-  //   );
-
-  //   return winners.map((winner) => {
-  //     if (!winner.user) {
-  //       throw new BadRequestException(
-  //         'У одного из победителей не загружен пользователь',
-  //       );
-  //     }
-
-  //     return winner.user;
-  //   });
-  // }
-
-  private async resolveManualWinners(contest: Contest): Promise<User[]> {
-    const winners = contest.winners?.length
-      ? contest.winners
-      : await this.contestWinnerRepo.findByContestId(contest.id);
+  /**
+   * MANUAL: победители заранее записаны в contest_winners оператором. Читаем их
+   * из БД (findByContestId), а не из переданного объекта. Прежняя ветка
+   * `contest.winners?.length ? ...` была недостижима: resolveAndSaveWinners для
+   * MANUAL короткозамыкается на существующих победителях ДО этого вызова —
+   * поэтому сюда попадаем только с пустым списком (→ 400).
+   */
+  private async resolveManualWinners(
+    contest: WinnerDrawContext,
+  ): Promise<User[]> {
+    const winners = await this.contestWinnerRepo.findByContestId(contest.id);
 
     if (!winners.length) {
       throw new BadRequestException(
@@ -296,7 +286,7 @@ export class ContestWinnerService {
     }
   }
 
-  async resolveAndSaveWinners(contest: Contest): Promise<void> {
+  async resolveAndSaveWinners(contest: WinnerDrawContext): Promise<void> {
     const existingWinners = await this.contestWinnerRepo.findByContestId(
       contest.id,
     );

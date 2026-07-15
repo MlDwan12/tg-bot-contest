@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { Contest } from './entities';
+import { ContestWithRelations } from './types';
 import { Logger } from 'nestjs-pino';
 import {
   ContestLifecycleService,
@@ -65,7 +66,7 @@ export class ContestsController {
     userId: number,
     @Body() dto: CreateContestDto,
     @UploadedFile() image?: Express.Multer.File,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     this.logger.log({ userId }, 'createContest');
     return this.contestsService.createContest(
       { ...dto, creatorId: userId },
@@ -81,7 +82,7 @@ export class ContestsController {
     @Body() dto: UpdateContestDto,
     @UserId() actorUserId: number,
     @UploadedFile() image?: Express.Multer.File,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     return this.contestsService.updateContest(id, dto, image, actorUserId);
   }
 
@@ -96,7 +97,7 @@ export class ContestsController {
   @Get(':id')
   async getContestById(
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     this.logger.debug({ id }, 'getContestById');
     return this.contestsService.getContestById(id);
   }
@@ -105,13 +106,15 @@ export class ContestsController {
   @UseGuards(JwtAuthGuard)
   async completeContest(
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<Contest> {
+  ): Promise<ContestWithRelations> {
     return this.contestLifecycleService.completeContest(id);
   }
 
   @Patch(':id/cancel')
   @UseGuards(JwtAuthGuard)
-  async cancelContest(@Param('id', ParseIntPipe) id: number): Promise<Contest> {
+  async cancelContest(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ContestWithRelations> {
     return this.contestLifecycleService.cancelContest(id);
   }
 

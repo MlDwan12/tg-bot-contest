@@ -12,7 +12,7 @@ import type {
   IContestParticipationRepository,
   IContestRepository,
 } from '../interfaces';
-import { Contest } from '../entities';
+import { ContestWithRelations } from '../types';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
 import { ContestWinnerService } from './contest-winner.service';
@@ -90,8 +90,7 @@ export class ContestLifecycleService {
     }
 
     try {
-      const contest =
-        await this.contestRepo.findByIdWithRelations(contestId);
+      const contest = await this.contestRepo.findByIdWithRelations(contestId);
       if (!contest) return;
 
       if (contest.status === ContestStatus.COMPLETED) return;
@@ -171,7 +170,7 @@ export class ContestLifecycleService {
     }
   }
 
-  async completeContest(contestId: number): Promise<Contest> {
+  async completeContest(contestId: number): Promise<ContestWithRelations> {
     const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     if (!contest) {
@@ -244,7 +243,7 @@ export class ContestLifecycleService {
     return updatedContest;
   }
 
-  async cancelContest(id: number): Promise<Contest> {
+  async cancelContest(id: number): Promise<ContestWithRelations> {
     const contest = await this.contestRepo.findByIdWithRelations(id);
 
     if (!contest) {
@@ -284,7 +283,7 @@ export class ContestLifecycleService {
   }
 
   private async notifyAdminsAboutMissingManualWinner(
-    contest: Contest,
+    contest: { id: number; name: string },
     extendedEndDate: Date,
   ): Promise<void> {
     try {

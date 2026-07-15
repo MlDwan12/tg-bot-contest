@@ -3,6 +3,7 @@ import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Contest, ContestPublication } from '../entities';
 import { IContestReadFilters } from './contest-filter.interface';
 import { Paginated } from 'src/common/response/paginated.type';
+import { ContestWithRelations } from '../types';
 
 /**
  * Единый контракт репозитория агрегата Contest (Фаза 9 — слиты read+write).
@@ -15,9 +16,8 @@ export interface IContestRepository {
   // ── чтение: конкурс ──────────────────────────────────────────────────────
   findById(id: number): Promise<Contest | null>;
   findByParams(params: FindOptionsWhere<Contest>): Promise<Contest | null>;
-  // findByIdWithRelations возвращает обогащённый DTO-подобный объект, не entity —
-  // типизация как any оставлена намеренно (отдельный кандидат на уточнение).
-  findByIdWithRelations(id: number): Promise<any>;
+  // findByIdWithRelations возвращает обогащённый DTO-подобный объект, не entity.
+  findByIdWithRelations(id: number): Promise<ContestWithRelations | null>;
   findMany(filters?: IContestReadFilters): Promise<Paginated<Contest>>;
   findManyShortInfo(
     filters?: IContestReadFilters,
