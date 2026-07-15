@@ -58,7 +58,6 @@ export class ContestsParticipateService {
    */
   async participate(contestId: number, tgData: ParticipateInput) {
     const contest = await this.contestRepo.findByParams({ id: contestId });
-
     this.assertContestFound(contest);
 
     if (contest.status === ContestStatus.COMPLETED) {
@@ -113,7 +112,9 @@ export class ContestsParticipateService {
       place: w.place,
       telegramId: w.user?.telegramId ?? null,
       userId: w.userId,
-      username: w.user?.username ?? null,
+      // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный ник
+      // в том же поле username, telegramId/userId остаются null.
+      username: w.user?.username ?? w.displayUsername ?? null,
     }));
   }
 

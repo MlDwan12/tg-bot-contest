@@ -583,56 +583,36 @@ export class ContestsService {
         if (dto.winners.length === 0) {
           await this.contestRepo.replaceWinners(contestId, []);
         } else {
-          const uniqueWinnerIds = [...new Set(dto.winners)];
-
-          if (uniqueWinnerIds.length !== dto.winners.length) {
-            throw new BadRequestException(
-              'Список победителей содержит дубликаты',
-            );
-          }
-
-          if (uniqueWinnerIds.length !== nextPrizePlaces) {
-            throw new BadRequestException(
-              'Количество победителей должно соответствовать количеству призовых мест',
-            );
-          }
-
-          const resolved = await Promise.all(
-            uniqueWinnerIds.map((winnerId) =>
-              this.usersService.findByTelegramId(winnerId.toString()),
-            ),
+          const rows = await this.resolveManualWinnerRows(
+            dto.winners,
+            nextPrizePlaces,
           );
-
-          const notFoundWinnerIds = uniqueWinnerIds.filter(
-            (_, index) => !resolved[index],
-          );
-
-          if (notFoundWinnerIds.length) {
-            throw new NotFoundException(
-              `Не найдены пользователи с telegramId: ${notFoundWinnerIds.join(', ')}`,
-            );
-          }
-
-          const orderedWinners = resolved as User[];
 
           await this.contestRepo.replaceWinners(
             contestId,
-            orderedWinners.map((winner, index) => ({
+            rows.map((row, index) => ({
               contestId,
-              userId: winner.id,
+              userId: row.userId,
+              displayUsername: row.displayUsername,
               place: index + 1,
             })),
           );
 
           // Аудит подотчётности (Q5.2), best-effort: назначение уже
           // выполнено выше — если запись следа упадёт, не ломаем операцию,
-          // только громко логируем.
+          // только громко логируем. Реальные победители → winnerUserIds,
+          // выдуманные ники (userId нет) → в note.
           try {
             await this.contestWinnerService.recordManualAssignment(
               contestId,
-              orderedWinners.map((winner) => winner.id),
+              rows
+                .filter((row) => row.userId !== null)
+                .map((row) => row.userId as number),
               nextPrizePlaces,
               actorUserId,
+              rows
+                .filter((row) => row.userId === null)
+                .map((row) => row.displayUsername as string),
             );
           } catch (error) {
             this.logger.error(
@@ -650,6 +630,102 @@ export class ContestsService {
         await this.contestRepo.replaceWinners(contestId, []);
       }
     }
+  }
+
+  /**
+   * Классификация + валидация ручного списка победителей → упорядоченные строки
+   * (place = индекс + 1). Реальный (telegramId) резолвится в юзера (не найден →
+   * 404); фиктивный (username) — ник без TG-аккаунта, userId = null.
+   */
+  private async resolveManualWinnerRows(
+    winners: NonNullable<UpdateContestDto['winners']>,
+    prizePlaces: number,
+  ): Promise<Array<{ userId: number | null; displayUsername: string | null }>> {
+    type Classified =
+      | { kind: 'real'; telegramId: number }
+      | { kind: 'fictitious'; nick: string };
+
+    const classified: Classified[] = winners.map((winner) => {
+      const hasTelegramId =
+        winner.telegramId !== undefined && winner.telegramId !== null;
+      const hasUsername =
+        winner.username !== undefined && winner.username !== null;
+
+      if (hasTelegramId && hasUsername) {
+        throw new BadRequestException(
+          'У победителя нужно указать либо telegramId, либо ник, но не оба',
+        );
+      }
+
+      if (hasTelegramId) {
+        return { kind: 'real', telegramId: Number(winner.telegramId) };
+      }
+
+      if (hasUsername) {
+        const nick = String(winner.username).trim().replace(/^@+/, '').trim();
+        if (!nick) {
+          throw new BadRequestException('Ник победителя не может быть пустым');
+        }
+        return { kind: 'fictitious', nick };
+      }
+
+      throw new BadRequestException(
+        'У победителя не указан ни telegramId, ни ник',
+      );
+    });
+
+    // Дубли: реальные — по telegramId, фиктивные — по нику (регистронезависимо,
+    // TG-ники case-insensitive).
+    const telegramIds: number[] = [];
+    const nickKeys: string[] = [];
+    for (const item of classified) {
+      if (item.kind === 'real') {
+        telegramIds.push(item.telegramId);
+      } else {
+        nickKeys.push(item.nick.toLowerCase());
+      }
+    }
+
+    if (
+      new Set(telegramIds).size !== telegramIds.length ||
+      new Set(nickKeys).size !== nickKeys.length
+    ) {
+      throw new BadRequestException('Список победителей содержит дубликаты');
+    }
+
+    if (classified.length !== prizePlaces) {
+      throw new BadRequestException(
+        'Количество победителей должно соответствовать количеству призовых мест',
+      );
+    }
+
+    // Реальных резолвим в юзеров; ников НЕ ищем (в этом суть фичи).
+    const resolvedUsers = await Promise.all(
+      classified.map((item) =>
+        item.kind === 'real'
+          ? this.usersService.findByTelegramId(item.telegramId.toString())
+          : Promise.resolve(null),
+      ),
+    );
+
+    const notFound: number[] = [];
+    classified.forEach((item, index) => {
+      if (item.kind === 'real' && !resolvedUsers[index]) {
+        notFound.push(item.telegramId);
+      }
+    });
+
+    if (notFound.length) {
+      throw new NotFoundException(
+        `Не найдены пользователи с telegramId: ${notFound.join(', ')}`,
+      );
+    }
+
+    return classified.map((item, index) =>
+      item.kind === 'real'
+        ? { userId: (resolvedUsers[index] as User).id, displayUsername: null }
+        : { userId: null, displayUsername: item.nick },
+    );
   }
 
   private async getChannelsByTelegramIds(

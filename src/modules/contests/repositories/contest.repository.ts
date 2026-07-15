@@ -113,6 +113,7 @@ export class ContestRepository implements IContestRepository {
         'participantsUser.username',
         'winners.id',
         'winners.userId',
+        'winners.displayUsername',
         'winnerUser.id',
         'winners.place',
         'winnerUser.telegramId',
@@ -173,13 +174,22 @@ export class ContestRepository implements IContestRepository {
           id: winner.id,
           userId: winner.userId,
           place: winner.place,
+          // Реальный победитель — реальный user. Фиктивный (ник без TG) не имеет
+          // user, поэтому отдаём синтетический с ником в username: фронт рисует
+          // его тем же кодом (winner.user.username), telegramId = null.
           user: winner.user
             ? {
                 id: winner.user.id,
                 telegramId: winner.user.telegramId ?? null,
                 username: winner.user.username ?? null,
               }
-            : null,
+            : winner.displayUsername
+              ? {
+                  id: null,
+                  telegramId: null,
+                  username: winner.displayUsername,
+                }
+              : null,
         })) ?? [],
       createdAt: contest.createdAt,
       startDate: contest.startDate,
@@ -440,8 +450,9 @@ export class ContestRepository implements IContestRepository {
     contestId: number,
     winners: Array<{
       contestId: number;
-      userId: number;
+      userId: number | null;
       place: number;
+      displayUsername?: string | null;
     }>,
   ): Promise<void> {
     await this.dataSource.transaction(async (manager) => {

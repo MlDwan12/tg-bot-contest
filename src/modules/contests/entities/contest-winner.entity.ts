@@ -17,8 +17,15 @@ export class ContestWinner {
   @Column()
   contestId: number;
 
-  @Column()
-  userId: number;
+  // Реальный победитель ссылается на users; у фиктивного (ник без TG-аккаунта)
+  // userId = null, а имя хранится в displayUsername. Тип колонки задан явно:
+  // при union-типе (number | null) TypeORM не выводит его из метаданных.
+  @Column({ type: 'int', nullable: true })
+  userId: number | null;
+
+  // Ник, вписанный оператором вручную (@ivan_petrov) для фиктивного победителя.
+  @Column({ type: 'varchar', nullable: true })
+  displayUsername: string | null;
 
   @Column()
   place: number;
@@ -26,6 +33,6 @@ export class ContestWinner {
   @ManyToOne(() => Contest, (c) => c.winners, { onDelete: 'CASCADE' })
   contest: Contest;
 
-  @ManyToOne(() => User)
-  user: User;
+  @ManyToOne(() => User, { nullable: true })
+  user: User | null;
 }

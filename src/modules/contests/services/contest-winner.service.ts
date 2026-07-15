@@ -49,13 +49,22 @@ export class ContestWinnerService {
     winnerUserIds: number[],
     prizePlaces: number,
     actorUserId?: number,
+    fictitiousUsernames: string[] = [],
   ): Promise<void> {
+    // Фиктивные победители (ник без TG-аккаунта) не имеют userId и не влезают
+    // в winnerUserIds — фиксируем их ники в note, чтобы след «кто каких назначил»
+    // не терял выдуманных.
+    const note = fictitiousUsernames.length
+      ? `Фиктивные победители: ${fictitiousUsernames.join(', ')}`
+      : null;
+
     await this.contestWinnerAuditWriteRepo.record({
       contestId,
       strategy: WinnerStrategy.MANUAL,
       prizePlaces,
       winnerUserIds,
       assignedByUserId: actorUserId ?? null,
+      note,
     });
   }
 

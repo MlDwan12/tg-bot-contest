@@ -174,6 +174,38 @@ describe('характеризация: ветки participate()', () => {
     ]);
   });
 
+  it('🔴 ветка 3b: COMPLETED + фиктивный победитель → ник в username, telegramId/userId = null', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      status: ContestStatus.COMPLETED,
+    });
+
+    // Смешанные победители: реальный (есть user) + фиктивный (user отсутствует,
+    // только displayUsername). Проверяем, что фиктивный виден — ник попадает
+    // в поле username, а telegramId/userId остаются null.
+    const fakeWinners = [
+      { place: 1, userId: 42, user: { telegramId: 999, username: 'real_one' } },
+      { place: 2, userId: null, displayUsername: 'ivan_petrov', user: null },
+    ];
+    const { service } = makeService({
+      getContestWinners: async () => fakeWinners,
+    });
+
+    const result: any = await service.participate(contest.id, {
+      telegramId: '779',
+      groupId: '100',
+    });
+
+    console.log(
+      `[наблюдение] COMPLETED+фиктивный вернул: ${JSON.stringify(result)}`,
+    );
+
+    expect(result).toEqual([
+      { place: 1, telegramId: 999, userId: 42, username: 'real_one' },
+      { place: 2, telegramId: null, userId: null, username: 'ivan_petrov' },
+    ]);
+  });
+
   it('🟢 ветка 4: ACTIVE + обязательный канал, НЕ подписан → 403; участия нет', async () => {
     const creator = await createUser(ds);
     const contest = await createContest(ds, creator); // ACTIVE по умолчанию

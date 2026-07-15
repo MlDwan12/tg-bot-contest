@@ -64,7 +64,12 @@ export interface IContestRepository {
   setRequiredChannels(contestId: number, channelIds: number[]): Promise<void>;
   replaceWinners(
     contestId: number,
-    winners: Array<{ contestId: number; userId: number; place: number }>,
+    winners: Array<{
+      contestId: number;
+      userId: number | null;
+      place: number;
+      displayUsername?: string | null;
+    }>,
   ): Promise<void>;
 
   // ── запись: публикации ───────────────────────────────────────────────────

@@ -9,9 +9,12 @@ import { ContestWinner } from 'src/modules/contests/entities/contest-winner.enti
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 
 /**
- * ХАРАКТЕРИЗАЦИЯ (Фаза 10.3) — фиксируем ТЕКУЩЕЕ поведение ветвистого
- * MANUAL-блока `ContestsService.updateContest` ПЕРЕД выносом его в приватный
- * метод. Все правила ниже — 🟢 (закрепляем как есть). Вынос обязан сохранить 1:1.
+ * MANUAL-победители `ContestsService.updateContest`.
+ *
+ * Тесты 1–7 (🟢) — характеризация прежнего поведения, адаптированная под новый
+ * формат входа `winners` (объекты `{ telegramId } | { username }` вместо чисел).
+ * Тесты 8–13 (🔴→🟢) — новое поведение: фиктивные победители (ник без TG),
+ * смешанный список, валидация «либо-либо»/дублей/пустого ника.
  *
  * Сеть: собираем РЕАЛЬНЫЙ ContestsService (настоящий repos.contest + тест-БД),
  * фейкая только коллабораторов, не относящихся к назначению победителей.
@@ -77,7 +80,9 @@ describe('характеризация: updateContest — MANUAL-победит�
 
     let err: any;
     try {
-      await service.updateContest(contest.id, { winners: [123] } as any);
+      await service.updateContest(contest.id, {
+        winners: [{ telegramId: 123 }],
+      } as any);
     } catch (e) {
       err = e;
     }
@@ -104,7 +109,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     let err: any;
     try {
       await service.updateContest(contest.id, {
-        winners: [123],
+        winners: [{ telegramId: 123 }],
         winnerStrategy: WinnerStrategy.MANUAL,
       } as any);
     } catch (e) {
@@ -129,7 +134,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     let err: any;
     try {
       await service.updateContest(contest.id, {
-        winners: [5, 5],
+        winners: [{ telegramId: 5 }, { telegramId: 5 }],
         winnerStrategy: WinnerStrategy.MANUAL,
       } as any);
     } catch (e) {
@@ -154,7 +159,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     let err: any;
     try {
       await service.updateContest(contest.id, {
-        winners: [5],
+        winners: [{ telegramId: 5 }],
         winnerStrategy: WinnerStrategy.MANUAL,
       } as any);
     } catch (e) {
@@ -180,7 +185,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     let err: any;
     try {
       await service.updateContest(contest.id, {
-        winners: [999],
+        winners: [{ telegramId: 999 }],
         winnerStrategy: WinnerStrategy.MANUAL,
       } as any);
     } catch (e) {
@@ -211,7 +216,10 @@ describe('характеризация: updateContest — MANUAL-победит�
 
     await service.updateContest(
       contest.id,
-      { winners: [111, 222], winnerStrategy: WinnerStrategy.MANUAL } as any,
+      {
+        winners: [{ telegramId: 111 }, { telegramId: 222 }],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any,
       undefined,
       7, // actorUserId — проверяем проброс в аудит
     );
@@ -227,11 +235,13 @@ describe('характеризация: updateContest — MANUAL-победит�
       { userId: uA.id, place: 1 },
       { userId: uB.id, place: 2 },
     ]);
+    // 5-й аргумент — фиктивные ники (пусто: оба победителя реальные).
     expect(recordManualAssignment).toHaveBeenCalledWith(
       contest.id,
       [uA.id, uB.id],
       2,
       7,
+      [],
     );
   });
 
@@ -261,5 +271,214 @@ describe('характеризация: updateContest — MANUAL-победит�
       `[наблюдение] MANUAL→RANDOM: строк победителей после=${winners.length} (ожидаем 0)`,
     );
     expect(winners.length).toBe(0);
+  });
+
+  it('🔴 8: MANUAL + фиктивный победитель (ник без TG) → строка userId=null + displayUsername', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    // findByTelegramId по умолчанию null — но фиктивных мы и не ищем.
+    const { service, repos } = makeService({});
+
+    await service.updateContest(contest.id, {
+      winners: [{ username: '@ivan_petrov' }],
+      winnerStrategy: WinnerStrategy.MANUAL,
+    } as any);
+
+    const winners = await repos.winner.findByContestId(contest.id);
+    console.log(
+      `[наблюдение] фиктивный: строк=${winners.length}, ` +
+        `userId=${winners[0]?.userId}, displayUsername="${winners[0]?.displayUsername}", place=${winners[0]?.place}`,
+    );
+
+    expect(winners.length).toBe(1);
+    expect(winners[0].userId).toBeNull();
+    expect(winners[0].displayUsername).toBe('ivan_petrov'); // @ снят
+    expect(winners[0].place).toBe(1);
+  });
+
+  it('🔴 9: MANUAL + смешанный список (реальный + фиктивный) → порядок мест + аудит', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 2,
+    });
+    const uA = await createUser(ds);
+    const { service, repos, recordManualAssignment } = makeService({
+      findByTelegramId: async (tid: string) => (tid === '111' ? uA : null),
+    });
+
+    await service.updateContest(
+      contest.id,
+      {
+        winners: [{ telegramId: 111 }, { username: 'masha' }],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any,
+      undefined,
+      7,
+    );
+
+    const winners = await repos.winner.findByContestId(contest.id);
+    console.log(
+      `[наблюдение] смешанный: ` +
+        winners
+          .map(
+            (w) =>
+              `место${w.place}[userId=${w.userId},nick=${w.displayUsername}]`,
+          )
+          .join(' ') +
+        `, аудит=${JSON.stringify(recordManualAssignment.mock.calls[0])}`,
+    );
+
+    expect(
+      winners.map((w) => ({
+        userId: w.userId,
+        displayUsername: w.displayUsername,
+        place: w.place,
+      })),
+    ).toEqual([
+      { userId: uA.id, displayUsername: null, place: 1 },
+      { userId: null, displayUsername: 'masha', place: 2 },
+    ]);
+    // Реальный → winnerUserIds; фиктивный ник → 5-й аргумент.
+    expect(recordManualAssignment).toHaveBeenCalledWith(
+      contest.id,
+      [uA.id],
+      2,
+      7,
+      ['masha'],
+    );
+  });
+
+  it('🔴 10: MANUAL + дубли ников (разный регистр) → 400', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 2,
+    });
+    const { service } = makeService({});
+
+    let err: any;
+    try {
+      await service.updateContest(contest.id, {
+        winners: [{ username: 'Ivan' }, { username: 'ivan' }],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any);
+    } catch (e) {
+      err = e;
+    }
+
+    console.log(
+      `[наблюдение] дубли ников: ${err?.constructor?.name} "${err?.message}"`,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('дубликаты');
+  });
+
+  it('🔴 11: MANUAL + у победителя оба поля (telegramId и ник) → 400', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    const { service } = makeService({});
+
+    let err: any;
+    try {
+      await service.updateContest(contest.id, {
+        winners: [{ telegramId: 5, username: 'ivan' }],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any);
+    } catch (e) {
+      err = e;
+    }
+
+    console.log(
+      `[наблюдение] оба поля: ${err?.constructor?.name} "${err?.message}"`,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('либо');
+  });
+
+  it('🔴 12: MANUAL + у победителя нет ни telegramId, ни ника → 400', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    const { service } = makeService({});
+
+    let err: any;
+    try {
+      await service.updateContest(contest.id, {
+        winners: [{}],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any);
+    } catch (e) {
+      err = e;
+    }
+
+    console.log(
+      `[наблюдение] пустой элемент: ${err?.constructor?.name} "${err?.message}"`,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('ни telegramId, ни ник');
+  });
+
+  it('🔴 13: MANUAL + ник из одного «@» (пустой после нормализации) → 400', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    const { service } = makeService({});
+
+    let err: any;
+    try {
+      await service.updateContest(contest.id, {
+        winners: [{ username: '@' }],
+        winnerStrategy: WinnerStrategy.MANUAL,
+      } as any);
+    } catch (e) {
+      err = e;
+    }
+
+    console.log(
+      `[наблюдение] пустой ник: ${err?.constructor?.name} "${err?.message}"`,
+    );
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('пустым');
+  });
+
+  it('🔴 14: фиктивный победитель виден в GET-выдаче (findByIdWithRelations) — ник в user.username, telegramId=null', async () => {
+    const creator = await createUser(ds);
+    const contest = await createContest(ds, creator, {
+      winnerStrategy: WinnerStrategy.MANUAL,
+      prizePlaces: 1,
+    });
+    const { service, repos } = makeService({});
+
+    // Записываем фиктивного через рабочий путь updateContest.
+    await service.updateContest(contest.id, {
+      winners: [{ username: '@ivan_petrov' }],
+      winnerStrategy: WinnerStrategy.MANUAL,
+    } as any);
+
+    // Читаем тем же путём, что и GET /contests/:id.
+    const detail: any = await repos.contest.findByIdWithRelations(contest.id);
+    console.log(
+      `[наблюдение] GET фиктивный: ${JSON.stringify(detail.winners)}`,
+    );
+
+    expect(detail.winners).toEqual([
+      {
+        id: expect.any(Number),
+        userId: null,
+        place: 1,
+        user: { id: null, telegramId: null, username: 'ivan_petrov' },
+      },
+    ]);
   });
 });

@@ -43,14 +43,78 @@
       "isPrivate": false,
       "metaSortKey": 1720915200000
     },
-
-    { "_id": "fld_health", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Health", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -100 },
-    { "_id": "fld_auth", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Auth", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -90 },
-    { "_id": "fld_channels", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Channels", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -80 },
-    { "_id": "fld_contests", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Contests", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -70 },
-    { "_id": "fld_users", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Users", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -60 },
-    { "_id": "fld_admin", "_type": "request_group", "parentId": "wrk_telegram_bot", "modified": 1720915200000, "created": 1720915200000, "name": "Admin (Bull Board)", "description": "", "environment": {}, "environmentPropertyOrder": null, "metaSortKey": -50 },
-
+    {
+      "_id": "fld_health",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Health",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -100
+    },
+    {
+      "_id": "fld_auth",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Auth",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -90
+    },
+    {
+      "_id": "fld_channels",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Channels",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -80
+    },
+    {
+      "_id": "fld_contests",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Contests",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -70
+    },
+    {
+      "_id": "fld_users",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Users",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -60
+    },
+    {
+      "_id": "fld_admin",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "Admin (Bull Board)",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -50
+    },
     {
       "_id": "req_health_check",
       "_type": "request",
@@ -74,7 +138,6 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global"
     },
-
     {
       "_id": "req_auth_login",
       "_type": "request",
@@ -90,7 +153,12 @@
         "text": "{\n  \"username\": \"{{ _.admin_username }}\",\n  \"password\": \"{{ _.admin_password }}\"\n}"
       },
       "parameters": [],
-      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
       "authentication": {},
       "metaSortKey": -100,
       "isPrivate": false,
@@ -147,7 +215,6 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global"
     },
-
     {
       "_id": "req_channels_create",
       "_type": "request",
@@ -163,7 +230,12 @@
         "text": "{\n  \"telegramId\": -1001234567890,\n  \"telegramUsername\": \"my_channel\",\n  \"name\": \"Мой канал\",\n  \"type\": \"casino\"\n}"
       },
       "parameters": [],
-      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
       "authentication": {},
       "metaSortKey": -100,
       "isPrivate": false,
@@ -186,10 +258,24 @@
       "method": "GET",
       "body": {},
       "parameters": [
-        { "name": "page", "value": "1" },
-        { "name": "limit", "value": "10" },
-        { "name": "type", "value": "casino", "disabled": true },
-        { "name": "isActive", "value": "true", "disabled": true }
+        {
+          "name": "page",
+          "value": "1"
+        },
+        {
+          "name": "limit",
+          "value": "10"
+        },
+        {
+          "name": "type",
+          "value": "casino",
+          "disabled": true
+        },
+        {
+          "name": "isActive",
+          "value": "true",
+          "disabled": true
+        }
       ],
       "headers": [],
       "authentication": {},
@@ -248,7 +334,6 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global"
     },
-
     {
       "_id": "req_contest_getall",
       "_type": "request",
@@ -261,13 +346,39 @@
       "method": "GET",
       "body": {},
       "parameters": [
-        { "name": "page", "value": "1" },
-        { "name": "limit", "value": "10" },
-        { "name": "status", "value": "active", "disabled": true },
-        { "name": "winnerStrategy", "value": "random", "disabled": true },
-        { "name": "search", "value": "", "disabled": true },
-        { "name": "sortBy", "value": "createdAt", "disabled": true },
-        { "name": "sortOrder", "value": "DESC", "disabled": true }
+        {
+          "name": "page",
+          "value": "1"
+        },
+        {
+          "name": "limit",
+          "value": "10"
+        },
+        {
+          "name": "status",
+          "value": "active",
+          "disabled": true
+        },
+        {
+          "name": "winnerStrategy",
+          "value": "random",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "",
+          "disabled": true
+        },
+        {
+          "name": "sortBy",
+          "value": "createdAt",
+          "disabled": true
+        },
+        {
+          "name": "sortOrder",
+          "value": "DESC",
+          "disabled": true
+        }
       ],
       "headers": [],
       "authentication": {},
@@ -292,9 +403,19 @@
       "method": "GET",
       "body": {},
       "parameters": [
-        { "name": "page", "value": "1" },
-        { "name": "limit", "value": "10" },
-        { "name": "status", "value": "active", "disabled": true }
+        {
+          "name": "page",
+          "value": "1"
+        },
+        {
+          "name": "limit",
+          "value": "10"
+        },
+        {
+          "name": "status",
+          "value": "active",
+          "disabled": true
+        }
       ],
       "headers": [],
       "authentication": {},
@@ -320,17 +441,53 @@
       "body": {
         "mimeType": "multipart/form-data",
         "params": [
-          { "name": "name", "value": "Тестовый конкурс" },
-          { "name": "description", "value": "Описание конкурса" },
-          { "name": "winnerStrategy", "value": "random" },
-          { "name": "prizePlaces", "value": "3" },
-          { "name": "startDate", "value": "2026-08-01T10:00:00.000Z" },
-          { "name": "endDate", "value": "2026-08-10T10:00:00.000Z" },
-          { "name": "publishChannelIds", "value": "[1]" },
-          { "name": "requiredChannelIds", "value": "[1]" },
-          { "name": "postText", "value": "Участвуй и выигрывай!" },
-          { "name": "buttonText", "value": "Участвовать" },
-          { "name": "media", "value": "", "type": "file", "fileName": "", "disabled": true }
+          {
+            "name": "name",
+            "value": "Тестовый конкурс"
+          },
+          {
+            "name": "description",
+            "value": "Описание конкурса"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "random"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "3"
+          },
+          {
+            "name": "startDate",
+            "value": "2026-08-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2026-08-10T10:00:00.000Z"
+          },
+          {
+            "name": "publishChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "requiredChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "postText",
+            "value": "Участвуй и выигрывай!"
+          },
+          {
+            "name": "buttonText",
+            "value": "Участвовать"
+          },
+          {
+            "name": "media",
+            "value": "",
+            "type": "file",
+            "fileName": "",
+            "disabled": true
+          }
         ]
       },
       "parameters": [],
@@ -375,17 +532,37 @@
       "modified": 1720915200000,
       "created": 1720915200000,
       "name": "PATCH /contest/:id 🔒",
-      "description": "Обновить конкурс (multipart/form-data). Все поля опциональны + status, winners[].",
+      "description": "Обновить конкурс (multipart). winners: массив объектов {telegramId} ИЛИ {username}. См. группу «🆕 Фиктивные победители».",
       "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
       "method": "PATCH",
       "body": {
         "mimeType": "multipart/form-data",
         "params": [
-          { "name": "name", "value": "Обновлённое имя" },
-          { "name": "description", "value": "Новое описание" },
-          { "name": "status", "value": "active", "disabled": true },
-          { "name": "winners", "value": "[1,2]", "disabled": true },
-          { "name": "media", "value": "", "type": "file", "fileName": "", "disabled": true }
+          {
+            "name": "name",
+            "value": "Обновлённое имя"
+          },
+          {
+            "name": "description",
+            "value": "Новое описание"
+          },
+          {
+            "name": "status",
+            "value": "active",
+            "disabled": true
+          },
+          {
+            "name": "winners",
+            "value": "[{\"telegramId\":111},{\"username\":\"@ivan_petrov\"}]",
+            "disabled": true
+          },
+          {
+            "name": "media",
+            "value": "",
+            "type": "file",
+            "fileName": "",
+            "disabled": true
+          }
         ]
       },
       "parameters": [],
@@ -415,7 +592,12 @@
         "text": "{\n  \"telegramId\": \"123456789\",\n  \"groupId\": \"group-1\",\n  \"username\": \"testuser\",\n  \"firstName\": \"Ivan\",\n  \"lastName\": \"Petrov\"\n}"
       },
       "parameters": [],
-      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
       "authentication": {},
       "metaSortKey": -75,
       "isPrivate": false,
@@ -495,7 +677,6 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global"
     },
-
     {
       "_id": "req_users_create",
       "_type": "request",
@@ -511,7 +692,12 @@
         "text": "{\n  \"login\": \"admin_user\",\n  \"password\": \"StrongPass123\"\n}"
       },
       "parameters": [],
-      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
       "authentication": {},
       "metaSortKey": -100,
       "isPrivate": false,
@@ -534,10 +720,24 @@
       "method": "GET",
       "body": {},
       "parameters": [
-        { "name": "page", "value": "1" },
-        { "name": "limit", "value": "10" },
-        { "name": "group", "value": "", "disabled": true },
-        { "name": "search", "value": "", "disabled": true }
+        {
+          "name": "page",
+          "value": "1"
+        },
+        {
+          "name": "limit",
+          "value": "10"
+        },
+        {
+          "name": "group",
+          "value": "",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "",
+          "disabled": true
+        }
       ],
       "headers": [],
       "authentication": {},
@@ -632,14 +832,46 @@
       "body": {
         "mimeType": "multipart/form-data",
         "params": [
-          { "name": "type", "value": "ALL" },
-          { "name": "text", "value": "Привет всем!" },
-          { "name": "userId", "value": "1", "disabled": true },
-          { "name": "groupId", "value": "group-1", "disabled": true },
-          { "name": "contestId", "value": "1", "disabled": true },
-          { "name": "buttonText", "value": "Открыть", "disabled": true },
-          { "name": "buttonUrl", "value": "https://example.com", "disabled": true },
-          { "name": "media", "value": "", "type": "file", "fileName": "", "disabled": true }
+          {
+            "name": "type",
+            "value": "ALL"
+          },
+          {
+            "name": "text",
+            "value": "Привет всем!"
+          },
+          {
+            "name": "userId",
+            "value": "1",
+            "disabled": true
+          },
+          {
+            "name": "groupId",
+            "value": "group-1",
+            "disabled": true
+          },
+          {
+            "name": "contestId",
+            "value": "1",
+            "disabled": true
+          },
+          {
+            "name": "buttonText",
+            "value": "Открыть",
+            "disabled": true
+          },
+          {
+            "name": "buttonUrl",
+            "value": "https://example.com",
+            "disabled": true
+          },
+          {
+            "name": "media",
+            "value": "",
+            "type": "file",
+            "fileName": "",
+            "disabled": true
+          }
         ]
       },
       "parameters": [],
@@ -654,7 +886,6 @@
       "settingRebuildPath": true,
       "settingFollowRedirects": "global"
     },
-
     {
       "_id": "req_admin_queues",
       "_type": "request",
@@ -670,6 +901,520 @@
       "headers": [],
       "authentication": {},
       "metaSortKey": -100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "fld_fictitious_winners",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "🆕 Фиктивные победители (ручной выбор)",
+      "description": "Полный флоу новой фичи: реальный по telegramId + выдуманный ник без TG. Запускать по порядку (F1→F14). Требует логина (группа Auth).",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 100
+    },
+    {
+      "_id": "req_fw_create",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F1 · POST создать MANUAL-конкурс",
+      "description": "201. Запомни data.id и впиши в env contest_id. Конкурс создаётся PENDING.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "name",
+            "value": "Фиктивные — тест"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "startDate",
+            "value": "2027-03-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2027-03-08T10:00:00.000Z"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_activate",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F2 · PATCH перевести в ACTIVE",
+      "description": "200. Обязательно ДО назначения победителей: на PENDING назначение даёт 400.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "status",
+            "value": "active"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -95,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_participant",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F3 · POST создать реального участника (tgId 111)",
+      "description": "200/201. Заводит юзера с telegramId 111 — понадобится как реальный победитель.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"111\",\n  \"groupId\": \"g1\",\n  \"username\": \"real_user\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -90,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_mixed",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F4 · PATCH ✅ смешанные (реальный 111 + ник)",
+      "description": "200. Место1 — реальный (111), место2 — фиктивный ivan_petrov (userId null).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"telegramId\":111},{\"username\":\"@ivan_petrov\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -85,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_get",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F5 · GET проверить победителей",
+      "description": "200. winners[0].user.telegramId=111; winners[1].user={id:null,telegramId:null,username:\"ivan_petrov\"}, userId=null.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "GET",
+      "body": {
+        "mimeType": null
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -80,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_allfic",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F6 · PATCH ✅ все выдуманные",
+      "description": "200. Оба userId=null, displayUsername=masha/vasya.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"username\":\"@masha\"},{\"username\":\"vasya\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -75,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_both",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F7 · PATCH ❌ оба поля у элемента",
+      "description": "400 «...либо telegramId, либо ник, но не оба».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"telegramId\":111,\"username\":\"x\"},{\"username\":\"y\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -70,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_neither",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F8 · PATCH ❌ ни одного поля",
+      "description": "400 «...не указан ни telegramId, ни ник».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{},{\"username\":\"y\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -65,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_dupnick",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F9 · PATCH ❌ дубли ников (разный регистр)",
+      "description": "400 «...содержит дубликаты» (ники case-insensitive).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"username\":\"Ivan\"},{\"username\":\"ivan\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -60,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_count",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F10 · PATCH ❌ кол-во ≠ призовым местам",
+      "description": "400 «...соответствовать количеству призовых мест».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"username\":\"solo\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -55,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_notfound",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F11 · PATCH ❌ реальный telegramId не найден",
+      "description": "404 «Не найдены пользователи с telegramId: 999999».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"telegramId\":999999},{\"username\":\"x\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -50,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_emptynick",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F12 · PATCH ❌ пустой ник («@»)",
+      "description": "400 «Ник победителя не может быть пустым».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "2"
+          },
+          {
+            "name": "winners",
+            "value": "[{\"username\":\"@\"},{\"username\":\"y\"}]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -45,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_complete",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F13 · PATCH завершить конкурс",
+      "description": "200, статус completed. Победители = последние успешно назначенные (F6 или переcommit F4).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/complete",
+      "method": "PATCH",
+      "body": {
+        "mimeType": null
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -40,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_fw_part_completed",
+      "_type": "request",
+      "parentId": "fld_fictitious_winners",
+      "modified": 1720915200000,
+      "created": 1720915200000,
+      "name": "F14 · POST participate (завершён) — победители наружу",
+      "description": "200, список победителей. Фиктивные видны: username=ник, telegramId=null, userId=null.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"777\",\n  \"groupId\": \"g1\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -35,
       "isPrivate": false,
       "settingStoreCookies": true,
       "settingSendCookies": true,
