@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { validationSchema } from './validation.schema';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { HttpOnlyThrottlerGuard } from 'src/common/guards/http-only-throttler.guard';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppImports } from './modules';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -68,12 +69,13 @@ import { ScheduleModule } from '@nestjs/schedule';
   ],
   providers: [
     // APP_GUARD — это специальный токен NestJS для глобальных guard'ов.
-    // ThrottlerGuard применяется ко ВСЕМ роутам автоматически.
-    // На конкретных роутах можно переопределить через @Throttle()
-    // или отключить через @SkipThrottle().
+    // Применяется ко ВСЕМ обработчикам, а не только к HTTP-роутам: базовый
+    // ThrottlerGuard накрывал и листенеры Telegraf и ронял их (см.
+    // HttpOnlyThrottlerGuard). На конкретных роутах можно переопределить
+    // через @Throttle() или отключить через @SkipThrottle().
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: HttpOnlyThrottlerGuard,
     },
   ],
 })
