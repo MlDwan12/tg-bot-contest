@@ -115,10 +115,12 @@ export class ContestLifecycleService {
         return;
       }
 
-      // Пул — только прошедшие перепроверку. Отписавшиеся после участия в
-      // розыгрыш не идут и не учитываются при сверке с числом призовых мест.
+      // Ворота «есть ли кого награждать» считаем по ВСЕМ участникам, а не по
+      // прошедшим перепроверку: отсев подписок касается только автоматического
+      // розыгрыша. У MANUAL победителя выбирает оператор, и его решение не
+      // должно отменяться тем, что участники отписались.
       const participants =
-        await this.contestParticipationRepo.findEligibleByContestId(contest.id);
+        await this.contestParticipationRepo.findManyByContestId(contest.id);
       const hasParticipants = participants.length > 0;
 
       if (hasParticipants) {
@@ -146,9 +148,17 @@ export class ContestLifecycleService {
           // окончательно упадёт и конкурс навсегда зависнет в ACTIVE. Вместо клина
           // даём тот же grace-период, что и MANUAL: зовём админа уменьшить число
           // мест (либо за это время подтянутся ещё участники — конкурс всё ещё
-          // ACTIVE). Считаем уникальных так же, как сам розыгрыш: по user.id.
+          // ACTIVE). Считаем уникальных так же, как сам розыгрыш: по user.id и
+          // только по прошедшим перепроверку подписки — отписавшиеся в пул
+          // resolveAutomaticWinners не попадут, значит и здесь их учитывать
+          // нельзя, иначе сверка с числом мест разойдётся с розыгрышем.
+          const eligibleParticipants =
+            await this.contestParticipationRepo.findEligibleByContestId(
+              contest.id,
+            );
+
           const uniqueParticipantCount = new Set(
-            participants
+            eligibleParticipants
               .map((p) => p.user?.id)
               .filter((id): id is number => id != null),
           ).size;
