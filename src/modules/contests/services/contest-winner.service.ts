@@ -79,7 +79,11 @@ export class ContestWinnerService {
     });
   }
 
-  async resolveWinners(contest: WinnerDrawContext): Promise<User[]> {
+  // Приватный: единственный корректный вход в розыгрыш — resolveAndSaveWinners,
+  // который ДО этого вызова короткозамыкается на уже записанных победителях
+  // (fake-safe). Прямой вызов в обход обошёл бы эту защиту и упёрся бы в
+  // resolveManualWinners, несовместимый с фиктивными победителями (user=null).
+  private async resolveWinners(contest: WinnerDrawContext): Promise<User[]> {
     if (!contest) {
       throw new NotFoundException('Конкурс не найден');
     }
@@ -291,10 +295,18 @@ export class ContestWinnerService {
       contest.id,
     );
     if (existingWinners.length > 0) {
-      const users = existingWinners
-        .map((w) => w.user)
-        .filter((u): u is User => u != null);
-      await this.syncParticipantsWithResolvedWinners(contest.id, users);
+      // Место берём из самой строки победителя (winner.place), а НЕ из индекса
+      // отфильтрованного массива: у фиктивного победителя (ник без TG) user=null,
+      // после его отсева индексы сдвигаются и реальный победитель получил бы
+      // чужое место в participants.prizePlace. Фиктивных в participants нет —
+      // синхронизируем флаги только по реальным, но с их настоящими местами.
+      const winnerFlags = existingWinners
+        .filter((w) => w.user != null)
+        .map((w) => ({ userId: (w.user as User).id, place: w.place }));
+      await this.contestParticipationRepo.syncWinnerFlagsInTransaction(
+        contest.id,
+        winnerFlags,
+      );
       return;
     }
 
