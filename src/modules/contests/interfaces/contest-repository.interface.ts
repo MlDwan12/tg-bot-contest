@@ -39,11 +39,12 @@ export interface IContestRepository {
     contestIdOrIds: number | number[],
     status: PublicationStatus,
   ): Promise<number[]>;
-  findPublicationForButtonUpdate(publicationId: number): Promise<{
+  findPublicationForFinishUpdate(publicationId: number): Promise<{
     id: number;
     contestId: number;
     chatId: number;
     telegramMessageId?: number;
+    payload?: ContestPublication['payload'];
   } | null>;
   findPublishedPublicationIdsForContest(
     contestId: number,
