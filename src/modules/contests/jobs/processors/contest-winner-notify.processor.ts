@@ -8,7 +8,12 @@ import { jobMeta } from 'src/common/helpers/job-meta.helper';
 import { BOT_MESSAGE_REPOSITORY } from 'src/common/constants';
 import type { IBotMessageRepository } from '../../interfaces';
 import { BotMessageContentType, BotMessageType } from 'src/common/enums/bot';
-import { WinnerNotifyJobData } from '../../services/contest-winner-notify.service';
+import {
+  ContestWinnerNotifyService,
+  WinnersSummaryJobData,
+  WinnerNotifyJobData,
+  WINNERS_SUMMARY_JOB,
+} from '../../services/contest-winner-notify.service';
 
 const telegramLimiter = new Bottleneck({
   maxConcurrent: 5,
@@ -21,13 +26,25 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
     @Inject(BOT_MESSAGE_REPOSITORY)
     private readonly botMessageRepo: IBotMessageRepository,
 
+    private readonly contestWinnerNotifyService: ContestWinnerNotifyService,
     private readonly telegramService: TelegramService,
     private readonly logger: Logger,
   ) {
     super();
   }
 
-  async process(job: Job<WinnerNotifyJobData>): Promise<void> {
+  async process(
+    job: Job<WinnerNotifyJobData | WinnersSummaryJobData>,
+  ): Promise<void> {
+    if (job.name === WINNERS_SUMMARY_JOB) {
+      await this.sendSummary(job as Job<WinnersSummaryJobData>);
+      return;
+    }
+
+    await this.notifyWinner(job as Job<WinnerNotifyJobData>);
+  }
+
+  private async notifyWinner(job: Job<WinnerNotifyJobData>): Promise<void> {
     const { contestId, userId, telegramId, text } = job.data;
 
     // Защита от повторной отправки при ретрае: сообщение могло уйти, а запись
@@ -71,6 +88,8 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
         { ...jobMeta(job), contestId, userId, messageId: sent.messageId },
         'notify-winner: sent',
       );
+
+      await this.tryEnqueueSummary(contestId);
     } catch (error: any) {
       const code = error?.response?.error_code;
       const description = error?.response?.description;
@@ -97,6 +116,8 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
           { ...jobMeta(job), contestId, userId, code, tg: errorText },
           'notify-winner: перманентный отказ Telegram -> FAILED без ретрая',
         );
+
+        await this.tryEnqueueSummary(contestId);
         return;
       }
 
@@ -115,6 +136,8 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
           contentType,
           error: errorText,
         });
+
+        await this.tryEnqueueSummary(contestId);
       }
 
       this.logger.error(
@@ -131,6 +154,57 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
       );
 
       throw error;
+    }
+  }
+
+  /**
+   * Сводка администраторам по итогам конкурса. Ставится последним отработавшим
+   * уведомлением, поэтому джоб один на конкурс (дедупликация по jobId).
+   */
+  private async sendSummary(job: Job<WinnersSummaryJobData>): Promise<void> {
+    const { contestId } = job.data;
+
+    const summary =
+      await this.contestWinnerNotifyService.buildWinnersSummary(contestId);
+
+    if (!summary) return;
+
+    for (const adminTelegramId of summary.adminTelegramIds) {
+      try {
+        await telegramLimiter.schedule(() =>
+          this.telegramService.sendMailingMessage({
+            chatId: adminTelegramId,
+            text: summary.text,
+          }),
+        );
+      } catch (error: any) {
+        // Недоступность одного администратора не должна лишать сводки
+        // остальных — и тем более ретраить рассылку всем заново.
+        this.logger.error(
+          { ...jobMeta(job), contestId, adminTelegramId, err: error },
+          'notify-winners-summary: не удалось отправить сводку администратору',
+        );
+      }
+    }
+
+    this.logger.log(
+      { ...jobMeta(job), contestId, admins: summary.adminTelegramIds.length },
+      'notify-winners-summary: сводка отправлена',
+    );
+  }
+
+  /**
+   * Сводка — побочный эффект уведомления, а не его часть: её сбой не должен
+   * ронять джоб и заставлять переотправлять уже доставленное сообщение.
+   */
+  private async tryEnqueueSummary(contestId: number): Promise<void> {
+    try {
+      await this.contestWinnerNotifyService.enqueueSummaryIfComplete(contestId);
+    } catch (error: any) {
+      this.logger.error(
+        { contestId, err: error },
+        'notify-winner: не удалось поставить сводку администраторам',
+      );
     }
   }
 }

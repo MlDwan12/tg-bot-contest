@@ -24,7 +24,7 @@ import { TelegramService } from 'src/modules/bot/bot.service';
 import { ContestWinnerService } from './contest-winner.service';
 import {
   buildContestResultsText,
-  ResultsWinner,
+  toResultsWinners,
   TELEGRAM_CAPTION_LIMIT,
   TELEGRAM_TEXT_LIMIT,
 } from './contest-results-text.util';
@@ -172,7 +172,7 @@ export class ContestPublicationService {
     const results = buildContestResultsText({
       name: contest.name,
       description: contest.description,
-      winners: this.toResultsWinners(winners),
+      winners: toResultsWinners(winners),
       limit: params.hasPhoto ? TELEGRAM_CAPTION_LIMIT : TELEGRAM_TEXT_LIMIT,
     });
 
@@ -185,28 +185,6 @@ export class ContestPublicationService {
       shownWinners: results.shownWinners,
       truncated: results.truncated,
     };
-  }
-
-  /**
-   * Строки победителей из БД → вход форматтера. Фиктивный победитель (ник,
-   * вписанный оператором без TG-аккаунта) не имеет user: его имя лежит в
-   * displayUsername, и форматтер берёт именно его.
-   */
-  private toResultsWinners(
-    winners: Array<{
-      place: number;
-      userId: number | null;
-      displayUsername: string | null;
-      user?: { username?: string; firstName?: string } | null;
-    }>,
-  ): ResultsWinner[] {
-    return winners.map((winner) => ({
-      place: winner.place,
-      username: winner.user?.username,
-      firstName: winner.user?.firstName,
-      displayUsername: winner.displayUsername,
-      userId: winner.userId,
-    }));
   }
 
   async recreatePendingPublications(params: {
@@ -258,7 +236,7 @@ export class ContestPublicationService {
     // базовым текстом.
     const winners =
       contest.status === ContestStatus.COMPLETED
-        ? this.toResultsWinners(
+        ? toResultsWinners(
             await this.contestWinnerService.getContestWinners(contest.id),
           )
         : [];

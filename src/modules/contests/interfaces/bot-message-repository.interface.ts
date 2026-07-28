@@ -1,4 +1,8 @@
-import { BotMessageContentType, BotMessageType } from 'src/common/enums/bot';
+import {
+  BotMessageContentType,
+  BotMessageStatus,
+  BotMessageType,
+} from 'src/common/enums/bot';
 
 /**
  * Единый контракт репозитория агрегата BotMessage (таблица bot_messages) —
@@ -37,9 +41,13 @@ export interface IBotMessageRepository {
     error: string;
   }): Promise<void>;
 
-  /** Сводка доставки по конкурсу — для отчёта администраторам. */
-  countByStatus(
+  /**
+   * Кому уже отправлено (или не отправлено) — для сводки администраторам и для
+   * проверки, что все уведомления по конкурсу отработали.
+   */
+  findUserIdsByStatus(
     contestId: number,
     type: BotMessageType,
-  ): Promise<{ sent: number; failed: number }>;
+    status: BotMessageStatus,
+  ): Promise<number[]>;
 }

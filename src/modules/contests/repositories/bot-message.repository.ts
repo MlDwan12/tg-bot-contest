@@ -35,16 +35,17 @@ export class BotMessageRepository implements IBotMessageRepository {
     });
   }
 
-  async countByStatus(
+  async findUserIdsByStatus(
     contestId: number,
     type: BotMessageType,
-  ): Promise<{ sent: number; failed: number }> {
-    const [sent, failed] = await Promise.all([
-      this.repo.countBy({ contestId, type, status: BotMessageStatus.SENT }),
-      this.repo.countBy({ contestId, type, status: BotMessageStatus.FAILED }),
-    ]);
+    status: BotMessageStatus,
+  ): Promise<number[]> {
+    const rows = await this.repo.find({
+      where: { contestId, type, status },
+      select: { userId: true },
+    });
 
-    return { sent, failed };
+    return rows.map((row) => row.userId);
   }
 
   // ── запись ──────────────────────────────────────────────────────────────

@@ -36,6 +36,28 @@ const RESULTS_HEADER = '🏆 Победители:';
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 /**
+ * Строки победителей из БД → вход форматтеров. Фиктивный победитель (ник,
+ * вписанный оператором без TG-аккаунта) не имеет user: его имя лежит в
+ * displayUsername.
+ */
+export function toResultsWinners(
+  winners: Array<{
+    place: number;
+    userId: number | null;
+    displayUsername: string | null;
+    user?: { username?: string; firstName?: string } | null;
+  }>,
+): ResultsWinner[] {
+  return winners.map((winner) => ({
+    place: winner.place,
+    username: winner.user?.username,
+    firstName: winner.user?.firstName,
+    displayUsername: winner.displayUsername,
+    userId: winner.userId,
+  }));
+}
+
+/**
  * Экранируем то, что пришло от пользователя/оператора: посты уходят с
  * parse_mode=HTML, и `<` в нике сломает разбор всего сообщения.
  * Название и описание конкурса НЕ экранируем — там HTML-разметка допустима
