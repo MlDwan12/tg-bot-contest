@@ -35,6 +35,7 @@ import {
   ContestJobsService,
   ContestWinnerNotifyService,
   ContestSubscriptionRecheckService,
+  ContestStatsService,
 } from './services';
 import { BotModule } from '../bot/bot.module';
 import {
@@ -69,6 +70,7 @@ import {
     ContestWinnerService,
     ContestWinnerNotifyService,
     ContestSubscriptionRecheckService,
+    ContestStatsService,
     ContestJobsService,
     ContestCountersProcessor,
     ContestWinnerNotifyProcessor,

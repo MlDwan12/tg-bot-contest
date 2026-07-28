@@ -20,8 +20,10 @@ import {
   ContestsParticipateService,
   ContestsService,
   ContestWinnerService,
+  ContestStatsService,
 } from './services';
 import { CreateContestDto, UpdateContestDto } from './dto';
+import { ContestStatsDto } from './dto/contest-stats.dto';
 import { UserId } from 'src/common/decorators';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ParticipateContestDto } from './dto/participate-contest.dto';
@@ -38,6 +40,7 @@ export class ContestsController {
     private readonly contestLifecycleService: ContestLifecycleService,
     private readonly contestsParticipateService: ContestsParticipateService,
     private readonly contestWinnerService: ContestWinnerService,
+    private readonly contestStatsService: ContestStatsService,
     private readonly logger: Logger,
   ) {}
 
@@ -100,6 +103,19 @@ export class ContestsController {
   ): Promise<ContestWithRelations> {
     this.logger.debug({ id }, 'getContestById');
     return this.contestsService.getContestById(id);
+  }
+
+  /**
+   * Сводка по конкурсу: сколько участников отсеялось на перепроверке подписки
+   * и до скольких победителей дошло личное уведомление. Под гардом — это
+   * внутренняя аналитика, а не публичная выдача.
+   */
+  @Get(':id/stats')
+  @UseGuards(JwtAuthGuard)
+  async getContestStats(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ContestStatsDto> {
+    return this.contestStatsService.getContestStats(id);
   }
 
   @Patch(':id/complete')

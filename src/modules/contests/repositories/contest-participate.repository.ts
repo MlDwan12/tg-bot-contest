@@ -71,6 +71,34 @@ export class ContestParticipationRepository implements IContestParticipationRepo
     });
   }
 
+  /**
+   * Разрез участий по итогу перепроверки подписки — метрика качества
+   * аудитории. Считаем уникальных пользователей, а не строки участия: один
+   * человек не должен весить больше другого.
+   */
+  async countBySubscriptionStatus(
+    contestId: number,
+  ): Promise<Record<ParticipationSubscriptionStatus, number>> {
+    const rows = await this.repo
+      .createQueryBuilder('participation')
+      .select('participation.subscriptionStatus', 'status')
+      .addSelect('COUNT(DISTINCT participation.userId)', 'count')
+      .where('participation.contestId = :contestId', { contestId })
+      .groupBy('participation.subscriptionStatus')
+      .getRawMany<{ status: ParticipationSubscriptionStatus; count: string }>();
+
+    const result = {
+      [ParticipationSubscriptionStatus.VALID]: 0,
+      [ParticipationSubscriptionStatus.UNSUBSCRIBED]: 0,
+    };
+
+    for (const row of rows) {
+      result[row.status] = Number(row.count);
+    }
+
+    return result;
+  }
+
   async countUniqueUsersByContestId(contestId: number): Promise<number> {
     const result = await this.repo
       .createQueryBuilder('participation')
