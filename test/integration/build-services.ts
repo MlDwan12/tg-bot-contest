@@ -78,6 +78,11 @@ export function buildLifecycleService(ds: DataSource) {
   } as any;
   const fakeLogger = { log() {}, warn() {}, error() {}, debug() {} } as any;
   const fakeTelegram = {} as any;
+  // Уведомления победителей — внешний сайд-эффект (очередь + Telegram),
+  // в путях completeContest проверяется не он, а розыгрыш и статусы.
+  const fakeWinnerNotify = {
+    enqueueWinnerNotifications: async () => ({ queued: 0, skipped: 0 }),
+  } as any;
 
   const service = new ContestLifecycleService(
     repos.contest,
@@ -85,6 +90,7 @@ export function buildLifecycleService(ds: DataSource) {
     fakeQueue,
     fakeJobs,
     winnerService,
+    fakeWinnerNotify,
     fakePublication,
     fakeLogger,
     ds,

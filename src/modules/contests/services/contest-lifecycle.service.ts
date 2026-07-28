@@ -16,6 +16,7 @@ import { ContestWithRelations } from '../types';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
 import { ContestWinnerService } from './contest-winner.service';
+import { ContestWinnerNotifyService } from './contest-winner-notify.service';
 import { ContestPublicationService } from './contest-publication.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
@@ -36,6 +37,7 @@ export class ContestLifecycleService {
 
     private readonly contestJobsService: ContestJobsService,
     private readonly contestWinnerService: ContestWinnerService,
+    private readonly contestWinnerNotifyService: ContestWinnerNotifyService,
     private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
     private readonly dataSource: DataSource,
@@ -169,6 +171,8 @@ export class ContestLifecycleService {
           { jobId: `publication:${publicationId}:finish-button` },
         );
       }
+
+      await this.notifyWinners(contestId);
     } finally {
       // Освобождаем лок при любом исходе — в том числе при исключении.
       // Без finally: если resolveAndSaveWinners выбросит ошибку, лок
@@ -247,7 +251,27 @@ export class ContestLifecycleService {
 
     await this.contestPublicationService.syncPublishedPosts(updatedContest);
 
+    await this.notifyWinners(contest.id);
+
     return updatedContest;
+  }
+
+  /**
+   * Ставит личные уведомления победителям. Ошибку глушим намеренно: конкурс уже
+   * завершён и итоги опубликованы — падение постановки уведомлений не должно
+   * откатывать или ронять завершение. Неотправленное видно в bot_messages.
+   */
+  private async notifyWinners(contestId: number): Promise<void> {
+    try {
+      await this.contestWinnerNotifyService.enqueueWinnerNotifications(
+        contestId,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        { err: error, contestId },
+        'notifyWinners: не удалось поставить уведомления победителей в очередь',
+      );
+    }
   }
 
   async cancelContest(id: number): Promise<ContestWithRelations> {

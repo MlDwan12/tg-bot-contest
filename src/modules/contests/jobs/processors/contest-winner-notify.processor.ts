@@ -1,0 +1,136 @@
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
+import Bottleneck from 'bottleneck';
+import { Inject } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
+import { TelegramService } from 'src/modules/bot/bot.service';
+import { jobMeta } from 'src/common/helpers/job-meta.helper';
+import { BOT_MESSAGE_REPOSITORY } from 'src/common/constants';
+import type { IBotMessageRepository } from '../../interfaces';
+import { BotMessageContentType, BotMessageType } from 'src/common/enums/bot';
+import { WinnerNotifyJobData } from '../../services/contest-winner-notify.service';
+
+const telegramLimiter = new Bottleneck({
+  maxConcurrent: 5,
+  minTime: 60,
+});
+
+@Processor('contest-winner-notify')
+export class ContestWinnerNotifyProcessor extends WorkerHost {
+  constructor(
+    @Inject(BOT_MESSAGE_REPOSITORY)
+    private readonly botMessageRepo: IBotMessageRepository,
+
+    private readonly telegramService: TelegramService,
+    private readonly logger: Logger,
+  ) {
+    super();
+  }
+
+  async process(job: Job<WinnerNotifyJobData>): Promise<void> {
+    const { contestId, userId, telegramId, text } = job.data;
+
+    // Защита от повторной отправки при ретрае: сообщение могло уйти, а запись
+    // в БД — упасть. BullMQ не гонит один джоб параллельно, так что гонки
+    // между воркерами здесь нет, только ретрай.
+    const alreadySent = await this.botMessageRepo.existsSent({
+      contestId,
+      userId,
+      type: BotMessageType.CONTEST_WINNER,
+    });
+
+    if (alreadySent) {
+      this.logger.warn(
+        { ...jobMeta(job), contestId, userId },
+        'notify-winner: уведомление уже отправлено, пропускаем ретрай',
+      );
+      return;
+    }
+
+    const contentType = BotMessageContentType.TEXT;
+
+    try {
+      const sent = await telegramLimiter.schedule(() =>
+        this.telegramService.sendMailingMessage({
+          chatId: telegramId,
+          text,
+        }),
+      );
+
+      await this.botMessageRepo.recordSent({
+        contestId,
+        userId,
+        chatId: sent.chatId,
+        telegramMessageId: sent.messageId,
+        type: BotMessageType.CONTEST_WINNER,
+        contentType,
+        payload: { text },
+      });
+
+      this.logger.debug(
+        { ...jobMeta(job), contestId, userId, messageId: sent.messageId },
+        'notify-winner: sent',
+      );
+    } catch (error: any) {
+      const code = error?.response?.error_code;
+      const description = error?.response?.description;
+      const errorText = description || error?.message || String(error);
+
+      // 403 — самый частый исход: бот не может писать первым тому, кто не
+      // запускал /start, а участники приходят из мини-аппа. Это не сбой
+      // доставки, а отсутствие права на неё: ретраи бессмысленны, пишем FAILED
+      // и выходим успешно, чтобы джоб не молотил впустую. 400 — тоже
+      // перманентный (чат не найден, юзер удалён).
+      const permanent = code === 403 || code === 400;
+
+      if (permanent) {
+        await this.botMessageRepo.recordFailed({
+          contestId,
+          userId,
+          chatId: telegramId,
+          type: BotMessageType.CONTEST_WINNER,
+          contentType,
+          error: errorText,
+        });
+
+        this.logger.warn(
+          { ...jobMeta(job), contestId, userId, code, tg: errorText },
+          'notify-winner: перманентный отказ Telegram -> FAILED без ретрая',
+        );
+        return;
+      }
+
+      const attempt = job.attemptsMade + 1;
+      const maxAttempts = job.opts?.attempts ?? 3;
+      const lastAttempt = attempt >= maxAttempts;
+
+      // Временную ошибку ретраим. На последней попытке фиксируем FAILED —
+      // иначе победитель тихо остался бы без уведомления и без следа.
+      if (lastAttempt) {
+        await this.botMessageRepo.recordFailed({
+          contestId,
+          userId,
+          chatId: telegramId,
+          type: BotMessageType.CONTEST_WINNER,
+          contentType,
+          error: errorText,
+        });
+      }
+
+      this.logger.error(
+        {
+          ...jobMeta(job),
+          contestId,
+          userId,
+          code,
+          attempt,
+          maxAttempts,
+          tg: errorText,
+        },
+        'notify-winner: временная ошибка -> ретрай',
+      );
+
+      throw error;
+    }
+  }
+}
