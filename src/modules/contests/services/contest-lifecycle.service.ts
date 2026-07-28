@@ -108,35 +108,42 @@ export class ContestLifecycleService {
             await this.contestWinnerService.getContestWinners(contest.id);
 
           if (existingWinners.length === 0) {
-            // Не завершаем конкурс: даём админу ещё немного времени выбрать
-            // победителя вручную, сдвигая дедлайн и перепланируя finish-job.
-            // Уведомление отправляется на каждой попытке, чтобы админ не забыл.
-            const extendedEndDate = new Date(
-              contest.endDate.getTime() + WINNER_SELECTION_GRACE_PERIOD_MS,
-            );
-
-            this.logger.warn(
-              { contestId: contest.id, extendedEndDate },
-              'finishContestIdempotent: MANUAL-стратегия без выбранного победителя, откладываем завершение',
-            );
-
-            await this.contestRepo.update(contest.id, {
-              endDate: extendedEndDate,
-            });
-            await this.contestJobsService.scheduleFinishRetry(
-              contest.id,
-              extendedEndDate,
-            );
-            await this.notifyAdminsAboutMissingManualWinner(
+            // Победители вручную ещё не выбраны — не завершаем, а даём админу
+            // grace-период их выбрать (сдвиг дедлайна + перепланирование +
+            // уведомление на каждой попытке, чтобы админ не забыл).
+            await this.scheduleFinishGracePeriod(
               contest,
-              extendedEndDate,
+              'finishContestIdempotent: MANUAL-стратегия без выбранного победителя, откладываем завершение',
+              'для него не выбраны победители (стратегия: вручную).',
+              'Пожалуйста, назначьте победителей в панели администратора до этого времени.',
             );
-
             return;
-          } else {
-            await this.contestWinnerService.resolveAndSaveWinners(contest);
           }
+
+          await this.contestWinnerService.resolveAndSaveWinners(contest);
         } else {
+          // Автоматический розыгрыш требует уникальных участников не меньше числа
+          // призовых мест — иначе resolveAndSaveWinners бросит ошибку, finish-job
+          // окончательно упадёт и конкурс навсегда зависнет в ACTIVE. Вместо клина
+          // даём тот же grace-период, что и MANUAL: зовём админа уменьшить число
+          // мест (либо за это время подтянутся ещё участники — конкурс всё ещё
+          // ACTIVE). Считаем уникальных так же, как сам розыгрыш: по user.id.
+          const uniqueParticipantCount = new Set(
+            participants
+              .map((p) => p.user?.id)
+              .filter((id): id is number => id != null),
+          ).size;
+
+          if (uniqueParticipantCount < contest.prizePlaces) {
+            await this.scheduleFinishGracePeriod(
+              contest,
+              'finishContestIdempotent: участников меньше числа призовых мест, откладываем завершение',
+              `участников (${uniqueParticipantCount}) меньше числа призовых мест (${contest.prizePlaces}).`,
+              'Пожалуйста, уменьшите число призовых мест в панели администратора до этого времени.',
+            );
+            return;
+          }
+
           await this.contestWinnerService.resolveAndSaveWinners(contest);
         }
       }
@@ -282,16 +289,50 @@ export class ContestLifecycleService {
     return updatedContest;
   }
 
-  private async notifyAdminsAboutMissingManualWinner(
+  /**
+   * Общий grace-период для конкурса, который должен был завершиться, но пока
+   * не может (MANUAL без выбранных победителей / авто-розыгрыш без достаточного
+   * числа участников): сдвигаем дедлайн на WINNER_SELECTION_GRACE_PERIOD_MS,
+   * перепланируем finish-job на новое время и уведомляем админов. Причина и
+   * призыв к действию подставляются вызывающим (reasonLine / actionLine).
+   */
+  private async scheduleFinishGracePeriod(
+    contest: { id: number; name: string; endDate: Date },
+    logMessage: string,
+    reasonLine: string,
+    actionLine: string,
+  ): Promise<void> {
+    const extendedEndDate = new Date(
+      contest.endDate.getTime() + WINNER_SELECTION_GRACE_PERIOD_MS,
+    );
+
+    this.logger.warn({ contestId: contest.id, extendedEndDate }, logMessage);
+
+    await this.contestRepo.update(contest.id, { endDate: extendedEndDate });
+    await this.contestJobsService.scheduleFinishRetry(
+      contest.id,
+      extendedEndDate,
+    );
+    await this.notifyAdminsAboutContestGrace(
+      contest,
+      extendedEndDate,
+      reasonLine,
+      actionLine,
+    );
+  }
+
+  private async notifyAdminsAboutContestGrace(
     contest: { id: number; name: string },
     extendedEndDate: Date,
+    reasonLine: string,
+    actionLine: string,
   ): Promise<void> {
     try {
       const admins = getAdminTelegramIdsFromEnv();
 
       if (!admins.length) {
         this.logger.warn(
-          'Нет админов в ADMIN_IDS для уведомления о невыбранном победителе',
+          'Нет админов в ADMIN_IDS для уведомления об отложенном завершении конкурса',
         );
         return;
       }
@@ -304,9 +345,8 @@ export class ContestLifecycleService {
 
       const text =
         `⚠️ Конкурс «${contest.name}» (ID: ${contest.id}) должен был завершиться, ` +
-        'но для него не выбраны победители (стратегия: вручную).\n\n' +
-        `Завершение отложено до ${extendedEndDateStr} (МСК). ` +
-        'Пожалуйста, назначьте победителей в панели администратора до этого времени.';
+        `но ${reasonLine}\n\n` +
+        `Завершение отложено до ${extendedEndDateStr} (МСК). ${actionLine}`;
 
       for (const admin of admins) {
         try {
@@ -317,14 +357,14 @@ export class ContestLifecycleService {
         } catch (error: any) {
           this.logger.error(
             { err: error, adminTelegramId: admin, contestId: contest.id },
-            'notifyAdminsAboutMissingManualWinner: не удалось отправить уведомление',
+            'notifyAdminsAboutContestGrace: не удалось отправить уведомление',
           );
         }
       }
     } catch (error: any) {
       this.logger.error(
         { err: error, contestId: contest.id },
-        'notifyAdminsAboutMissingManualWinner: ошибка',
+        'notifyAdminsAboutContestGrace: ошибка',
       );
     }
   }
