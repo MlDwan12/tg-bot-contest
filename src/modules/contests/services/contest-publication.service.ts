@@ -21,6 +21,10 @@ import { ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
+import {
+  buildContestPostPayload,
+  ContestPostPayload,
+} from './contest-post-payload.util';
 
 /**
  * Минимальный контекст для синхронизации опубликованных постов — только поля,
@@ -129,6 +133,48 @@ export class ContestPublicationService {
     'id' | 'contestId' | 'chatId' | 'telegramMessageId'
   > | null> {
     return this.contestRepo.findPublicationForButtonUpdate(publicationId);
+  }
+
+  /**
+   * Превью поста без публикации: что именно уйдёт в каждый канал.
+   *
+   * Собирается тем же buildContestPostPayload, что и реальная публикация, —
+   * иначе превью со временем разойдётся с фактом. Отдаём по элементу на канал:
+   * ссылка кнопки содержит chatId канала и у каждого своя.
+   *
+   * Счётчика участников в тексте кнопки нет намеренно: при публикации он тоже
+   * не проставляется, его дописывает отдельный джоб уже по ходу конкурса.
+   */
+  async buildContestPreview(contestId: number): Promise<
+    Array<{
+      channelTelegramId: string;
+      channelUsername: string | null;
+      payload: ContestPostPayload;
+    }>
+  > {
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
+
+    if (!contest) {
+      throw new NotFoundException('Конкурс не найден');
+    }
+
+    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
+
+    return (contest.publishChannels ?? [])
+      .filter((channel) => channel.telegramId != null)
+      .map((channel) => ({
+        channelTelegramId: String(channel.telegramId),
+        channelUsername: channel.telegramUsername ?? null,
+        payload: buildContestPostPayload({
+          contestId,
+          channelTelegramId: String(channel.telegramId),
+          name: contest.name,
+          description: contest.description,
+          buttonText: contest.buttonText,
+          imagePath: contest.imagePath,
+          miniAppUrl,
+        }),
+      }));
   }
 
   async recreatePendingPublications(params: {
@@ -376,12 +422,15 @@ export class ContestPublicationService {
         channelId: channel.id,
         chatId,
         status: PublicationStatus.PENDING,
-        payload: {
-          text: `${name}\n\n${description || ''}`,
-          buttonText: buttonText || 'Участвовать',
-          buttonUrl: `${miniAppUrl}?startapp=${channel.telegramId}_${contestId}`,
-          photoUrl: imagePath,
-        },
+        payload: buildContestPostPayload({
+          contestId,
+          channelTelegramId: channel.telegramId,
+          name,
+          description,
+          buttonText,
+          imagePath,
+          miniAppUrl,
+        }),
       };
     });
   }
