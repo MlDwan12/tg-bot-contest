@@ -83,6 +83,10 @@ export function buildLifecycleService(ds: DataSource) {
   const fakeWinnerNotify = {
     enqueueWinnerNotifications: async () => ({ queued: 0, skipped: 0 }),
   } as any;
+  // Перепроверка подписок — отдельная фаза с походами в Telegram. В тестах
+  // завершения её выключаем: needsRecheck=false воспроизводит конкурс без
+  // обязательных каналов, то есть прежний прямой путь к розыгрышу.
+  const fakeSubscriptionRecheck = { needsRecheck: () => false } as any;
 
   const service = new ContestLifecycleService(
     repos.contest,
@@ -91,6 +95,7 @@ export function buildLifecycleService(ds: DataSource) {
     fakeJobs,
     winnerService,
     fakeWinnerNotify,
+    fakeSubscriptionRecheck,
     fakePublication,
     fakeLogger,
     ds,

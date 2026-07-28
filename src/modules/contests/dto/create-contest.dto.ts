@@ -10,6 +10,7 @@ import {
   IsNotEmpty,
   ArrayUnique,
   MaxLength,
+  IsBoolean,
 } from 'class-validator';
 import { WinnerStrategy } from 'src/common/enums/contest';
 import { CreateContest } from 'src/modules/contests/types';
@@ -132,6 +133,16 @@ export class CreateContestDto implements Omit<CreateContest, 'creatorId'> {
   @IsDate()
   @IsFutureDate({ message: 'endDate must not be in the past' })
   endDate: Date;
+
+  // Перепроверка подписки перед розыгрышем. По умолчанию включена — выключать
+  // осознанно. Строковые 'true'/'false' принимаем: форма шлётся multipart.
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return value;
+  })
+  @IsBoolean()
+  recheckSubscriptionOnFinish?: boolean;
 
   // ВАЖНО:
   // если реально ищешь по telegramId, лучше переименовать поле.

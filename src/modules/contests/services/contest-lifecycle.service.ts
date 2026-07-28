@@ -17,6 +17,7 @@ import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
 import { ContestWinnerService } from './contest-winner.service';
 import { ContestWinnerNotifyService } from './contest-winner-notify.service';
+import { ContestSubscriptionRecheckService } from './contest-subscription-recheck.service';
 import { ContestPublicationService } from './contest-publication.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
@@ -38,6 +39,7 @@ export class ContestLifecycleService {
     private readonly contestJobsService: ContestJobsService,
     private readonly contestWinnerService: ContestWinnerService,
     private readonly contestWinnerNotifyService: ContestWinnerNotifyService,
+    private readonly contestSubscriptionRecheckService: ContestSubscriptionRecheckService,
     private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
     private readonly dataSource: DataSource,
@@ -100,8 +102,23 @@ export class ContestLifecycleService {
       const now = new Date();
       if (contest.endDate > now) return;
 
+      // Перепроверка подписок — отдельная фаза: она делает запрос в Telegram на
+      // каждого участника и идёт минутами, а мы держим advisory lock. Ставим
+      // джоб и выходим; он по завершении снова позовёт finishContest, и мы
+      // придём сюда уже с проставленными статусами.
+      if (this.contestSubscriptionRecheckService.needsRecheck(contest)) {
+        this.logger.log(
+          { contestId },
+          'finishContestIdempotent: нужна перепроверка подписок, откладываем завершение',
+        );
+        await this.contestJobsService.scheduleSubscriptionRecheck(contestId);
+        return;
+      }
+
+      // Пул — только прошедшие перепроверку. Отписавшиеся после участия в
+      // розыгрыш не идут и не учитываются при сверке с числом призовых мест.
       const participants =
-        await this.contestParticipationRepo.findManyByContestId(contest.id);
+        await this.contestParticipationRepo.findEligibleByContestId(contest.id);
       const hasParticipants = participants.length > 0;
 
       if (hasParticipants) {

@@ -100,9 +100,7 @@ export class ContestJobsService implements OnModuleInit {
     );
   }
   private async rescheduleFromDb() {
-    const pending = await this.contestRepo.findByStatus(
-      ContestStatus.PENDING,
-    );
+    const pending = await this.contestRepo.findByStatus(ContestStatus.PENDING);
 
     for (const c of pending) {
       const publishJobId = `contest:${c.id}:publish`;
@@ -128,9 +126,7 @@ export class ContestJobsService implements OnModuleInit {
       }
     }
 
-    const active = await this.contestRepo.findByStatus(
-      ContestStatus.ACTIVE,
-    );
+    const active = await this.contestRepo.findByStatus(ContestStatus.ACTIVE);
 
     for (const c of active) {
       const finishJobId = `contest:${c.id}:finish`;
@@ -189,6 +185,25 @@ export class ContestJobsService implements OnModuleInit {
       {
         jobId: finishJobId,
         delay: Math.max(0, endDate.getTime() - now),
+        removeOnComplete: true,
+        removeOnFail: 1000,
+      },
+    );
+  }
+
+  /**
+   * Ставит перепроверку подписок отдельным джобом: она делает по запросу в
+   * Telegram на каждого участника и при больших конкурсах идёт минутами —
+   * держать на это время advisory lock завершения нельзя.
+   *
+   * jobId стабильный: повторные попытки finishContest не наплодят проверок.
+   */
+  async scheduleSubscriptionRecheck(contestId: number): Promise<void> {
+    await this.finishQueue.add(
+      'recheckSubscriptions',
+      { contestId },
+      {
+        jobId: `contest:${contestId}:recheck`,
         removeOnComplete: true,
         removeOnFail: 1000,
       },

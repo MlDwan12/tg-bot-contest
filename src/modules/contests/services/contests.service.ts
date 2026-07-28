@@ -179,6 +179,9 @@ export class ContestsService {
         status: dto.status ?? contest.status,
         imagePath,
         buttonText: nextButtonText,
+        recheckSubscriptionOnFinish:
+          dto.recheckSubscriptionOnFinish ??
+          contest.recheckSubscriptionOnFinish,
       });
       contestUpdated = true;
 
@@ -461,6 +464,7 @@ export class ContestsService {
       creatorId: dto.creatorId,
       imagePath,
       buttonText,
+      recheckSubscriptionOnFinish: dto.recheckSubscriptionOnFinish ?? true,
     });
 
     await this.contestRepo.setPublishChannels(

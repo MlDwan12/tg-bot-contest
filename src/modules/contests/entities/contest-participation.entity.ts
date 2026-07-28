@@ -9,6 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { Contest } from './contest.entity';
+import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
 
 @Entity('contest_participants')
 @Index(['contestId', 'userId'], { unique: true })
@@ -47,4 +48,20 @@ export class ContestParticipation {
 
   @Column({ type: 'bigint', nullable: true })
   groupId: string;
+
+  /**
+   * Итог перепроверки подписки на обязательные каналы при завершении конкурса.
+   * По умолчанию VALID: подписку проверяли при участии, и до перепроверки
+   * считать участника выбывшим нельзя. В розыгрыш идут только VALID.
+   */
+  @Column({
+    type: 'enum',
+    enum: ParticipationSubscriptionStatus,
+    default: ParticipationSubscriptionStatus.VALID,
+  })
+  subscriptionStatus: ParticipationSubscriptionStatus;
+
+  /** Когда перепроверяли подписку; null — перепроверка не проводилась. */
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionCheckedAt: Date | null;
 }

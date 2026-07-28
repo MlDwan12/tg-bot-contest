@@ -198,6 +198,8 @@ export class ContestRepository implements IContestRepository {
       startDate: contest.startDate,
       endDate: contest.endDate,
       status: contest.status,
+      recheckSubscriptionOnFinish: contest.recheckSubscriptionOnFinish,
+      subscriptionsCheckedAt: contest.subscriptionsCheckedAt ?? null,
     };
   }
 

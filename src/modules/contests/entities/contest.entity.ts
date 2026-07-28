@@ -55,6 +55,22 @@ export class Contest {
   @Column({ type: 'timestamp' })
   endDate: Date;
 
+  /**
+   * Перепроверять ли подписку на обязательные каналы перед розыгрышем.
+   * Включено по умолчанию: без этого отписавшийся после участия выигрывает
+   * наравне со всеми.
+   */
+  @Column({ default: true })
+  recheckSubscriptionOnFinish: boolean;
+
+  /**
+   * Когда перепроверка отработала. null — ещё не проводилась; именно это
+   * отличает «проверять пора» от «уже проверили» и не даёт гонять проверку
+   * повторно при каждом продлении дедлайна.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionsCheckedAt: Date | null;
+
   @ManyToMany(() => Channel)
   @JoinTable({
     name: 'contest_publish_channels',

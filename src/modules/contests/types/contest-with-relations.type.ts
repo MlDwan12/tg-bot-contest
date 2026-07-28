@@ -68,4 +68,6 @@ export type ContestWithRelations = {
   startDate: Date;
   endDate: Date;
   status: ContestStatus;
+  recheckSubscriptionOnFinish: boolean;
+  subscriptionsCheckedAt: Date | null;
 };

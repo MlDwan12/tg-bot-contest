@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
+import { DataSource, FindOptionsWhere, In, Repository } from 'typeorm';
 import { ContestParticipation } from '../entities';
 import { IContestParticipationRepository } from '../interfaces';
+import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
 
 /**
  * Единый репозиторий агрегата ContestParticipation (Фаза 9 — слиты read+write).
@@ -10,9 +11,7 @@ import { IContestParticipationRepository } from '../interfaces';
  * от IContestParticipationRepository.
  */
 @Injectable()
-export class ContestParticipationRepository
-  implements IContestParticipationRepository
-{
+export class ContestParticipationRepository implements IContestParticipationRepository {
   constructor(
     @InjectRepository(ContestParticipation)
     private readonly repo: Repository<ContestParticipation>,
@@ -53,6 +52,25 @@ export class ContestParticipationRepository
     });
   }
 
+  /**
+   * Пул розыгрыша: только участники, прошедшие перепроверку подписки.
+   * Пока перепроверка не проводилась, все участия VALID — выборка совпадает
+   * с findManyByContestId, поведение конкурсов без перепроверки не меняется.
+   */
+  async findEligibleByContestId(
+    contestId: number,
+  ): Promise<ContestParticipation[]> {
+    return this.repo.find({
+      where: {
+        contestId,
+        subscriptionStatus: ParticipationSubscriptionStatus.VALID,
+      },
+      relations: {
+        user: true,
+      },
+    });
+  }
+
   async countUniqueUsersByContestId(contestId: number): Promise<number> {
     const result = await this.repo
       .createQueryBuilder('participation')
@@ -74,8 +92,35 @@ export class ContestParticipationRepository
     return await this.repo.save(participation);
   }
 
+  /**
+   * Проставляет итог перепроверки пачкой: один UPDATE на статус, а не запрос
+   * на участника. При десятках тысяч участий разница принципиальная.
+   */
+  async markSubscriptionStatuses(
+    updates: Array<{
+      participationIds: number[];
+      status: ParticipationSubscriptionStatus;
+    }>,
+    checkedAt: Date,
+  ): Promise<void> {
+    for (const update of updates) {
+      if (!update.participationIds.length) continue;
+
+      await this.repo.update(
+        { id: In(update.participationIds) },
+        {
+          subscriptionStatus: update.status,
+          subscriptionCheckedAt: checkedAt,
+        },
+      );
+    }
+  }
+
   async resetWinnerFlags(contestId: number): Promise<void> {
-    await this.repo.update({ contestId }, { isWinner: false, prizePlace: null });
+    await this.repo.update(
+      { contestId },
+      { isWinner: false, prizePlace: null },
+    );
   }
 
   async markAsWinner(

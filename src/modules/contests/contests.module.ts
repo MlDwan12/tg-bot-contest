@@ -34,6 +34,7 @@ import {
   ContestWinnerService,
   ContestJobsService,
   ContestWinnerNotifyService,
+  ContestSubscriptionRecheckService,
 } from './services';
 import { BotModule } from '../bot/bot.module';
 import {
@@ -67,6 +68,7 @@ import {
     ContestsParticipateService,
     ContestWinnerService,
     ContestWinnerNotifyService,
+    ContestSubscriptionRecheckService,
     ContestJobsService,
     ContestCountersProcessor,
     ContestWinnerNotifyProcessor,
@@ -93,6 +95,10 @@ import {
     ContestsService,
     ContestPublicationService,
     ContestLifecycleService,
+    // Нужны ContestFinishProcessor из ContestsJobsModule: он ведёт двухфазное
+    // завершение — заказывает перепроверку подписок и переставляет финиш.
+    ContestSubscriptionRecheckService,
+    ContestJobsService,
     CONTEST_REPOSITORY,
     CONTEST_PARTICIPATE_REPOSITORY,
   ],

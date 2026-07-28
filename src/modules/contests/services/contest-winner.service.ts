@@ -135,8 +135,11 @@ export class ContestWinnerService {
   private async resolveAutomaticWinners(
     contest: WinnerDrawContext,
   ): Promise<User[]> {
+    // Только прошедшие перепроверку подписки: отписавшийся после участия в
+    // розыгрыше не участвует. Пока перепроверка не проводилась, все участия
+    // VALID и выборка совпадает с прежней.
     const participants =
-      await this.contestParticipationRepo.findManyByContestId(contest.id);
+      await this.contestParticipationRepo.findEligibleByContestId(contest.id);
 
     if (!participants.length) {
       throw new BadRequestException(

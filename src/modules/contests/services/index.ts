@@ -4,4 +4,5 @@ export * from './contest-participate.service';
 export * from './contest-publication.service';
 export * from './contest-winner.service';
 export * from './contest-winner-notify.service';
+export * from './contest-subscription-recheck.service';
 export * from './contests.service';

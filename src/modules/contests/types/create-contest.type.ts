@@ -14,6 +14,12 @@ export type CreateContest = {
   endDate: Date;
   creatorId: number;
 
+  /**
+   * Перепроверять ли подписку на обязательные каналы перед розыгрышем.
+   * Не задано → true: отписавшийся после участия не должен выигрывать.
+   */
+  recheckSubscriptionOnFinish?: boolean;
+
   // Каналы
   publishChannelIds?: number[];
   requiredChannelIds?: number[];
