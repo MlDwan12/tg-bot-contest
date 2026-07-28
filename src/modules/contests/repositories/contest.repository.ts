@@ -263,12 +263,11 @@ export class ContestRepository implements IContestRepository {
       .getMany();
   }
 
-  async findPublicationForFinishUpdate(publicationId: number): Promise<{
+  async findPublicationForButtonUpdate(publicationId: number): Promise<{
     id: number;
     contestId: number;
     chatId: number;
     telegramMessageId?: number;
-    payload?: ContestPublication['payload'];
   } | null> {
     return this.pubRepo.findOne({
       where: { id: publicationId },
@@ -277,9 +276,6 @@ export class ContestRepository implements IContestRepository {
         contestId: true,
         chatId: true,
         telegramMessageId: true,
-        // payload нужен, чтобы понять, чем пост был отправлен (фото или текст):
-        // от этого зависит, править подпись или текст сообщения.
-        payload: true,
       },
     });
   }

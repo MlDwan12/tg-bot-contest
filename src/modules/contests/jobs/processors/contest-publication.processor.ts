@@ -6,6 +6,7 @@ import { ContestLifecycleService } from '../../services/contest-lifecycle.servic
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
+import { ConfigService } from '@nestjs/config';
 
 const telegramLimiter = new Bottleneck({
   maxConcurrent: 5,
@@ -42,6 +43,7 @@ export class ContestPublicationProcessor extends WorkerHost {
     private readonly contestLifecycleService: ContestLifecycleService,
     private readonly telegramService: TelegramService,
     private readonly logger: Logger,
+    private readonly configService: ConfigService,
   ) {
     super();
     this.logger.debug('ContestPublicationProcessor initialized');
@@ -205,7 +207,7 @@ export class ContestPublicationProcessor extends WorkerHost {
       );
 
       const pub =
-        await this.contestPublicationService.getPublicationForFinishUpdate(
+        await this.contestPublicationService.getPublicationForButtonUpdate(
           publicationId,
         );
 
@@ -237,51 +239,18 @@ export class ContestPublicationProcessor extends WorkerHost {
         return;
       }
 
-      // Пост с картинкой правится через подпись, текстовый — через текст.
-      // Что именно отправляли, знает payload публикации.
-      const hasPhoto = !!pub.payload?.photoUrl;
-
-      const update =
-        await this.contestPublicationService.buildFinishedPostUpdate({
-          contestId: pub.contestId,
-          chatId: pub.chatId,
-          hasPhoto,
-        });
-
-      if (!update) {
-        this.logger.warn(
-          { ...jobMeta(job), publicationId, contestId: pub.contestId },
-          'updateFinishedButton: contest not found -> skip',
-        );
-        return;
-      }
-
-      if (update.truncated) {
-        this.logger.warn(
-          {
-            ...jobMeta(job),
-            publicationId,
-            contestId: pub.contestId,
-            shownWinners: update.shownWinners,
-          },
-          'updateFinishedButton: блок победителей не поместился в лимит целиком',
-        );
-      }
-
       try {
         await telegramLimiter.schedule(() =>
-          this.telegramService.updateContestResultsMessage({
+          this.telegramService.updateContestMessageButton({
             chatId: String(pub.chatId),
             messageId,
-            text: update.text,
-            buttonText: update.buttonText,
-            buttonUrl: update.buttonUrl,
-            hasPhoto,
+            buttonText: 'Конкурс завершён',
+            buttonUrl: `${this.configService.get<string>('MINI_APP_URL')}?startapp=${pub.chatId}_${pub.contestId}`,
           }),
         );
 
         this.logger.debug(
-          { ...jobMeta(job), publicationId, shownWinners: update.shownWinners },
+          { ...jobMeta(job), publicationId },
           'updateFinishedButton: updated',
         );
 

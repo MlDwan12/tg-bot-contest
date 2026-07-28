@@ -21,13 +21,6 @@ import { ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
-import { ContestWinnerService } from './contest-winner.service';
-import {
-  buildContestResultsText,
-  toResultsWinners,
-  TELEGRAM_CAPTION_LIMIT,
-  TELEGRAM_TEXT_LIMIT,
-} from './contest-results-text.util';
 
 /**
  * Минимальный контекст для синхронизации опубликованных постов — только поля,
@@ -60,8 +53,6 @@ export class ContestPublicationService {
 
     @Inject(forwardRef(() => TelegramService))
     private readonly telegramService: TelegramService,
-
-    private readonly contestWinnerService: ContestWinnerService,
 
     private readonly logger: Logger,
   ) {}
@@ -131,60 +122,13 @@ export class ContestPublicationService {
     ).map((pub) => pub.id);
   }
 
-  getPublicationForFinishUpdate(
+  getPublicationForButtonUpdate(
     publicationId: number,
   ): Promise<Pick<
     ContestPublication,
-    'id' | 'contestId' | 'chatId' | 'telegramMessageId' | 'payload'
+    'id' | 'contestId' | 'chatId' | 'telegramMessageId'
   > | null> {
-    return this.contestRepo.findPublicationForFinishUpdate(publicationId);
-  }
-
-  /**
-   * Готовит правку поста завершённого конкурса: текст с блоком победителей и
-   * кнопка «Конкурс завершён». Сам вызов Telegram делает процессор — здесь
-   * только чтение из БД и сборка.
-   *
-   * hasPhoto определяет лимит длины: у поста с картинкой это подпись (1024),
-   * у текстового — 4096.
-   */
-  async buildFinishedPostUpdate(params: {
-    contestId: number;
-    chatId: number;
-    hasPhoto: boolean;
-  }): Promise<{
-    text: string;
-    buttonText: string;
-    buttonUrl: string;
-    shownWinners: number;
-    truncated: boolean;
-  } | null> {
-    const contest = await this.contestRepo.findByParams({
-      id: params.contestId,
-    });
-
-    if (!contest) return null;
-
-    const winners = await this.contestWinnerService.getContestWinners(
-      params.contestId,
-    );
-
-    const results = buildContestResultsText({
-      name: contest.name,
-      description: contest.description,
-      winners: toResultsWinners(winners),
-      limit: params.hasPhoto ? TELEGRAM_CAPTION_LIMIT : TELEGRAM_TEXT_LIMIT,
-    });
-
-    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
-
-    return {
-      text: results.text,
-      buttonText: 'Конкурс завершён',
-      buttonUrl: `${miniAppUrl}?startapp=${params.chatId}_${params.contestId}`,
-      shownWinners: results.shownWinners,
-      truncated: results.truncated,
-    };
+    return this.contestRepo.findPublicationForButtonUpdate(publicationId);
   }
 
   async recreatePendingPublications(params: {
@@ -229,18 +173,6 @@ export class ContestPublicationService {
 
     const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
 
-    // У завершённого конкурса в посте должен стоять блок победителей. Это тот
-    // же текст, что публикует джоб updateFinishedButton при автозавершении:
-    // сюда приходит ручное завершение (completeContest) и правка уже
-    // завершённого конкурса — без этого итоги бы не появились либо затёрлись
-    // базовым текстом.
-    const winners =
-      contest.status === ContestStatus.COMPLETED
-        ? toResultsWinners(
-            await this.contestWinnerService.getContestWinners(contest.id),
-          )
-        : [];
-
     for (const publication of publishedPublications) {
       if (!publication.telegramMessageId) {
         this.logger.warn(
@@ -263,31 +195,11 @@ export class ContestPublicationService {
           ? contest.imagePath
           : undefined;
 
-      // Без победителей buildContestResultsText отдаёт ровно прежний
-      // `name\n\ndescription` — для незавершённых конкурсов текст не меняется.
-      const results = buildContestResultsText({
-        name: contest.name,
-        description: contest.description,
-        winners,
-        limit: photoUrl ? TELEGRAM_CAPTION_LIMIT : TELEGRAM_TEXT_LIMIT,
-      });
-
-      if (results.truncated) {
-        this.logger.warn(
-          {
-            contestId: contest.id,
-            publicationId: publication.id,
-            shownWinners: results.shownWinners,
-          },
-          'syncPublishedPosts: блок победителей не поместился в лимит целиком',
-        );
-      }
-
       try {
         await this.telegramService.updateContestPublishedMessage({
           chatId: String(publication.chatId),
           messageId: publication.telegramMessageId,
-          text: results.text,
+          text: `${contest.name}\n\n${contest.description || ''}`,
           buttonText:
             contest.status === ContestStatus.COMPLETED
               ? 'Конкурс завершён'
