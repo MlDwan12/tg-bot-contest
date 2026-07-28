@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, FindOptionsWhere, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  FindOptionsWhere,
+  In,
+  MoreThan,
+  Repository,
+} from 'typeorm';
 import { ContestParticipation } from '../entities';
 import { IContestParticipationRepository } from '../interfaces';
 import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
@@ -68,6 +74,26 @@ export class ContestParticipationRepository implements IContestParticipationRepo
       relations: {
         user: true,
       },
+    });
+  }
+
+  /**
+   * Порция участий для выгрузки, keyset-пагинация по id.
+   *
+   * OFFSET здесь не годится: на десятках тысяч строк он заставляет базу
+   * пролистывать всё от начала на каждой странице. Курсор по id читает ровно
+   * нужный кусок по индексу первичного ключа.
+   */
+  async findPageForExport(
+    contestId: number,
+    afterId: number,
+    limit: number,
+  ): Promise<ContestParticipation[]> {
+    return this.repo.find({
+      where: { contestId, id: MoreThan(afterId) },
+      relations: { user: true },
+      order: { id: 'ASC' },
+      take: limit,
     });
   }
 

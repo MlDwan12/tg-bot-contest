@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,6 +22,8 @@ import {
   ContestsService,
   ContestWinnerService,
   ContestStatsService,
+  ContestPublicationService,
+  ContestExportService,
 } from './services';
 import { CreateContestDto, UpdateContestDto } from './dto';
 import { ContestStatsDto } from './dto/contest-stats.dto';
@@ -32,6 +35,7 @@ import { Paginated } from 'src/common/response/paginated.type';
 import { ContestShortInfoDto } from './dto/contest-short-info.dto';
 import { contestImageUploadOptions } from './interceptors/contest-image.interceptor';
 import { JwtAuthGuard } from '../auth/guards';
+import type { Response } from 'express';
 
 @Controller('contest')
 export class ContestsController {
@@ -41,6 +45,8 @@ export class ContestsController {
     private readonly contestsParticipateService: ContestsParticipateService,
     private readonly contestWinnerService: ContestWinnerService,
     private readonly contestStatsService: ContestStatsService,
+    private readonly contestPublicationService: ContestPublicationService,
+    private readonly contestExportService: ContestExportService,
     private readonly logger: Logger,
   ) {}
 
@@ -116,6 +122,52 @@ export class ContestsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ContestStatsDto> {
     return this.contestStatsService.getContestStats(id);
+  }
+
+  /**
+   * Превью поста: что уйдёт в каждый канал публикации, без самой публикации.
+   * Собирается тем же кодом, что и реальный пост, — оператор видит факт, а не
+   * его приблизительное описание.
+   */
+  @Get(':id/preview')
+  @UseGuards(JwtAuthGuard)
+  async getContestPreview(@Param('id', ParseIntPipe) id: number) {
+    return this.contestPublicationService.buildContestPreview(id);
+  }
+
+  /**
+   * Выгрузка участников в CSV. Пишем в ответ потоком: у крупного конкурса
+   * десятки тысяч строк, и держать весь файл в памяти незачем.
+   *
+   * @Res без passthrough отключает ResponseInterceptor — обёртка
+   * {success, status, data} для файла не нужна, отдаём сырой CSV.
+   */
+  @Get(':id/participants.csv')
+  @UseGuards(JwtAuthGuard)
+  async exportParticipants(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ): Promise<void> {
+    const stream = this.contestExportService.streamParticipantsCsv(id);
+
+    // Первый кусок берём отдельно: до него сервис успевает бросить 404, и
+    // ошибка ещё уйдёт нормальным JSON-ответом. После записи заголовков
+    // сделать это уже нельзя.
+    const first = await stream.next();
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${this.contestExportService.buildFileName(id)}"`,
+    );
+
+    if (!first.done) res.write(first.value);
+
+    for await (const chunk of stream) {
+      res.write(chunk);
+    }
+
+    res.end();
   }
 
   @Patch(':id/complete')

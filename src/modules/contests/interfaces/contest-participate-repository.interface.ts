@@ -18,6 +18,12 @@ export interface IContestParticipationRepository {
   findManyByContestId(contestId: number): Promise<ContestParticipation[]>;
   /** Пул розыгрыша: участия, прошедшие перепроверку подписки. */
   findEligibleByContestId(contestId: number): Promise<ContestParticipation[]>;
+  /** Порция участий для выгрузки: keyset-пагинация по id. */
+  findPageForExport(
+    contestId: number,
+    afterId: number,
+    limit: number,
+  ): Promise<ContestParticipation[]>;
   /** Разрез участий по итогу перепроверки подписки (уникальные пользователи). */
   countBySubscriptionStatus(
     contestId: number,

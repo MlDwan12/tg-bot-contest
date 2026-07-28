@@ -6,4 +6,5 @@ export * from './contest-winner.service';
 export * from './contest-winner-notify.service';
 export * from './contest-subscription-recheck.service';
 export * from './contest-stats.service';
+export * from './contest-export.service';
 export * from './contests.service';
