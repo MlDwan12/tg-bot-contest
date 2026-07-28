@@ -39,18 +39,22 @@ export class ContestJobsService implements OnModuleInit {
       await existingFinishJob.remove();
     }
 
-    if (startDate.getTime() > now) {
-      await this.schedulerQueue.add(
-        'publishContest',
-        { contestId },
-        {
-          jobId: publishJobId,
-          delay: startDate.getTime() - now,
-          removeOnComplete: true,
-          removeOnFail: 1000,
-        },
-      );
-    }
+    // Publish-job ставим ВСЕГДА, даже если startDate уже наступил: задержку
+    // зажимаем в 0, чтобы джоб отработал немедленно. Он делает и активацию
+    // (activateContestIfDue: PENDING→ACTIVE), и публикацию — если пропустить его
+    // для уже наступившей даты (напр. при rescheduleContest, где старый job уже
+    // снесён), конкурс навсегда зависнет в PENDING. rescheduleFromDb на рестарте
+    // использует ту же формулу Math.max(0, ...).
+    await this.schedulerQueue.add(
+      'publishContest',
+      { contestId },
+      {
+        jobId: publishJobId,
+        delay: Math.max(0, startDate.getTime() - now),
+        removeOnComplete: true,
+        removeOnFail: 1000,
+      },
+    );
 
     await this.finishQueue.add(
       'finishContest',
