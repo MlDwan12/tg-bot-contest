@@ -25,6 +25,7 @@ import { UsersService } from '../../users/services/users.service';
 import { User } from 'src/modules/users/entities';
 import { Channel } from 'src/modules/channels/entities';
 import { fromZonedTime } from 'date-fns-tz';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.helper';
 import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
 import { ContestPublicationService } from './contest-publication.service';
@@ -32,7 +33,7 @@ import { ContestWinnerService } from './contest-winner.service';
 
 @Injectable()
 export class ContestsService {
-  private readonly APP_TIME_ZONE = 'Europe/Moscow';
+  private readonly APP_TIME_ZONE = getAppTimeZone();
 
   constructor(
     @Inject(CONTEST_REPOSITORY)

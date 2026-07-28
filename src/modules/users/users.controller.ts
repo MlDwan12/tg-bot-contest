@@ -27,7 +27,7 @@ import { MAILING_UPLOADS_DIR } from 'src/common/constants/storage.constants';
 import { JwtAuthGuard } from '../auth/guards';
 import * as fs from 'fs';
 import { Logger } from 'nestjs-pino';
-import { AfterMoscowTimeGuard } from './guard/time.guard';
+import { AfterMailingHourGuard } from './guard/mailing-hour.guard';
 
 @Controller('users')
 export class UsersController {
@@ -77,7 +77,7 @@ export class UsersController {
 
   @Post('broadcast')
   @UseGuards(JwtAuthGuard)
-  // @UseGuards(JwtAuthGuard, AfterMoscowTimeGuard)
+  // @UseGuards(JwtAuthGuard, AfterMailingHourGuard)
   @UseInterceptors(
     FileInterceptor('media', {
       storage: diskStorage({

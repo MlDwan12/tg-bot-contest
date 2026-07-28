@@ -21,6 +21,7 @@ import { ContestSubscriptionRecheckService } from './contest-subscription-rechec
 import { ContestPublicationService } from './contest-publication.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 
 const WINNER_SELECTION_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000;
 
@@ -389,7 +390,7 @@ export class ContestLifecycleService {
       }
 
       const extendedEndDateStr = extendedEndDate.toLocaleString('ru-RU', {
-        timeZone: 'Europe/Moscow',
+        timeZone: getAppTimeZone(),
         dateStyle: 'short',
         timeStyle: 'short',
       });
