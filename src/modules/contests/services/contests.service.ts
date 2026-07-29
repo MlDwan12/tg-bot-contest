@@ -61,6 +61,11 @@ export class ContestsService {
     const buttonText = dto.buttonText?.trim() || 'Участвовать';
 
     await this.assertCreatableContestDates(startDate, endDate, now, image);
+    await this.assertConfirmationSupported(
+      dto.winnerStrategy,
+      dto.requireWinnerConfirmation ?? false,
+      image,
+    );
 
     try {
       return await this.persistNewContest(
@@ -183,6 +188,9 @@ export class ContestsService {
         recheckSubscriptionOnFinish:
           dto.recheckSubscriptionOnFinish ??
           contest.recheckSubscriptionOnFinish,
+        requireWinnerConfirmation:
+          dto.requireWinnerConfirmation ?? contest.requireWinnerConfirmation,
+        confirmationHours: dto.confirmationHours ?? contest.confirmationHours,
       });
       contestUpdated = true;
 
@@ -424,6 +432,25 @@ export class ContestsService {
     }
   }
 
+  /**
+   * Подтверждение приза поддерживаем только для RANDOM: у MANUAL победителей
+   * назначает оператор, порядка жеребьёвки не существует, и заменить
+   * отказавшегося автоматически нечем. Молча игнорировать галку нельзя —
+   * оператор считал бы, что подтверждение работает, а оно бы не работало.
+   */
+  private async assertConfirmationSupported(
+    winnerStrategy: WinnerStrategy,
+    requireWinnerConfirmation: boolean,
+    image?: Express.Multer.File,
+  ): Promise<void> {
+    if (requireWinnerConfirmation && winnerStrategy !== WinnerStrategy.RANDOM) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Подтверждение приза победителем доступно только для случайного розыгрыша',
+      );
+    }
+  }
+
   /** Создание конкурса + каналы + публикации + джобы. Тело прежнего try 1:1. */
   private async persistNewContest(
     dto: CreateContest,
@@ -466,6 +493,10 @@ export class ContestsService {
       imagePath,
       buttonText,
       recheckSubscriptionOnFinish: dto.recheckSubscriptionOnFinish ?? true,
+      // Не заданы — не передаём вовсе: сработают DEFAULT'ы колонок (false и 24),
+      // и дефолт не придётся держать в двух местах.
+      requireWinnerConfirmation: dto.requireWinnerConfirmation,
+      confirmationHours: dto.confirmationHours,
     });
 
     await this.contestRepo.setPublishChannels(
@@ -562,6 +593,14 @@ export class ContestsService {
         'Нельзя менять каналы публикации после запуска конкурса',
       );
     }
+
+    // Проверяем ИТОГОВУЮ пару: сменить можно как стратегию, так и галку — в
+    // том числе по отдельности, оставив вторую часть от прежнего состояния.
+    await this.assertConfirmationSupported(
+      dto.winnerStrategy ?? contest.winnerStrategy,
+      dto.requireWinnerConfirmation ?? contest.requireWinnerConfirmation,
+      image,
+    );
   }
 
   /**

@@ -200,6 +200,8 @@ export class ContestRepository implements IContestRepository {
       status: contest.status,
       recheckSubscriptionOnFinish: contest.recheckSubscriptionOnFinish,
       subscriptionsCheckedAt: contest.subscriptionsCheckedAt ?? null,
+      requireWinnerConfirmation: contest.requireWinnerConfirmation,
+      confirmationHours: contest.confirmationHours,
     };
   }
 

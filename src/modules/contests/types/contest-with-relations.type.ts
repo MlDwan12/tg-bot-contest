@@ -70,4 +70,6 @@ export type ContestWithRelations = {
   status: ContestStatus;
   recheckSubscriptionOnFinish: boolean;
   subscriptionsCheckedAt: Date | null;
+  requireWinnerConfirmation: boolean;
+  confirmationHours: number;
 };

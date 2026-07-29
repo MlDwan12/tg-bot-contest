@@ -20,6 +20,16 @@ export type CreateContest = {
    */
   recheckSubscriptionOnFinish?: boolean;
 
+  /**
+   * Требовать ли подтверждение приза победителем. Не задано → false: конкурс
+   * идёт как до Ш10. Включение — единственный способ освободить место, без
+   * него автодобор не срабатывает никогда.
+   */
+  requireWinnerConfirmation?: boolean;
+
+  /** Срок подтверждения в часах. Не задано → 24. */
+  confirmationHours?: number;
+
   // Каналы
   publishChannelIds?: number[];
   requiredChannelIds?: number[];

@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   Min,
+  Max,
   IsDate,
   IsArray,
   IsNotEmpty,
@@ -143,6 +144,27 @@ export class CreateContestDto implements Omit<CreateContest, 'creatorId'> {
   })
   @IsBoolean()
   recheckSubscriptionOnFinish?: boolean;
+
+  // Требовать ли от победителя подтверждения приза. Выключено по умолчанию:
+  // с выключенным конкурс идёт как раньше (CONFIRMED сразу, без кнопки и
+  // дедлайна). Строковые 'true'/'false' — как выше, форма шлётся multipart.
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return value;
+  })
+  @IsBoolean()
+  requireWinnerConfirmation?: boolean;
+
+  // Срок подтверждения в часах. Учитывается только при включённом
+  // requireWinnerConfirmation. Потолок в неделю — защита от опечатки вроде
+  // 2400 часов, из-за которой место зависло бы на месяцы.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  confirmationHours?: number;
 
   // ВАЖНО:
   // если реально ищешь по telegramId, лучше переименовать поле.
