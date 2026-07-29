@@ -45,6 +45,17 @@ export interface IBotMessageRepository {
    * Кому уже отправлено (или не отправлено) — для сводки администраторам и для
    * проверки, что все уведомления по конкурсу отработали.
    */
+  /**
+   * Координаты доставленного уведомления — чтобы отредактировать его позже.
+   * Нужны, когда срок подтверждения истёк: у сообщения надо снять кнопки,
+   * иначе победитель жмёт по тому, что уже ничего не делает.
+   */
+  findSentMessage(params: {
+    contestId: number;
+    userId: number;
+    type: BotMessageType;
+  }): Promise<{ chatId: string; telegramMessageId: number } | null>;
+
   findUserIdsByStatus(
     contestId: number,
     type: BotMessageType,

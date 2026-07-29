@@ -514,6 +514,39 @@ export class TelegramService {
     };
   }
 
+  /**
+   * Снимает inline-кнопки у отправленного сообщения, оставляя текст.
+   *
+   * Нужно, когда решение принимать поздно: срок подтверждения истёк, приз ушёл
+   * следующему. Живые кнопки под таким сообщением вводят в заблуждение —
+   * человек жмёт и не понимает, почему ничего не происходит.
+   *
+   * Сообщение могло быть удалено получателем, поэтому ошибку Telegram здесь
+   * считаем нормальным исходом: сняли — хорошо, не смогли — не беда.
+   */
+  async removeInlineKeyboard(
+    chatId: string,
+    messageId: number,
+  ): Promise<boolean> {
+    try {
+      await this.bot.telegram.editMessageReplyMarkup(
+        chatId,
+        messageId,
+        undefined,
+        undefined,
+      );
+
+      return true;
+    } catch (error: any) {
+      this.logger.debug(
+        { chatId, messageId, tg: error?.response?.description },
+        'removeInlineKeyboard: не удалось снять кнопки',
+      );
+
+      return false;
+    }
+  }
+
   async deleteMessage(chatId: string, messageId: number): Promise<void> {
     await this.bot.telegram.deleteMessage(Number(chatId), messageId);
   }

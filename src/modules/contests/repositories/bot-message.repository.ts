@@ -35,6 +35,31 @@ export class BotMessageRepository implements IBotMessageRepository {
     });
   }
 
+  async findSentMessage(params: {
+    contestId: number;
+    userId: number;
+    type: BotMessageType;
+  }): Promise<{ chatId: string; telegramMessageId: number } | null> {
+    const row = await this.repo.findOne({
+      where: {
+        contestId: params.contestId,
+        userId: params.userId,
+        type: params.type,
+        status: BotMessageStatus.SENT,
+      },
+      // Свежайшее: на одном месте у победителя может быть несколько отправок
+      // (уведомление о призе, потом о замене) — редактировать нужно последнюю.
+      order: { id: 'DESC' },
+    });
+
+    if (!row?.telegramMessageId) return null;
+
+    return {
+      chatId: String(row.chatId),
+      telegramMessageId: row.telegramMessageId,
+    };
+  }
+
   async findUserIdsByStatus(
     contestId: number,
     type: BotMessageType,

@@ -71,7 +71,14 @@ export class ContestWinnerConfirmationService {
     }
 
     if (winner.status !== ContestWinnerStatus.PENDING_CONFIRMATION) {
-      return 'already_resolved';
+      // Причину различаем: «вы уже принимали решение» человеку, у которого
+      // просто вышел срок, читается как обман — он ничего не нажимал.
+      // Кнопки у просроченного уведомления снимает джоб дедлайна, но
+      // сообщение могли удалить или редактирование не прошло — тогда сюда
+      // всё-таки попадают.
+      return winner.status === ContestWinnerStatus.EXPIRED
+        ? 'expired'
+        : 'already_resolved';
     }
 
     // Срок вышел, но джоб дедлайна ещё не отработал (отставание очереди):

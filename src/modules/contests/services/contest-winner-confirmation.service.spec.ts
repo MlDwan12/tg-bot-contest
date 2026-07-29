@@ -110,6 +110,26 @@ describe('ContestWinnerConfirmationService', () => {
     expect(resolveCalls).toHaveLength(0);
   });
 
+  it('срок истёк → «истёк», а не «вы уже принимали решение»', async () => {
+    const { service, resolveCalls } = build({
+      winner: {
+        id: 15,
+        contestId: 7,
+        userId: 42,
+        place: 1,
+        status: ContestWinnerStatus.EXPIRED,
+        confirmationDeadline: new Date(Date.now() - 60 * 60 * 1000),
+        user: { id: 42, telegramId: OWNER_TELEGRAM_ID },
+      },
+    });
+
+    // Кнопки у просроченного снимает джоб дедлайна, но сообщение могли
+    // удалить или редактирование не прошло — тогда нажатие дойдёт сюда, и
+    // человек не должен читать, будто он что-то решал.
+    expect(await service.confirm(15, OWNER_TELEGRAM_ID)).toBe('expired');
+    expect(resolveCalls).toHaveLength(0);
+  });
+
   it('решение уже принято → повторное нажатие ничего не меняет', async () => {
     const { service, resolveCalls } = build({
       winner: {

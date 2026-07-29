@@ -3,8 +3,16 @@ import { Job } from 'bullmq';
 import { Inject } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { jobMeta } from 'src/common/helpers/job-meta.helper';
-import { CONTEST_WINNER_REPOSITORY } from 'src/common/constants';
-import type { IContestWinnerRepository } from '../../interfaces';
+import {
+  BOT_MESSAGE_REPOSITORY,
+  CONTEST_WINNER_REPOSITORY,
+} from 'src/common/constants';
+import type {
+  IBotMessageRepository,
+  IContestWinnerRepository,
+} from '../../interfaces';
+import { BotMessageType } from 'src/common/enums/bot';
+import { TelegramService } from 'src/modules/bot/bot.service';
 import { ContestWinnerStatus } from 'src/common/enums/contest';
 import { ContestWinnerReplacementService } from '../../services/contest-winner-replacement.service';
 import { ContestWinnerNotifyService } from '../../services/contest-winner-notify.service';
@@ -24,6 +32,10 @@ export class ContestWinnerConfirmProcessor extends WorkerHost {
     @Inject(CONTEST_WINNER_REPOSITORY)
     private readonly contestWinnerRepo: IContestWinnerRepository,
 
+    @Inject(BOT_MESSAGE_REPOSITORY)
+    private readonly botMessageRepo: IBotMessageRepository,
+
+    private readonly telegramService: TelegramService,
     private readonly replacementService: ContestWinnerReplacementService,
     private readonly notifyService: ContestWinnerNotifyService,
     private readonly logger: Logger,
@@ -70,7 +82,41 @@ export class ContestWinnerConfirmProcessor extends WorkerHost {
       'confirmation-deadline: срок истёк, место освобождено',
     );
 
+    // Кнопки под старым уведомлением больше ничего не делают — снимаем их
+    // сразу, не дожидаясь, пока человек ткнёт и не поймёт, почему тишина.
+    await this.disableConfirmationButtons(winnerId);
+
     await this.replaceWinner(contestId, place);
+  }
+
+  /**
+   * Снимает кнопки у уведомления просроченного победителя. Побочный шаг:
+   * его сбой не должен мешать автодобору — место уже освобождено.
+   */
+  private async disableConfirmationButtons(winnerId: number): Promise<void> {
+    try {
+      const winner = await this.contestWinnerRepo.findById(winnerId);
+
+      if (!winner?.userId) return;
+
+      const sent = await this.botMessageRepo.findSentMessage({
+        contestId: winner.contestId,
+        userId: winner.userId,
+        type: BotMessageType.CONTEST_WINNER,
+      });
+
+      if (!sent) return;
+
+      await this.telegramService.removeInlineKeyboard(
+        sent.chatId,
+        sent.telegramMessageId,
+      );
+    } catch (error) {
+      this.logger.warn(
+        { err: error, winnerId },
+        'confirmation-deadline: не удалось снять кнопки у просроченного уведомления',
+      );
+    }
   }
 
   /**
