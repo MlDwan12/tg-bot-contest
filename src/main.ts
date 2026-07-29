@@ -33,26 +33,26 @@ async function bootstrap() {
   const serverAdapter = new BullBoardExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
-  const telegramQueue = app.get<Queue>(getQueueToken('telegram-messages'));
-  const contestSchedulerQueue = app.get<Queue>(
-    getQueueToken('contest-scheduler'),
-  );
-  const contestFinishQueue = app.get<Queue>(getQueueToken('contest-finish'));
-  const contestPublicationQueue = app.get<Queue>(
-    getQueueToken('contest-publication'),
-  );
-  const contestMaintenanceQueue = app.get<Queue>(
-    getQueueToken('contest-maintenance'),
-  );
+  // Список очередей держим одним массивом: раньше он был набором отдельных
+  // переменных, и новые очереди в дашборд просто не попадали — contest-counters,
+  // contest-winner-notify, contest-winner-confirm и user-mailing отсутствовали,
+  // а именно в них живут уведомления победителей и дедлайны подтверждения.
+  const MONITORED_QUEUES = [
+    'telegram-messages',
+    'contest-scheduler',
+    'contest-finish',
+    'contest-publication',
+    'contest-maintenance',
+    'contest-counters',
+    'contest-winner-notify',
+    'contest-winner-confirm',
+    'user-mailing',
+  ];
 
   createBullBoard({
-    queues: [
-      new BullMQAdapter(telegramQueue),
-      new BullMQAdapter(contestSchedulerQueue),
-      new BullMQAdapter(contestFinishQueue),
-      new BullMQAdapter(contestPublicationQueue),
-      new BullMQAdapter(contestMaintenanceQueue),
-    ],
+    queues: MONITORED_QUEUES.map(
+      (name) => new BullMQAdapter(app.get<Queue>(getQueueToken(name))),
+    ),
     serverAdapter,
   });
 
