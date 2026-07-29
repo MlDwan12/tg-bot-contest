@@ -14,6 +14,10 @@ import {
   WinnerNotifyJobData,
   WINNERS_SUMMARY_JOB,
 } from '../../services/contest-winner-notify.service';
+import {
+  buildConfirmCallbackData,
+  buildDeclineCallbackData,
+} from '../../contest-winner-confirm.update';
 
 const telegramLimiter = new Bottleneck({
   maxConcurrent: 5,
@@ -45,7 +49,7 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
   }
 
   private async notifyWinner(job: Job<WinnerNotifyJobData>): Promise<void> {
-    const { contestId, userId, telegramId, text } = job.data;
+    const { contestId, userId, telegramId, text, winnerId } = job.data;
 
     // Защита от повторной отправки при ретрае: сообщение могло уйти, а запись
     // в БД — упасть. BullMQ не гонит один джоб параллельно, так что гонки
@@ -67,10 +71,27 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
     const contentType = BotMessageContentType.TEXT;
 
     try {
+      // Кнопки только у конкурсов с подтверждением приза: winnerId проставлен
+      // ровно тогда, когда строка ждёт решения победителя.
+      const callbackButtons =
+        winnerId === undefined
+          ? undefined
+          : [
+              {
+                text: '✅ Подтвердить',
+                callbackData: buildConfirmCallbackData(winnerId),
+              },
+              {
+                text: '❌ Отказаться',
+                callbackData: buildDeclineCallbackData(winnerId),
+              },
+            ];
+
       const sent = await telegramLimiter.schedule(() =>
         this.telegramService.sendMailingMessage({
           chatId: telegramId,
           text,
+          callbackButtons,
         }),
       );
 

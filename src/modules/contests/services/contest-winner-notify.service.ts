@@ -8,6 +8,7 @@ import {
 } from 'src/common/constants';
 import type { IBotMessageRepository, IContestRepository } from '../interfaces';
 import { BotMessageStatus, BotMessageType } from 'src/common/enums/bot';
+import { ContestWinnerStatus } from 'src/common/enums/contest';
 import { ContestWinner } from '../entities';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
 import { ContestWinnerService } from './contest-winner.service';
@@ -32,6 +33,13 @@ export interface WinnerNotifyJobData {
   userId: number;
   telegramId: string;
   text: string;
+
+  /**
+   * id строки победителя — нужен для кнопок подтверждения (уходит в
+   * callback_data). Заполняется, только когда у конкурса включено
+   * requireWinnerConfirmation; иначе уведомление уходит без кнопок, как прежде.
+   */
+  winnerId?: number;
 }
 
 /**
@@ -97,6 +105,12 @@ export class ContestWinnerNotifyService {
         continue;
       }
 
+      // Кнопки нужны только тому, у кого решение ещё не принято. Строка могла
+      // уже быть CONFIRMED (подтверждение выключено — так проставляет БД), и
+      // тогда уведомление уходит прежним, без кнопок.
+      const awaitsConfirmation =
+        winner.status === ContestWinnerStatus.PENDING_CONFIRMATION;
+
       jobs.push({
         name: 'notify-winner',
         data: {
@@ -106,7 +120,12 @@ export class ContestWinnerNotifyService {
           text: buildWinnerNotificationText({
             contestName: contest.name,
             place: winner.place,
+            confirmationDeadline: awaitsConfirmation
+              ? winner.confirmationDeadline
+              : null,
+            confirmationHours: contest.confirmationHours,
           }),
+          winnerId: awaitsConfirmation ? winner.id : undefined,
         },
         // Разделитель перед userId — дефис, а не двоеточие: BullMQ принимает
         // кастомный jobId с двоеточиями только ровно из трёх сегментов

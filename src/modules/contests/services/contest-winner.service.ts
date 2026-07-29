@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ContestParticipation } from '../entities';
 import { User } from 'src/modules/users/entities';
-import { WinnerStrategy } from 'src/common/enums/contest';
+import { ContestWinnerStatus, WinnerStrategy } from 'src/common/enums/contest';
 import {
   CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_WINNER_REPOSITORY,
@@ -31,7 +31,17 @@ export interface WinnerDrawContext {
   id: number;
   prizePlaces: number;
   winnerStrategy: WinnerStrategy;
+
+  /**
+   * Требуется ли подтверждение приза. Поля опциональны: старые вызовы и тесты,
+   * не знающие про Ш10, продолжают работать — победитель сразу CONFIRMED.
+   */
+  requireWinnerConfirmation?: boolean;
+  confirmationHours?: number;
 }
+
+/** Срок подтверждения, если у конкурса он не задан. */
+const DEFAULT_CONFIRMATION_HOURS = 24;
 
 @Injectable()
 export class ContestWinnerService {
@@ -106,8 +116,9 @@ export class ContestWinnerService {
     contestId: number,
     users: User[],
     prizePlaces: number,
+    confirmation?: { required?: boolean; hours?: number },
   ): Promise<void> {
-    const rows = this.toWinnerRows(contestId, users);
+    const rows = this.toWinnerRows(contestId, users, confirmation);
     this.validateWinnerRows(rows, prizePlaces);
     await this.contestWinnerRepo.replace(contestId, rows);
   }
@@ -235,11 +246,37 @@ export class ContestWinnerService {
     return normalized.map((item) => item.user);
   }
 
-  private toWinnerRows(contestId: number, users: User[]) {
+  /**
+   * Строки победителей. Когда подтверждение не требуется, status и дедлайн не
+   * заполняем вовсе — БД проставит DEFAULT 'confirmed', и конкурс идёт ровно
+   * как до Ш10.
+   *
+   * Дедлайн считаем от МОМЕНТА СОХРАНЕНИЯ, а не от endDate конкурса: финиш
+   * может задержаться (grace-период, перепроверка подписок идёт минутами), и
+   * отсчёт от endDate съел бы у победителя часть срока, а то и весь.
+   */
+  private toWinnerRows(
+    contestId: number,
+    users: User[],
+    confirmation?: { required?: boolean; hours?: number },
+  ) {
+    if (!confirmation?.required) {
+      return users.map((user, index) => ({
+        contestId,
+        userId: user.id,
+        place: index + 1,
+      }));
+    }
+
+    const hours = confirmation.hours ?? DEFAULT_CONFIRMATION_HOURS;
+    const deadline = new Date(Date.now() + hours * 60 * 60 * 1000);
+
     return users.map((user, index) => ({
       contestId,
       userId: user.id,
       place: index + 1,
+      status: ContestWinnerStatus.PENDING_CONFIRMATION,
+      confirmationDeadline: deadline,
     }));
   }
 
@@ -314,7 +351,23 @@ export class ContestWinnerService {
     }
 
     const users = await this.resolveWinners(contest);
-    await this.saveResolvedWinners(contest.id, users, contest.prizePlaces);
+    // Подтверждение только для RANDOM: у MANUAL победителей назначает оператор
+    // (другим путём — contestRepo.replaceWinners), и порядка жеребьёвки, из
+    // которого берётся замена, там не существует.
+    const confirmation =
+      contest.winnerStrategy === WinnerStrategy.RANDOM
+        ? {
+            required: contest.requireWinnerConfirmation,
+            hours: contest.confirmationHours,
+          }
+        : undefined;
+
+    await this.saveResolvedWinners(
+      contest.id,
+      users,
+      contest.prizePlaces,
+      confirmation,
+    );
     await this.syncParticipantsWithResolvedWinners(contest.id, users);
   }
 

@@ -237,6 +237,12 @@ export class TelegramService {
     imagePath?: string;
     buttonText?: string;
     buttonUrl?: string;
+    /**
+     * Инлайн-кнопки, возвращающие нажатие боту (подтверждение приза), в отличие
+     * от buttonUrl, который просто ведёт по ссылке. Заданы — имеют приоритет:
+     * в одном ряду вперемешку url и callback не нужны никому из вызывающих.
+     */
+    callbackButtons?: Array<{ text: string; callbackData: string }>;
   }): Promise<{ messageId: number; chatId: string }> {
     this.logger.debug(
       {
@@ -247,8 +253,16 @@ export class TelegramService {
       'sendMailingMessage: start',
     );
 
-    const replyMarkup =
-      dto.buttonText && dto.buttonUrl
+    const replyMarkup = dto.callbackButtons?.length
+      ? {
+          inline_keyboard: [
+            dto.callbackButtons.map((button) => ({
+              text: button.text,
+              callback_data: button.callbackData,
+            })),
+          ],
+        }
+      : dto.buttonText && dto.buttonUrl
         ? {
             inline_keyboard: [[{ text: dto.buttonText, url: dto.buttonUrl }]],
           }
