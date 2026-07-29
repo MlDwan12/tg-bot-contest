@@ -15,7 +15,7 @@ import type {
   IContestParticipationRepository,
   IContestWinnerRepository,
 } from '../interfaces';
-import { ContestWinnerAuditWriteRepository } from '../repositories';
+import { ContestWinnerAuditRepository } from '../repositories';
 import {
   DRAW_ALGORITHM,
   generateSeed,
@@ -52,7 +52,7 @@ export class ContestWinnerService {
     @Inject(CONTEST_PARTICIPATE_REPOSITORY)
     private readonly contestParticipationRepo: IContestParticipationRepository,
 
-    private readonly contestWinnerAuditWriteRepo: ContestWinnerAuditWriteRepository,
+    private readonly contestWinnerAuditRepo: ContestWinnerAuditRepository,
   ) {}
 
   async getContestWinners(contestId: number) {
@@ -79,7 +79,7 @@ export class ContestWinnerService {
       ? `Фиктивные победители: ${fictitiousUsernames.join(', ')}`
       : null;
 
-    await this.contestWinnerAuditWriteRepo.record({
+    await this.contestWinnerAuditRepo.record({
       contestId,
       strategy: WinnerStrategy.MANUAL,
       prizePlaces,
@@ -181,7 +181,7 @@ export class ContestWinnerService {
     // Неизменяемый след: любой пересчитает winners = shuffle(seed, pool) и
     // убедится, что розыгрыш не подкручен. Fail-closed: если след не записался,
     // розыгрыш не состоится (для дорогих призов «нет аудита — нет розыгрыша»).
-    await this.contestWinnerAuditWriteRepo.record({
+    await this.contestWinnerAuditRepo.record({
       contestId: contest.id,
       strategy: contest.winnerStrategy,
       prizePlaces: contest.prizePlaces,

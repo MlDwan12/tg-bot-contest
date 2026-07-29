@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import { CONTEST_WINNER_REPOSITORY } from 'src/common/constants';
 import type { IContestWinnerRepository } from '../interfaces';
 import { ContestWinnerStatus } from 'src/common/enums/contest';
+import { PLACE_VACATED_JOB } from '../jobs/contest-winner-confirm.jobs';
 
 /** Что показать нажавшему кнопку. Тексты — в обработчике, здесь только исход. */
 export type ConfirmationOutcome =
@@ -23,6 +26,9 @@ export class ContestWinnerConfirmationService {
   constructor(
     @Inject(CONTEST_WINNER_REPOSITORY)
     private readonly contestWinnerRepo: IContestWinnerRepository,
+
+    @InjectQueue('contest-winner-confirm')
+    private readonly confirmQueue: Queue,
 
     private readonly logger: Logger,
   ) {}
@@ -92,11 +98,37 @@ export class ContestWinnerConfirmationService {
     // джоб дедлайна). Победила первая операция, и это нормальный исход.
     if (!changed) return 'already_resolved';
 
+    // Отказ освобождает место — добор запускаем джобом, а не здесь: у
+    // победителя на кнопке крутятся «часики», и заставлять его ждать похода в
+    // Telegram за подпиской кандидата незачем.
+    if (!accepted) {
+      await this.enqueuePlaceVacated(winner.contestId, winner.place, winnerId);
+    }
+
     this.logger.log(
       { winnerId, contestId: winner.contestId, userId: winner.userId, status },
       'confirmation: победитель принял решение по призу',
     );
 
     return accepted ? 'confirmed' : 'declined';
+  }
+
+  /**
+   * jobId по id СТРОКИ, а не по месту: на одном месте отказаться может
+   * несколько человек подряд, и ключ вида vacated-<place> оказался бы занят
+   * первым отказом — BullMQ молча не создал бы джоб, и второй добор не
+   * состоялся бы. Повторный отказ той же строки при этом по-прежнему
+   * дедуплицируется.
+   */
+  private async enqueuePlaceVacated(
+    contestId: number,
+    place: number,
+    winnerId: number,
+  ): Promise<void> {
+    await this.confirmQueue.add(
+      PLACE_VACATED_JOB,
+      { contestId, place },
+      { jobId: `contest:${contestId}:vacated-${winnerId}` },
+    );
   }
 }

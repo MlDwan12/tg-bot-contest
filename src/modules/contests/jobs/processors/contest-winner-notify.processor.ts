@@ -13,6 +13,8 @@ import {
   WinnersSummaryJobData,
   WinnerNotifyJobData,
   WINNERS_SUMMARY_JOB,
+  UNFILLED_PLACE_JOB,
+  UnfilledPlaceJobData,
 } from '../../services/contest-winner-notify.service';
 import {
   buildConfirmCallbackData,
@@ -38,10 +40,15 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<WinnerNotifyJobData | WinnersSummaryJobData>,
+    job: Job<WinnerNotifyJobData | WinnersSummaryJobData | UnfilledPlaceJobData>,
   ): Promise<void> {
     if (job.name === WINNERS_SUMMARY_JOB) {
       await this.sendSummary(job as Job<WinnersSummaryJobData>);
+      return;
+    }
+
+    if (job.name === UNFILLED_PLACE_JOB) {
+      await this.sendUnfilledPlace(job as Job<UnfilledPlaceJobData>);
       return;
     }
 
@@ -212,6 +219,37 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
       { ...jobMeta(job), contestId, admins: summary.adminTelegramIds.length },
       'notify-winners-summary: сводка отправлена',
     );
+  }
+
+  /**
+   * «Место осталось незакрытым»: очередь жеребьёвки исчерпана, заменить
+   * отказавшегося некем. Решение за человеком, поэтому просто зовём админов.
+   */
+  private async sendUnfilledPlace(
+    job: Job<UnfilledPlaceJobData>,
+  ): Promise<void> {
+    const { contestId, place, contestName, adminTelegramIds } = job.data;
+
+    const text =
+      `⚠️ Конкурс «${contestName}» (id ${contestId}): место ${place} осталось ` +
+      `незакрытым — победитель не подтвердил приз, а участники для замены ` +
+      `закончились. Нужно решение вручную.`;
+
+    for (const adminTelegramId of adminTelegramIds) {
+      try {
+        await telegramLimiter.schedule(() =>
+          this.telegramService.sendMailingMessage({
+            chatId: adminTelegramId,
+            text,
+          }),
+        );
+      } catch (error: any) {
+        this.logger.error(
+          { ...jobMeta(job), contestId, adminTelegramId, err: error },
+          'notify-unfilled-place: не удалось уведомить администратора',
+        );
+      }
+    }
   }
 
   /**

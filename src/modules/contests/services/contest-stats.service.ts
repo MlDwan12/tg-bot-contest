@@ -10,7 +10,10 @@ import type {
   IContestRepository,
 } from '../interfaces';
 import { BotMessageStatus, BotMessageType } from 'src/common/enums/bot';
-import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
+import {
+  ContestWinnerStatus,
+  ParticipationSubscriptionStatus,
+} from 'src/common/enums/contest';
 import { ContestStatsDto } from '../dto/contest-stats.dto';
 import { ContestWinnerService } from './contest-winner.service';
 
@@ -60,6 +63,22 @@ export class ContestStatsService {
     const unsubscribed =
       participants[ParticipationSubscriptionStatus.UNSUBSCRIBED];
 
+    const countByStatus = (status: ContestWinnerStatus) =>
+      winners.filter((winner) => winner.status === status).length;
+
+    // Место считаем закрытым, пока за ним стоит живой победитель: подтвердивший
+    // либо ещё думающий. Отказ и просрочка место освобождают, поэтому в
+    // сравнении с prizePlaces сразу видно, где приз завис без хозяина.
+    const filledPlaces = new Set(
+      winners
+        .filter(
+          (winner) =>
+            winner.status === ContestWinnerStatus.CONFIRMED ||
+            winner.status === ContestWinnerStatus.PENDING_CONFIRMATION,
+        )
+        .map((winner) => winner.place),
+    );
+
     return {
       contestId,
       participantsTotal: valid + unsubscribed,
@@ -67,6 +86,12 @@ export class ContestStatsService {
       participantsUnsubscribed: unsubscribed,
       subscriptionsCheckedAt: contest.subscriptionsCheckedAt ?? null,
       winnersTotal: winners.length,
+      winnersConfirmed: countByStatus(ContestWinnerStatus.CONFIRMED),
+      winnersPending: countByStatus(ContestWinnerStatus.PENDING_CONFIRMATION),
+      winnersDeclined: countByStatus(ContestWinnerStatus.DECLINED),
+      winnersExpired: countByStatus(ContestWinnerStatus.EXPIRED),
+      placesFilled: filledPlaces.size,
+      prizePlaces: contest.prizePlaces,
       notificationsDelivered: deliveredIds.length,
       notificationsFailed: failedIds.length,
     };

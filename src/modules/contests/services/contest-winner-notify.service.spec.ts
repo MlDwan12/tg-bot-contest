@@ -2,6 +2,7 @@ import {
   ContestWinnerNotifyService,
   WINNERS_SUMMARY_JOB,
 } from './contest-winner-notify.service';
+import { ContestWinnerStatus } from 'src/common/enums/contest';
 
 type BulkJob = {
   name: string;
@@ -39,10 +40,22 @@ function assertValidBullMqJobId(jobId: string | undefined): void {
 /** Реальный победитель: есть строка в users и telegramId, есть кому писать. */
 function realWinner(place: number, userId: number, telegramId: string) {
   return {
+    id: 100 + userId,
     place,
     userId,
     displayUsername: null,
+    status: ContestWinnerStatus.CONFIRMED,
+    confirmationDeadline: null,
     user: { id: userId, telegramId, username: `user${userId}` },
+  };
+}
+
+/** Победитель, ждущий решения: конкурс с включённым подтверждением приза. */
+function pendingWinner(place: number, userId: number, telegramId: string) {
+  return {
+    ...realWinner(place, userId, telegramId),
+    status: ContestWinnerStatus.PENDING_CONFIRMATION,
+    confirmationDeadline: new Date(Date.now() + 60 * 60 * 1000),
   };
 }
 
@@ -81,6 +94,16 @@ function build(options: { winners?: any[]; contest?: any } = {}) {
     },
   } as any;
 
+  // Дедлайны ставятся отдельной очередью и независимо от уведомлений: срок
+  // должен истечь даже если победителю не удалось написать (403).
+  const deadlineJobs: Array<{ name: string; data: any; opts: any }> = [];
+  const confirmQueue = {
+    add: async (name: string, data: any, opts: any) => {
+      deadlineJobs.push({ name, data, opts });
+      return { id: 'deadline' };
+    },
+  } as any;
+
   const contestWinnerService = {
     getContestWinners: async () => options.winners ?? [],
   } as any;
@@ -91,11 +114,12 @@ function build(options: { winners?: any[]; contest?: any } = {}) {
     contestRepo,
     botMessageRepo,
     notifyQueue,
+    confirmQueue,
     contestWinnerService,
     logger,
   );
 
-  return { service, bulkCalls, addCalls };
+  return { service, bulkCalls, addCalls, deadlineJobs };
 }
 
 describe('ContestWinnerNotifyService.enqueueWinnerNotifications', () => {
@@ -197,5 +221,38 @@ describe('ContestWinnerNotifyService.enqueueWinnerNotifications', () => {
     expect(result).toEqual({ queued: 0, skipped: 0 });
     expect(bulkCalls).toHaveLength(0);
     expect(addCalls).toHaveLength(0);
+  });
+
+  describe('дедлайны подтверждения', () => {
+    it('ждущим решения ставится отложенный джоб дедлайна', async () => {
+      const { service, deadlineJobs, bulkCalls } = build({
+        winners: [pendingWinner(1, 42, '750482759')],
+      });
+
+      await service.enqueueWinnerNotifications(7);
+
+      expect(deadlineJobs).toHaveLength(1);
+      expect(deadlineJobs[0].data).toMatchObject({
+        contestId: 7,
+        winnerId: 142,
+        place: 1,
+      });
+      expect(deadlineJobs[0].opts.jobId).toBe('contest:7:deadline-142');
+      expect(deadlineJobs[0].opts.delay).toBeGreaterThan(0);
+
+      // Кнопки подтверждения уходят только ждущим решения.
+      expect(bulkCalls[0][0].data.winnerId).toBe(142);
+    });
+
+    it('подтверждение выключено → дедлайнов нет, кнопок нет', async () => {
+      const { service, deadlineJobs, bulkCalls } = build({
+        winners: [realWinner(1, 42, '750482759')],
+      });
+
+      await service.enqueueWinnerNotifications(7);
+
+      expect(deadlineJobs).toHaveLength(0);
+      expect(bulkCalls[0][0].data.winnerId).toBeUndefined();
+    });
   });
 });

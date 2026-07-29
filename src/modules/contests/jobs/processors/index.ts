@@ -4,3 +4,4 @@ export * from './contest-maintenance.processor';
 export * from './contest-publication.processor';
 export * from './contest-publish.processor';
 export * from './contest-winner-notify.processor';
+export * from './contest-winner-confirm.processor';

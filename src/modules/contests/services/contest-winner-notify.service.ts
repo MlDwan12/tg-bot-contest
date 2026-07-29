@@ -10,6 +10,7 @@ import type { IBotMessageRepository, IContestRepository } from '../interfaces';
 import { BotMessageStatus, BotMessageType } from 'src/common/enums/bot';
 import { ContestWinnerStatus } from 'src/common/enums/contest';
 import { ContestWinner } from '../entities';
+import { CONFIRMATION_DEADLINE_JOB } from '../jobs/contest-winner-confirm.jobs';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
 import { ContestWinnerService } from './contest-winner.service';
 import { buildWinnerNotificationText } from './contest-winner-message.util';
@@ -18,6 +19,16 @@ import { toResultsWinners } from './contest-results-text.util';
 
 /** Имя джоба сводки администраторам в очереди contest-winner-notify. */
 export const WINNERS_SUMMARY_JOB = 'notify-winners-summary';
+
+/** Имя джоба «место осталось незакрытым» — очередь жеребьёвки исчерпана. */
+export const UNFILLED_PLACE_JOB = 'notify-unfilled-place';
+
+export interface UnfilledPlaceJobData {
+  contestId: number;
+  place: number;
+  contestName: string;
+  adminTelegramIds: string[];
+}
 
 export interface WinnersSummaryJobData {
   contestId: number;
@@ -57,6 +68,9 @@ export class ContestWinnerNotifyService {
 
     @InjectQueue('contest-winner-notify')
     private readonly notifyQueue: Queue,
+
+    @InjectQueue('contest-winner-confirm')
+    private readonly confirmQueue: Queue,
 
     private readonly contestWinnerService: ContestWinnerService,
     private readonly logger: Logger,
@@ -138,6 +152,11 @@ export class ContestWinnerNotifyService {
       });
     }
 
+    // Дедлайны ставим ОТДЕЛЬНО от уведомлений и независимо от их исхода:
+    // победитель мог не запускать бота (403), уведомление не дойдёт — но срок
+    // всё равно должен истечь, иначе место зависнет за ним навсегда.
+    await this.scheduleConfirmationDeadlines(contestId, winners);
+
     if (jobs.length) {
       await this.notifyQueue.addBulk(jobs);
     } else {
@@ -153,6 +172,80 @@ export class ContestWinnerNotifyService {
     );
 
     return { queued: jobs.length, skipped };
+  }
+
+  /**
+   * Уведомление ОДНОМУ победителю — тому, кто занял место по автодобору.
+   * Отдельный вход нужен потому, что enqueueWinnerNotifications ставит джобы
+   * всем сразу, а остальных уведомлять повторно нельзя.
+   */
+  async enqueueWinnerNotification(
+    contestId: number,
+    winnerId: number,
+  ): Promise<void> {
+    const contest = await this.contestRepo.findByParams({ id: contestId });
+    const winners =
+      await this.contestWinnerService.getContestWinners(contestId);
+    const winner = winners.find((row) => row.id === winnerId);
+    const telegramId = winner?.user?.telegramId;
+
+    if (!contest || !winner || winner.userId == null || !telegramId) {
+      this.logger.warn(
+        { contestId, winnerId },
+        'enqueueWinnerNotification: уведомлять некого (нет конкурса, строки или telegramId)',
+      );
+      return;
+    }
+
+    const awaitsConfirmation =
+      winner.status === ContestWinnerStatus.PENDING_CONFIRMATION;
+
+    await this.notifyQueue.add(
+      'notify-winner',
+      {
+        contestId,
+        userId: winner.userId,
+        telegramId: String(telegramId),
+        text: buildWinnerNotificationText({
+          contestName: contest.name,
+          place: winner.place,
+          confirmationDeadline: awaitsConfirmation
+            ? winner.confirmationDeadline
+            : null,
+          confirmationHours: contest.confirmationHours,
+        }),
+        winnerId: awaitsConfirmation ? winner.id : undefined,
+      },
+      // jobId по id СТРОКИ, а не по userId: на одном месте побывает несколько
+      // победителей, и ключ вида contest:<id>:winner-<userId> уже занят
+      // отказавшимся. Три сегмента — требование BullMQ.
+      { jobId: `contest:${contestId}:winner-row-${winnerId}` },
+    );
+  }
+
+  /**
+   * Место не закрыть — очередь жеребьёвки исчерпана. Сообщаем администраторам:
+   * иначе приз потеряется молча, и об этом никто не узнает.
+   */
+  async notifyAdminsAboutUnfilledPlace(
+    contestId: number,
+    place: number,
+  ): Promise<void> {
+    const contest = await this.contestRepo.findByParams({ id: contestId });
+    const adminTelegramIds = getAdminTelegramIdsFromEnv();
+
+    if (!contest || !adminTelegramIds.length) return;
+
+    await this.notifyQueue.add(
+      UNFILLED_PLACE_JOB,
+      {
+        contestId,
+        place,
+        contestName: contest.name,
+        adminTelegramIds,
+      },
+      { jobId: `contest:${contestId}:unfilled-${place}` },
+    );
   }
 
   /**
@@ -244,6 +337,51 @@ export class ContestWinnerNotifyService {
       }),
       adminTelegramIds,
     };
+  }
+
+  /**
+   * Отложенные джобы на дедлайн подтверждения. Ставятся только тем строкам,
+   * что реально ждут решения: при выключенном подтверждении статус CONFIRMED,
+   * и дедлайнов нет вовсе.
+   */
+  async scheduleConfirmationDeadlines(
+    contestId: number,
+    winners: ContestWinner[],
+  ): Promise<void> {
+    for (const winner of winners) {
+      if (
+        winner.status !== ContestWinnerStatus.PENDING_CONFIRMATION ||
+        !winner.confirmationDeadline
+      ) {
+        continue;
+      }
+
+      await this.scheduleConfirmationDeadline(
+        contestId,
+        winner.id,
+        winner.place,
+        winner.confirmationDeadline,
+      );
+    }
+  }
+
+  /** Один дедлайн — используется и при розыгрыше, и после автодобора. */
+  async scheduleConfirmationDeadline(
+    contestId: number,
+    winnerId: number,
+    place: number,
+    deadline: Date,
+  ): Promise<void> {
+    await this.confirmQueue.add(
+      CONFIRMATION_DEADLINE_JOB,
+      { contestId, winnerId, place },
+      {
+        jobId: `contest:${contestId}:deadline-${winnerId}`,
+        // Дедлайн мог уже наступить (очередь стояла, сервис лежал) — тогда
+        // джоб выполняется сразу, а не отбрасывается отрицательной задержкой.
+        delay: Math.max(0, deadline.getTime() - Date.now()),
+      },
+    );
   }
 
   private async enqueueSummary(contestId: number): Promise<void> {

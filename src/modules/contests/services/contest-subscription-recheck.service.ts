@@ -71,6 +71,45 @@ export class ContestSubscriptionRecheckService {
    * нечего»: без неё finishContestIdempotent снова поставил бы джоб проверки и
    * конкурс зациклился бы, так и не завершившись.
    */
+  /**
+   * Подписка ОДНОГО участника. Нужна автодобору: кандидат мог отписаться уже
+   * после финиша, а гонять перепроверку всего пула ради одного человека незачем.
+   *
+   * true, если проверять нечего — перепроверка у конкурса выключена, обязательных
+   * каналов нет или у участника нет telegramId: доказать отписку мы не можем, а
+   * лишать приза по недоказанному хуже, чем оставить.
+   */
+  async isUserStillSubscribed(
+    contestId: number,
+    userId: number,
+  ): Promise<boolean> {
+    const contest = await this.contestRepo.findByParams({ id: contestId });
+
+    const channelIds = (contest?.requiredChannels ?? [])
+      .map((channel) => channel.telegramId)
+      .filter((id): id is number => id != null);
+
+    if (!contest?.recheckSubscriptionOnFinish || !channelIds.length) {
+      return true;
+    }
+
+    const participation = await this.contestParticipationRepo.findOneByParam({
+      contestId,
+      userId,
+    });
+
+    const telegramId = participation?.user?.telegramId;
+
+    if (!telegramId) return true;
+
+    const { passed } = await this.telegramService.checkUserInChannels(
+      String(telegramId),
+      channelIds,
+    );
+
+    return passed;
+  }
+
   async recheckContestSubscriptions(contestId: number): Promise<RecheckResult> {
     const contest = await this.contestRepo.findByParams({ id: contestId });
 

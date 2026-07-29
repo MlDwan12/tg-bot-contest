@@ -17,7 +17,7 @@ export type ContestWinnerRow = {
 /**
  * Единый контракт репозитория агрегата ContestWinner (Фаза 9 — слиты read+write).
  * Сервисы зависят от этой абстракции через токен CONTEST_WINNER_REPOSITORY.
- * NB: аудит назначения (ContestWinnerAuditWriteRepository) — отдельный write-only
+ * NB: аудит назначения (ContestWinnerAuditRepository) — отдельный append-only
  * агрегат, в этот контракт НЕ входит.
  */
 export interface IContestWinnerRepository {
@@ -28,6 +28,13 @@ export interface IContestWinnerRepository {
   // запись
   replace(contestId: number, winners: ContestWinnerRow[]): Promise<void>;
   deleteByContestId(contestId: number): Promise<void>;
+
+  /**
+   * Добавляет ОДНУ строку победителя, не трогая остальных. Нужен автодобору:
+   * replace стирает всех, а строка отказавшегося должна остаться — по ней видна
+   * история места прямо в таблице, а не только в аудите.
+   */
+  append(row: ContestWinnerRow): Promise<ContestWinner>;
 
   /**
    * Атомарно переводит победителя из PENDING_CONFIRMATION в конечный статус.

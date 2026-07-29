@@ -77,6 +77,10 @@ export class ContestWinnerRepository implements IContestWinnerRepository {
     });
   }
 
+  async append(row: ContestWinnerRow): Promise<ContestWinner> {
+    return this.repo.save(this.repo.create(row));
+  }
+
   async deleteByContestId(contestId: number): Promise<void> {
     await this.repo.delete({ contestId });
   }

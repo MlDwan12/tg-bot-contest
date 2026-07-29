@@ -17,7 +17,7 @@ import {
   ContestParticipationRepository,
   ContestRepository,
   ContestWinnerRepository,
-  ContestWinnerAuditWriteRepository,
+  ContestWinnerAuditRepository,
   BotMessageRepository,
 } from './repositories';
 import {
@@ -36,6 +36,7 @@ import {
   ContestJobsService,
   ContestWinnerNotifyService,
   ContestWinnerConfirmationService,
+  ContestWinnerReplacementService,
   ContestSubscriptionRecheckService,
   ContestStatsService,
   ContestExportService,
@@ -44,6 +45,7 @@ import { BotModule } from '../bot/bot.module';
 import {
   ContestCountersProcessor,
   ContestWinnerNotifyProcessor,
+  ContestWinnerConfirmProcessor,
 } from './jobs/processors';
 
 @Module({
@@ -73,6 +75,7 @@ import {
     ContestWinnerService,
     ContestWinnerNotifyService,
     ContestWinnerConfirmationService,
+    ContestWinnerReplacementService,
     ContestWinnerConfirmUpdate,
     ContestSubscriptionRecheckService,
     ContestStatsService,
@@ -80,8 +83,9 @@ import {
     ContestJobsService,
     ContestCountersProcessor,
     ContestWinnerNotifyProcessor,
+    ContestWinnerConfirmProcessor,
 
-    ContestWinnerAuditWriteRepository,
+    ContestWinnerAuditRepository,
     {
       provide: CONTEST_REPOSITORY,
       useClass: ContestRepository,

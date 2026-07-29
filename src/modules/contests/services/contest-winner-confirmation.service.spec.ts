@@ -40,14 +40,23 @@ function build(
     },
   } as any;
 
+  const vacatedJobs: Array<{ name: string; data: any; opts: any }> = [];
+  const confirmQueue = {
+    add: async (name: string, data: any, opts: any) => {
+      vacatedJobs.push({ name, data, opts });
+      return { id: 'job' };
+    },
+  } as any;
+
   const logger = { log() {}, warn() {}, error() {}, debug() {} } as any;
 
   const service = new ContestWinnerConfirmationService(
     contestWinnerRepo,
+    confirmQueue,
     logger,
   );
 
-  return { service, resolveCalls };
+  return { service, resolveCalls, vacatedJobs };
 }
 
 describe('ContestWinnerConfirmationService', () => {
@@ -127,6 +136,27 @@ describe('ContestWinnerConfirmationService', () => {
     expect(await service.confirm(15, OWNER_TELEGRAM_ID)).toBe(
       'already_resolved',
     );
+  });
+
+  it('отказ ставит джоб автодобора с ключом по строке, а не по месту', async () => {
+    const { service, vacatedJobs } = build();
+
+    await service.decline(15, OWNER_TELEGRAM_ID);
+
+    expect(vacatedJobs).toHaveLength(1);
+    expect(vacatedJobs[0].data).toEqual({ contestId: 7, place: 1 });
+
+    // На одном месте отказаться может несколько человек подряд: ключ по месту
+    // был бы занят первым отказом, и BullMQ молча не создал бы второй джоб.
+    expect(vacatedJobs[0].opts.jobId).toBe('contest:7:vacated-15');
+  });
+
+  it('подтверждение автодобор не запускает', async () => {
+    const { service, vacatedJobs } = build();
+
+    await service.confirm(15, OWNER_TELEGRAM_ID);
+
+    expect(vacatedJobs).toHaveLength(0);
   });
 
   it('строка победителя не найдена', async () => {
