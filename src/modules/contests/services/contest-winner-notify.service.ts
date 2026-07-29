@@ -4,9 +4,14 @@ import { Queue } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import {
   BOT_MESSAGE_REPOSITORY,
+  CONTEST_PARTICIPATE_REPOSITORY,
   CONTEST_REPOSITORY,
 } from 'src/common/constants';
-import type { IBotMessageRepository, IContestRepository } from '../interfaces';
+import type {
+  IBotMessageRepository,
+  IContestParticipationRepository,
+  IContestRepository,
+} from '../interfaces';
 import { BotMessageStatus, BotMessageType } from 'src/common/enums/bot';
 import { ContestWinnerStatus } from 'src/common/enums/contest';
 import { ContestWinner } from '../entities';
@@ -14,6 +19,11 @@ import { CONFIRMATION_DEADLINE_JOB } from '../jobs/contest-winner-confirm.jobs';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
 import { ContestWinnerService } from './contest-winner.service';
 import { buildWinnerNotificationText } from './contest-winner-message.util';
+import {
+  buildAllPostLinks,
+  ContestPostRef,
+  findPostLinkForChat,
+} from './contest-post-link.util';
 import { buildWinnersSummaryText } from './contest-winners-summary.util';
 import { toResultsWinners } from './contest-results-text.util';
 
@@ -28,6 +38,7 @@ export interface UnfilledPlaceJobData {
   place: number;
   contestName: string;
   adminTelegramIds: string[];
+  postUrls?: string[];
 }
 
 export interface WinnersSummaryJobData {
@@ -65,6 +76,9 @@ export class ContestWinnerNotifyService {
 
     @Inject(BOT_MESSAGE_REPOSITORY)
     private readonly botMessageRepo: IBotMessageRepository,
+
+    @Inject(CONTEST_PARTICIPATE_REPOSITORY)
+    private readonly contestParticipationRepo: IContestParticipationRepository,
 
     @InjectQueue('contest-winner-notify')
     private readonly notifyQueue: Queue,
@@ -104,6 +118,9 @@ export class ContestWinnerNotifyService {
     const winners =
       await this.contestWinnerService.getContestWinners(contestId);
 
+    // Публикации грузим один раз на конкурс, а не на каждого победителя.
+    const posts = await this.loadPostRefs(contestId);
+
     const jobs: Array<{
       name: string;
       data: WinnerNotifyJobData;
@@ -125,6 +142,11 @@ export class ContestWinnerNotifyService {
       const awaitsConfirmation =
         winner.status === ContestWinnerStatus.PENDING_CONFIRMATION;
 
+      const chatId = await this.findParticipationChatId(
+        contestId,
+        winner.userId,
+      );
+
       jobs.push({
         name: 'notify-winner',
         data: {
@@ -138,6 +160,7 @@ export class ContestWinnerNotifyService {
               ? winner.confirmationDeadline
               : null,
             confirmationHours: contest.confirmationHours,
+            postUrl: findPostLinkForChat(posts, chatId),
           }),
           winnerId: awaitsConfirmation ? winner.id : undefined,
         },
@@ -200,6 +223,9 @@ export class ContestWinnerNotifyService {
     const awaitsConfirmation =
       winner.status === ContestWinnerStatus.PENDING_CONFIRMATION;
 
+    const posts = await this.loadPostRefs(contestId);
+    const chatId = await this.findParticipationChatId(contestId, winner.userId);
+
     await this.notifyQueue.add(
       'notify-winner',
       {
@@ -213,6 +239,7 @@ export class ContestWinnerNotifyService {
             ? winner.confirmationDeadline
             : null,
           confirmationHours: contest.confirmationHours,
+          postUrl: findPostLinkForChat(posts, chatId),
         }),
         winnerId: awaitsConfirmation ? winner.id : undefined,
       },
@@ -243,6 +270,7 @@ export class ContestWinnerNotifyService {
         place,
         contestName: contest.name,
         adminTelegramIds,
+        postUrls: buildAllPostLinks(await this.loadPostRefs(contestId)),
       },
       { jobId: `contest:${contestId}:unfilled-${place}` },
     );
@@ -320,6 +348,8 @@ export class ContestWinnerNotifyService {
     const isNotifiable = (winner: ContestWinner) =>
       winner.userId != null && !!winner.user?.telegramId;
 
+    const posts = await this.loadPostRefs(contestId);
+
     return {
       text: buildWinnersSummaryText({
         contestId,
@@ -334,6 +364,7 @@ export class ContestWinnerNotifyService {
           ),
         ),
         skipped: toResultsWinners(winners.filter((w) => !isNotifiable(w))),
+        postUrls: buildAllPostLinks(posts),
       }),
       adminTelegramIds,
     };
@@ -408,5 +439,34 @@ export class ContestWinnerNotifyService {
     ]);
 
     return new Set([...sentIds, ...failedIds]);
+  }
+
+  /**
+   * Публикации конкурса в виде, пригодном для ссылок. Username канала нужен,
+   * чтобы у публичных площадок ссылка открывалась у любого, а не только у
+   * подписчиков (формат t.me/c/… работает лишь для состоящих в канале).
+   */
+  private async loadPostRefs(contestId: number): Promise<ContestPostRef[]> {
+    const publications =
+      await this.contestRepo.findPublicationsByContestId(contestId);
+
+    return publications.map((publication) => ({
+      chatId: publication.chatId,
+      telegramMessageId: publication.telegramMessageId ?? null,
+      channelUsername: publication.channel?.telegramUsername ?? null,
+    }));
+  }
+
+  /** Чат, из которого победитель нажал «Участвовать» — groupId его участия. */
+  private async findParticipationChatId(
+    contestId: number,
+    userId: number,
+  ): Promise<string | null> {
+    const participation = await this.contestParticipationRepo.findOneByParam({
+      contestId,
+      userId,
+    });
+
+    return participation?.groupId ?? null;
   }
 }

@@ -40,6 +40,8 @@ export function buildWinnersSummaryText(params: {
   deliveredCount: number;
   undelivered: ResultsWinner[];
   skipped: ResultsWinner[];
+  /** Ссылки на ВСЕ посты конкурса — админ ведёт все площадки сразу. */
+  postUrls?: string[];
 }): string {
   const parts: string[] = [
     `✅ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён.`,
@@ -68,6 +70,16 @@ export function buildWinnersSummaryText(params: {
     parts.push(
       `ℹ️ Без Telegram-аккаунта, уведомить невозможно:\n` +
         formatNameList(params.skipped),
+    );
+  }
+
+  if (params.postUrls?.length) {
+    parts.push(
+      params.postUrls.length === 1
+        ? `<a href="${params.postUrls[0]}">Пост конкурса</a>`
+        : `Посты конкурса:\n${params.postUrls
+            .map((url, index) => `<a href="${url}">Площадка ${index + 1}</a>`)
+            .join('\n')}`,
     );
   }
 

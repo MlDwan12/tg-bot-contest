@@ -40,7 +40,9 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
   }
 
   async process(
-    job: Job<WinnerNotifyJobData | WinnersSummaryJobData | UnfilledPlaceJobData>,
+    job: Job<
+      WinnerNotifyJobData | WinnersSummaryJobData | UnfilledPlaceJobData
+    >,
   ): Promise<void> {
     if (job.name === WINNERS_SUMMARY_JOB) {
       await this.sendSummary(job as Job<WinnersSummaryJobData>);
@@ -228,12 +230,23 @@ export class ContestWinnerNotifyProcessor extends WorkerHost {
   private async sendUnfilledPlace(
     job: Job<UnfilledPlaceJobData>,
   ): Promise<void> {
-    const { contestId, place, contestName, adminTelegramIds } = job.data;
+    const { contestId, place, contestName, adminTelegramIds, postUrls } =
+      job.data;
+
+    const links = postUrls?.length
+      ? `\n\n${postUrls
+          .map((url, index) =>
+            postUrls.length === 1
+              ? `<a href="${url}">Пост конкурса</a>`
+              : `<a href="${url}">Площадка ${index + 1}</a>`,
+          )
+          .join('\n')}`
+      : '';
 
     const text =
       `⚠️ Конкурс «${contestName}» (id ${contestId}): место ${place} осталось ` +
       `незакрытым — победитель не подтвердил приз, а участники для замены ` +
-      `закончились. Нужно решение вручную.`;
+      `закончились. Нужно решение вручную.${links}`;
 
     for (const adminTelegramId of adminTelegramIds) {
       try {

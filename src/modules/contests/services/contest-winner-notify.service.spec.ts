@@ -77,10 +77,23 @@ function build(options: { winners?: any[]; contest?: any } = {}) {
       options.contest === undefined
         ? { id: 7, name: 'Проверка фазы 1' }
         : options.contest,
+    findPublicationsByContestId: async () => [
+      {
+        chatId: '-1002949180383',
+        telegramMessageId: 126,
+        channel: { telegramUsername: 'GroupRandomTestPub' },
+      },
+    ],
   } as any;
 
   const botMessageRepo = {
     findUserIdsByStatus: async () => [],
+  } as any;
+
+  // Ссылку на пост победителю строим по groupId его участия — по тому чату,
+  // где он нажал «Участвовать».
+  const participationRepo = {
+    findOneByParam: async () => ({ groupId: '-1002949180383' }),
   } as any;
 
   const notifyQueue = {
@@ -113,6 +126,7 @@ function build(options: { winners?: any[]; contest?: any } = {}) {
   const service = new ContestWinnerNotifyService(
     contestRepo,
     botMessageRepo,
+    participationRepo,
     notifyQueue,
     confirmQueue,
     contestWinnerService,
@@ -253,6 +267,22 @@ describe('ContestWinnerNotifyService.enqueueWinnerNotifications', () => {
 
       expect(deadlineJobs).toHaveLength(0);
       expect(bulkCalls[0][0].data.winnerId).toBeUndefined();
+    });
+  });
+
+  describe('ссылка на пост конкурса', () => {
+    it('победителю уходит ссылка на пост ТОГО чата, где он участвовал', async () => {
+      const { service, bulkCalls } = build({
+        winners: [realWinner(1, 42, '750482759')],
+      });
+
+      await service.enqueueWinnerNotifications(7);
+
+      // Ссылка на чужую площадку, где победитель не состоит, у приватных
+      // каналов просто не откроется — поэтому берём его groupId.
+      expect(bulkCalls[0][0].data.text).toContain(
+        'https://t.me/GroupRandomTestPub/126',
+      );
     });
   });
 });

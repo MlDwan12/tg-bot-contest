@@ -18,6 +18,8 @@ export function buildWinnerNotificationText(params: {
   confirmationDeadline?: Date | null;
   /** Срок в часах — показываем рядом с датой, чтобы не зависеть от пояса. */
   confirmationHours?: number;
+  /** Ссылка на пост в ТОМ чате, откуда победитель нажал «Участвовать». */
+  postUrl?: string | null;
 }): string {
   const medals = ['🥇', '🥈', '🥉'];
   const medal =
@@ -25,11 +27,17 @@ export function buildWinnerNotificationText(params: {
       ? `${medals[params.place - 1]} `
       : '';
 
+  // Ссылка на пост даётся именно того чата, где человек участвовал: ссылка на
+  // канал, где он не состоит, у приватных площадок просто не откроется.
+  const post = params.postUrl
+    ? `\n\n<a href="${params.postUrl}">Пост конкурса</a>`
+    : '';
+
   const base =
     `${medal}Поздравляем! Вы заняли ${params.place} место ` +
     `в конкурсе «${escapeHtml(params.contestName)}».`;
 
-  if (!params.confirmationDeadline) return base;
+  if (!params.confirmationDeadline) return base + post;
 
   // Срок называем прямо в тексте: без него кнопка выглядит необязательной, а
   // молчание стоит победителю приза.
@@ -47,7 +55,7 @@ export function buildWinnerNotificationText(params: {
   return (
     `${base}\n\nПодтвердите получение приза ${relative}до ` +
     `${formatConfirmationDeadline(params.confirmationDeadline)}. ` +
-    `Если не ответить, приз перейдёт следующему участнику.`
+    `Если не ответить, приз перейдёт следующему участнику.${post}`
   );
 }
 
