@@ -6,7 +6,11 @@ import { createUser, createContest } from './fixtures';
 import { buildContestRepos } from './build-services';
 import { ContestsService } from 'src/modules/contests/services/contests.service';
 import { ContestWinner } from 'src/modules/contests/entities/contest-winner.entity';
-import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import {
+  ContestStatus,
+  ContestWinnerStatus,
+  WinnerStrategy,
+} from 'src/common/enums/contest';
 
 /**
  * MANUAL-победители `ContestsService.updateContest`.
@@ -34,9 +38,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     await truncateAll(ds);
   });
 
-  function makeService(fakes: {
-    findByTelegramId?: (...args: any[]) => any;
-  }) {
+  function makeService(fakes: { findByTelegramId?: (...args: any[]) => any }) {
     const repos = buildContestRepos(ds);
 
     const fakeLogger = {
@@ -477,6 +479,11 @@ describe('характеризация: updateContest — MANUAL-победит�
         id: expect.any(Number),
         userId: null,
         place: 1,
+        // Ш10: админской выдаче статус нужен, иначе после автодобора на одном
+        // месте лежат две строки и отличить актуальную нечем. Ручному
+        // победителю БД проставляет 'confirmed' по умолчанию — подтверждение
+        // доступно только для RANDOM.
+        status: ContestWinnerStatus.CONFIRMED,
         user: { id: null, telegramId: null, username: 'ivan_petrov' },
       },
     ]);

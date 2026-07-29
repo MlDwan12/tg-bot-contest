@@ -18,7 +18,7 @@ import type {
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { Contest, ContestParticipation } from '../entities';
-import { ContestStatus } from 'src/common/enums/contest';
+import { ContestStatus, ContestWinnerStatus } from 'src/common/enums/contest';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';
@@ -108,14 +108,43 @@ export class ContestsParticipateService {
     const winners =
       await this.contestWinnerService.getContestWinners(contestId);
 
-    return winners.map((w) => ({
-      place: w.place,
-      telegramId: w.user?.telegramId ?? null,
-      userId: w.userId,
-      // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный ник
-      // в том же поле username, telegramId/userId остаются null.
-      username: w.user?.username ?? w.displayUsername ?? null,
-    }));
+    // Участникам показываем только ЖИВЫХ победителей. После автодобора на одном
+    // месте остаётся несколько строк: отказавшийся (declined/expired) и тот,
+    // кто занял место. Отдать оба — значит показать в мини-аппе двух
+    // победителей одного места, из которых один приз уже не получит.
+    return winners
+      .filter(
+        // Отсеиваем только тех, кто приза уже не получит. Именно «исключаем
+        // отказавшихся», а не «оставляем известные статусы»: при неожиданном
+        // значении победитель должен остаться в выдаче, а не исчезнуть.
+        (w) =>
+          w.status !== ContestWinnerStatus.DECLINED &&
+          w.status !== ContestWinnerStatus.EXPIRED,
+      )
+      .map((w) => {
+        const winner = {
+          place: w.place,
+          telegramId: w.user?.telegramId ?? null,
+          userId: w.userId,
+          // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный
+          // ник в том же поле username, telegramId/userId остаются null.
+          username: w.user?.username ?? w.displayUsername ?? null,
+        };
+
+        // Пока идёт подтверждение — добавляем статус и срок, чтобы возможная
+        // замена не выглядела подлогом: правило видно рядом с именем ДО того,
+        // как победитель сменится. Как только приз принят, отдаём ровно
+        // прежний формат — у конкурсов без подтверждения он не меняется вовсе.
+        if (w.status !== ContestWinnerStatus.PENDING_CONFIRMATION) {
+          return winner;
+        }
+
+        return {
+          ...winner,
+          status: w.status,
+          confirmationDeadline: w.confirmationDeadline,
+        };
+      });
   }
 
   /**

@@ -119,6 +119,7 @@ export class ContestRepository implements IContestRepository {
         'winners.displayUsername',
         'winnerUser.id',
         'winners.place',
+        'winners.status',
         'winnerUser.telegramId',
         'winnerUser.username',
       ])
@@ -177,6 +178,7 @@ export class ContestRepository implements IContestRepository {
           id: winner.id,
           userId: winner.userId,
           place: winner.place,
+          status: winner.status,
           // Реальный победитель — реальный user. Фиктивный (ник без TG) не имеет
           // user, поэтому отдаём синтетический с ником в username: фронт рисует
           // его тем же кодом (winner.user.username), telegramId = null.
