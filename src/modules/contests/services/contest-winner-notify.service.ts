@@ -61,7 +61,7 @@ export class ContestWinnerNotifyService {
    * попросту нет) и реальный без telegramId. Обоих считаем и логируем, чтобы
    * расхождение «победителей N, уведомлений M» было объяснимым.
    *
-   * Идемпотентность — по jobId вида contest:<id>:winner:<userId>: повторный
+   * Идемпотентность — по jobId вида contest:<id>:winner-<userId>: повторный
    * вызов (ретрай завершения, двойной клик) не поставит второй джоб. Вторая
    * линия защиты — проверка уже отправленного в самом процессоре.
    */
@@ -108,7 +108,14 @@ export class ContestWinnerNotifyService {
             place: winner.place,
           }),
         },
-        opts: { jobId: `contest:${contestId}:winner:${winner.userId}` },
+        // Разделитель перед userId — дефис, а не двоеточие: BullMQ принимает
+        // кастомный jobId с двоеточиями только ровно из трёх сегментов
+        // (Job.validateOptions, совместимость со старыми repeatable-джобами),
+        // а `contest:1:winner:2` давал четыре — addBulk падал с «Custom Id
+        // cannot contain :» и не ставил НИ ОДНОГО джоба. Ошибку глушил catch
+        // в notifyWinners, поэтому конкурс завершался штатно, а уведомлений
+        // не было вовсе — bot_messages оставалась пустой при живых победителях.
+        opts: { jobId: `contest:${contestId}:winner-${winner.userId}` },
       });
     }
 
