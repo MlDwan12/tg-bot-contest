@@ -6,6 +6,7 @@ import { CONTEST_WINNER_REPOSITORY } from 'src/common/constants';
 import type { IContestWinnerRepository } from '../interfaces';
 import { ContestWinnerStatus } from 'src/common/enums/contest';
 import { PLACE_VACATED_JOB } from '../jobs/contest-winner-confirm.jobs';
+import { ContestWinnerNotifyService } from './contest-winner-notify.service';
 
 /** Что показать нажавшему кнопку. Тексты — в обработчике, здесь только исход. */
 export type ConfirmationOutcome =
@@ -29,6 +30,8 @@ export class ContestWinnerConfirmationService {
 
     @InjectQueue('contest-winner-confirm')
     private readonly confirmQueue: Queue,
+
+    private readonly notifyService: ContestWinnerNotifyService,
 
     private readonly logger: Logger,
   ) {}
@@ -110,6 +113,10 @@ export class ContestWinnerConfirmationService {
     // Telegram за подпиской кандидата незачем.
     if (!accepted) {
       await this.enqueuePlaceVacated(winner.contestId, winner.place, winnerId);
+    } else {
+      // Подтверждение может оказаться последним недостающим решением — тогда
+      // админу пора слать итоговую сводку взамен предварительной.
+      await this.notifyService.enqueueFinalSummaryIfSettled(winner.contestId);
     }
 
     this.logger.log(

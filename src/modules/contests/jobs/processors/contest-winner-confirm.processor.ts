@@ -135,6 +135,10 @@ export class ContestWinnerConfirmProcessor extends WorkerHost {
         contestId,
         result.winnerId,
       );
+      // Замена сама ждёт подтверждения, так что итог ещё не наступил — метод
+      // это проверит и промолчит. Зовём безусловно, чтобы не держать знание
+      // «когда наступает финал» в двух местах.
+      await this.notifyService.enqueueFinalSummaryIfSettled(contestId);
       return;
     }
 
@@ -143,5 +147,7 @@ export class ContestWinnerConfirmProcessor extends WorkerHost {
       // потеряется в тишине.
       await this.notifyService.notifyAdminsAboutUnfilledPlace(contestId, place);
     }
+
+    await this.notifyService.enqueueFinalSummaryIfSettled(contestId);
   }
 }

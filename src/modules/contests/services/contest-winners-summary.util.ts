@@ -1,3 +1,5 @@
+import { formatInTimeZone } from 'date-fns-tz';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 import {
   escapeHtml,
   formatWinnerName,
@@ -40,11 +42,22 @@ export function buildWinnersSummaryText(params: {
   deliveredCount: number;
   undelivered: ResultsWinner[];
   skipped: ResultsWinner[];
+  /**
+   * Сколько победителей ещё думают. Больше нуля — состав не окончателен, и
+   * сводку нельзя подавать как итог: админ работает по ней с людьми.
+   */
+  pendingCount?: number;
+  /** До какого момента идёт подтверждение — чтобы админ знал, когда ждать итог. */
+  pendingDeadline?: Date | null;
   /** Ссылки на ВСЕ посты конкурса — админ ведёт все площадки сразу. */
   postUrls?: string[];
 }): string {
+  const isPreliminary = (params.pendingCount ?? 0) > 0;
+
   const parts: string[] = [
-    `✅ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён.`,
+    isPreliminary
+      ? `⏳ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён, идёт подтверждение призов.`
+      : `✅ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён.`,
   ];
 
   parts.push(
@@ -52,6 +65,18 @@ export function buildWinnersSummaryText(params: {
       ? `🏆 Победители:\n${formatNameList(params.winners)}`
       : 'Победителей нет — конкурс завершён без участников.',
   );
+
+  if (isPreliminary) {
+    const until = params.pendingDeadline
+      ? ` до ${formatInTimeZone(params.pendingDeadline, getAppTimeZone(), 'dd.MM.yyyy HH:mm (zzz)')}`
+      : '';
+
+    parts.push(
+      `⚠️ Список предварительный: ждём подтверждения${until} ` +
+        `(${params.pendingCount}). Отказавшегося заменит следующий по ` +
+        `жеребьёвке — итоговую сводку пришлём, когда все места закроются.`,
+    );
+  }
 
   if (params.winners.length) {
     parts.push(

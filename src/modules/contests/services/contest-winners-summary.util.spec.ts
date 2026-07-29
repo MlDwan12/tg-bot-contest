@@ -85,4 +85,52 @@ describe('buildWinnersSummaryText', () => {
 
     expect(text).toContain('«Приз &lt;b&gt;»');
   });
+
+  describe('предварительная и итоговая сводка', () => {
+    const base = {
+      contestId: 7,
+      contestName: 'Тест',
+      winners: [
+        {
+          place: 1,
+          userId: 2,
+          username: 'winner',
+          firstName: null,
+          displayUsername: null,
+        },
+      ],
+      deliveredCount: 1,
+      undelivered: [],
+      skipped: [],
+    };
+
+    it('есть ждущие решения → список помечен предварительным', () => {
+      const text = buildWinnersSummaryText({
+        ...base,
+        pendingCount: 1,
+        pendingDeadline: new Date('2026-07-30T12:00:00Z'),
+      });
+
+      // Без пометки админ примет за итог список, который сменится после отказа,
+      // и пойдёт связываться не с тем человеком.
+      expect(text).toContain('идёт подтверждение призов');
+      expect(text).toContain('Список предварительный');
+      expect(text).toContain('30.07.2026');
+      expect(text).toMatch(/GMT[+-]\d/);
+    });
+
+    it('решений больше не ждём → обычная итоговая сводка', () => {
+      const text = buildWinnersSummaryText({ ...base, pendingCount: 0 });
+
+      expect(text).toContain('завершён.');
+      expect(text).not.toContain('предварительный');
+    });
+
+    it('конкурс без подтверждения → сводка как раньше', () => {
+      const text = buildWinnersSummaryText(base);
+
+      expect(text).toContain('завершён.');
+      expect(text).not.toContain('предварительный');
+    });
+  });
 });

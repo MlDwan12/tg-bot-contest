@@ -48,15 +48,23 @@ function build(
     },
   } as any;
 
+  const finalSummaryCalls: number[] = [];
+  const notifyService = {
+    enqueueFinalSummaryIfSettled: async (contestId: number) => {
+      finalSummaryCalls.push(contestId);
+    },
+  } as any;
+
   const logger = { log() {}, warn() {}, error() {}, debug() {} } as any;
 
   const service = new ContestWinnerConfirmationService(
     contestWinnerRepo,
     confirmQueue,
+    notifyService,
     logger,
   );
 
-  return { service, resolveCalls, vacatedJobs };
+  return { service, resolveCalls, vacatedJobs, finalSummaryCalls };
 }
 
 describe('ContestWinnerConfirmationService', () => {
@@ -183,5 +191,26 @@ describe('ContestWinnerConfirmationService', () => {
     const { service } = build({ winner: null });
 
     expect(await service.confirm(15, OWNER_TELEGRAM_ID)).toBe('not_found');
+  });
+
+  it('подтверждение пробует закрыть итоговую сводку', async () => {
+    const { service, finalSummaryCalls } = build();
+
+    await service.confirm(15, OWNER_TELEGRAM_ID);
+
+    // Решение может оказаться последним недостающим — тогда админу пора слать
+    // итог вместо предварительного списка. Проверку «а все ли решили» делает
+    // сам notify-сервис, чтобы это знание не жило в двух местах.
+    expect(finalSummaryCalls).toEqual([7]);
+  });
+
+  it('отказ итоговую сводку не ставит — сначала автодобор', async () => {
+    const { service, finalSummaryCalls, vacatedJobs } = build();
+
+    await service.decline(15, OWNER_TELEGRAM_ID);
+
+    // Место освободилось, замена ещё не назначена: слать итог рано.
+    expect(vacatedJobs).toHaveLength(1);
+    expect(finalSummaryCalls).toHaveLength(0);
   });
 });

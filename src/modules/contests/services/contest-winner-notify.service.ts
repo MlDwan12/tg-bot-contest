@@ -350,20 +350,37 @@ export class ContestWinnerNotifyService {
 
     const posts = await this.loadPostRefs(contestId);
 
+    // Отказавшихся и просроченных в списке победителей быть не должно: приз им
+    // уже не достанется, а админ по этому списку связывается с людьми.
+    const actual = winners.filter(
+      (winner) =>
+        winner.status !== ContestWinnerStatus.DECLINED &&
+        winner.status !== ContestWinnerStatus.EXPIRED,
+    );
+
+    // Пока кто-то думает, состав не окончателен: сводка помечается
+    // предварительной, иначе админ получает список, который завтра изменится,
+    // и считает его итогом.
+    const pending = actual.filter(
+      (winner) => winner.status === ContestWinnerStatus.PENDING_CONFIRMATION,
+    );
+
     return {
       text: buildWinnersSummaryText({
         contestId,
         contestName: contest.name,
-        winners: toResultsWinners(winners),
-        deliveredCount: winners.filter(
+        winners: toResultsWinners(actual),
+        pendingCount: pending.length,
+        pendingDeadline: pending[0]?.confirmationDeadline ?? null,
+        deliveredCount: actual.filter(
           (winner) => winner.userId != null && sent.has(winner.userId),
         ).length,
         undelivered: toResultsWinners(
-          winners.filter(
+          actual.filter(
             (winner) => winner.userId != null && failed.has(winner.userId),
           ),
         ),
-        skipped: toResultsWinners(winners.filter((w) => !isNotifiable(w))),
+        skipped: toResultsWinners(actual.filter((w) => !isNotifiable(w))),
         postUrls: buildAllPostLinks(posts),
       }),
       adminTelegramIds,
@@ -468,5 +485,31 @@ export class ContestWinnerNotifyService {
     });
 
     return participation?.groupId ?? null;
+  }
+
+  /**
+   * Итоговая сводка — когда ждать больше нечего: все решения приняты либо
+   * места закрыть некем. Первая сводка уходит сразу после завершения и
+   * помечена предварительной, потому что состав ещё может смениться отказом;
+   * без этой второй админ так и остался бы с устаревшим списком.
+   *
+   * Отдельный jobId: у предварительной свой ключ, и дедупликация не должна их
+   * склеивать.
+   */
+  async enqueueFinalSummaryIfSettled(contestId: number): Promise<void> {
+    const winners =
+      await this.contestWinnerService.getContestWinners(contestId);
+
+    const stillWaiting = winners.some(
+      (winner) => winner.status === ContestWinnerStatus.PENDING_CONFIRMATION,
+    );
+
+    if (stillWaiting) return;
+
+    await this.notifyQueue.add(
+      WINNERS_SUMMARY_JOB,
+      { contestId },
+      { jobId: `contest:${contestId}:winners-final` },
+    );
   }
 }
