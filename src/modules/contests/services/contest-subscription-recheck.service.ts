@@ -10,6 +10,8 @@ import type {
   IContestRepository,
 } from '../interfaces';
 import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
+import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
 
 /**
@@ -50,6 +52,18 @@ export class ContestSubscriptionRecheckService {
   ) {}
 
   /**
+   * Проверка подписки пока умеет только Telegram — каналы других платформ
+   * (когда появятся) здесь игнорируются до появления своей реализации.
+   */
+  private resolveTelegramChannelIds(channels: Channel[]): number[] {
+    return channels
+      .filter((channel) => channel.platform === ChannelPlatform.TELEGRAM)
+      .map((channel) => channel.externalId)
+      .filter((externalId): externalId is string => externalId != null)
+      .map(Number);
+  }
+
+  /**
    * Нужна ли конкурсу перепроверка перед подведением итогов.
    * Отдельный предикат, потому что решение принимается в finishContestIdempotent
    * (под advisory lock), а сама проверка идёт отдельным джобом — долгая работа
@@ -85,9 +99,9 @@ export class ContestSubscriptionRecheckService {
   ): Promise<boolean> {
     const contest = await this.contestRepo.findByParams({ id: contestId });
 
-    const channelIds = (contest?.requiredChannels ?? [])
-      .map((channel) => channel.telegramId)
-      .filter((id): id is number => id != null);
+    const channelIds = this.resolveTelegramChannelIds(
+      contest?.requiredChannels ?? [],
+    );
 
     if (!contest?.recheckSubscriptionOnFinish || !channelIds.length) {
       return true;
@@ -121,9 +135,9 @@ export class ContestSubscriptionRecheckService {
       return { skipped: true, checked: 0, unsubscribed: 0 };
     }
 
-    const channelIds = (contest.requiredChannels ?? [])
-      .map((channel) => channel.telegramId)
-      .filter((id): id is number => id != null);
+    const channelIds = this.resolveTelegramChannelIds(
+      contest.requiredChannels ?? [],
+    );
 
     if (!contest.recheckSubscriptionOnFinish || !channelIds.length) {
       await this.markContestChecked(contestId);

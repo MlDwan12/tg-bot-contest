@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Expose, Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsOptional,
@@ -166,21 +166,41 @@ export class CreateContestDto implements Omit<CreateContest, 'creatorId'> {
   @Max(168)
   confirmationHours?: number;
 
-  // ВАЖНО:
-  // если реально ищешь по telegramId, лучше переименовать поле.
+  /** @deprecated переходный период — используй publishChannelExternalIds. */
   @IsOptional()
-  @Transform(({ value }) => toNumberArray(value))
+  publishChannelIds?: unknown;
+
+  /** @deprecated переходный период — используй requiredChannelExternalIds. */
+  @IsOptional()
+  requiredChannelIds?: unknown;
+
+  // Ищет каналы по Channel.externalId (у Telegram это chat id), а не по
+  // внутреннему Channel.id — раньше поле называлось "...Ids", что вводило в
+  // заблуждение (баг в имени, а не в поведении).
+  // @Expose() обязателен: без него class-transformer не вызовет @Transform,
+  // если в запросе прислали только legacy publishChannelIds — ключа
+  // publishChannelExternalIds в исходном объекте тогда просто нет.
+  @IsOptional()
+  @Expose()
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
+      toNumberArray(value ?? obj.publishChannelIds)?.map(String),
+  )
   @IsArray()
   @ArrayUnique()
-  @IsInt({ each: true })
-  publishChannelIds?: number[];
+  @IsString({ each: true })
+  publishChannelExternalIds?: string[];
 
   @IsOptional()
-  @Transform(({ value }) => toNumberArray(value))
+  @Expose()
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
+      toNumberArray(value ?? obj.requiredChannelIds)?.map(String),
+  )
   @IsArray()
   @ArrayUnique()
-  @IsInt({ each: true })
-  requiredChannelIds?: number[];
+  @IsString({ each: true })
+  requiredChannelExternalIds?: string[];
 
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

@@ -10,8 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ChannelsService } from './services/channels.service';
-import { Channel } from './entities';
-import { CreateChannelDto, GetChannelsQueryDto } from './dto';
+import {
+  ChannelResponseDto,
+  CreateChannelDto,
+  GetChannelsQueryDto,
+} from './dto';
 import { Paginated } from 'src/common/response/paginated.type';
 import { JwtAuthGuard } from '../auth/guards';
 
@@ -21,20 +24,30 @@ export class ChannelsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  createChannel(@Body() data: CreateChannelDto): Promise<Channel> {
-    return this.channelsService.createChannel(data);
+  async createChannel(
+    @Body() data: CreateChannelDto,
+  ): Promise<ChannelResponseDto> {
+    const channel = await this.channelsService.createChannel(data);
+    return ChannelResponseDto.fromEntity(channel);
   }
 
   @Get()
-  getAllChannels(
+  async getAllChannels(
     @Query() query: GetChannelsQueryDto,
-  ): Promise<Paginated<Channel>> {
-    return this.channelsService.getAllChannels(query);
+  ): Promise<Paginated<ChannelResponseDto>> {
+    const result = await this.channelsService.getAllChannels(query);
+    return {
+      ...result,
+      items: result.items.map(ChannelResponseDto.fromEntity),
+    };
   }
 
   @Get(':id')
-  getChannelById(@Param('id', ParseIntPipe) id: number): Promise<Channel> {
-    return this.channelsService.getChannelById(id);
+  async getChannelById(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ChannelResponseDto> {
+    const channel = await this.channelsService.getChannelById(id);
+    return ChannelResponseDto.fromEntity(channel);
   }
 
   @Delete(':id')

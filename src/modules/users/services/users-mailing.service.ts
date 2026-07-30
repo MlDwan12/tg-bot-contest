@@ -178,9 +178,9 @@ export class UsersMailingService {
       );
 
       const postUrl = this.buildTelegramPostUrl({
-        telegramUsername: publication.channel?.telegramUsername,
+        telegramUsername: publication.channel?.externalUsername,
         telegramId:
-          publication.channel?.telegramId ?? String(publication.chatId),
+          publication.channel?.externalId ?? String(publication.chatId),
         messageId: publication.telegramMessageId!,
       });
 

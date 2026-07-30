@@ -12,7 +12,7 @@ import { Telegraf } from 'telegraf';
 interface DeletablePublication {
   id: number;
   telegramMessageId?: number | null;
-  channel?: { telegramId?: number | null } | null;
+  channel?: { externalId?: string | null } | null;
 }
 
 @Injectable()
@@ -378,7 +378,9 @@ export class TelegramService {
     publications: DeletablePublication[],
   ): Promise<void> {
     for (const pub of publications) {
-      const chatId = pub.channel?.telegramId;
+      const chatId = pub.channel?.externalId
+        ? Number(pub.channel.externalId)
+        : undefined;
       const messageId = pub.telegramMessageId;
       if (!messageId || !chatId) continue;
 

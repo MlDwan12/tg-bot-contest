@@ -1,9 +1,10 @@
-import { ChannelType } from 'src/common/enums/channel';
+import { ChannelPlatform, ChannelType } from 'src/common/enums/channel';
 
 export type CreateChannel = {
   id: number;
-  telegramId?: number;
-  telegramUsername?: string;
+  platform: ChannelPlatform;
+  externalId?: string;
+  externalUsername?: string;
   name?: string;
   isActive: boolean;
   type?: ChannelType;

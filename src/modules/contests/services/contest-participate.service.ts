@@ -19,6 +19,7 @@ import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { Contest, ContestParticipation } from '../entities';
 import { ContestStatus, ContestWinnerStatus } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';
@@ -149,17 +150,21 @@ export class ContestsParticipateService {
 
   /**
    * Участие запрещено, пока пользователь не подписан на обязательные каналы.
-   * Нет обязательных каналов (или у них нет telegramId) → проверка пропускается.
+   * Нет обязательных каналов (или у них нет externalId) → проверка пропускается.
+   * Проверка подписки пока умеет только Telegram — каналы других платформ
+   * (когда появятся) игнорируются здесь до появления своей реализации.
    */
   private async assertUserSubscribedToRequiredChannels(
     contest: Contest,
     telegramId: string,
   ): Promise<void> {
-    const requiredChannels = contest.requiredChannels ?? [];
+    const requiredChannels = (contest.requiredChannels ?? []).filter(
+      (c) => c.platform === ChannelPlatform.TELEGRAM,
+    );
     if (requiredChannels.length === 0) return;
 
     const channelIds = requiredChannels
-      .map((c) => c.telegramId)
+      .map((c) => (c.externalId != null ? Number(c.externalId) : null))
       .filter((id): id is number => id != null);
     if (channelIds.length === 0) return;
 
@@ -169,10 +174,12 @@ export class ContestsParticipateService {
 
     const usernames = requiredChannels
       .filter(
-        (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
+        (c) =>
+          c.externalId != null &&
+          missingChannels.includes(Number(c.externalId)),
       )
       .map((c) =>
-        c.telegramUsername ? `@${c.telegramUsername}` : `id:${c.telegramId}`,
+        c.externalUsername ? `@${c.externalUsername}` : `id:${c.externalId}`,
       )
       .join(', ');
 

@@ -81,7 +81,7 @@ function build(options: { winners?: any[]; contest?: any } = {}) {
       {
         chatId: '-1002949180383',
         telegramMessageId: 126,
-        channel: { telegramUsername: 'GroupRandomTestPub' },
+        channel: { externalUsername: 'GroupRandomTestPub' },
       },
     ],
   } as any;

@@ -12,6 +12,7 @@ import {
 import { Contest } from '../entities/contest.entity';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
+import { toLegacyTelegramFields } from 'src/modules/channels/utils/channel-legacy.util';
 import { IContestReadFilters, IContestRepository } from '../interfaces';
 import { ContestWithRelations } from '../types';
 import { ContestPublication, ContestWinner } from '../entities';
@@ -132,15 +133,13 @@ export class ContestRepository implements IContestRepository {
     return {
       id: contest.id,
       publishChannels:
-        contest.publishChannels?.map((channel) => ({
-          telegramId: channel.telegramId,
-          telegramUsername: channel.telegramUsername,
-        })) ?? [],
+        contest.publishChannels?.map((channel) =>
+          this.toContestChannelInfo(channel),
+        ) ?? [],
       requiredChannels:
-        contest.requiredChannels?.map((channel) => ({
-          telegramId: channel.telegramId,
-          telegramUsername: channel.telegramUsername,
-        })) ?? [],
+        contest.requiredChannels?.map((channel) =>
+          this.toContestChannelInfo(channel),
+        ) ?? [],
       creator: contest.creator ? contest.creator.username : null,
       name: contest.name,
       description: contest.description ?? null,
@@ -625,6 +624,17 @@ export class ContestRepository implements IContestRepository {
   }
 
   // ── приватное ───────────────────────────────────────────────────────────────
+
+  private toContestChannelInfo(
+    channel: Channel,
+  ): ContestWithRelations['publishChannels'][number] {
+    return {
+      platform: channel.platform,
+      externalId: channel.externalId ?? null,
+      externalUsername: channel.externalUsername ?? null,
+      ...toLegacyTelegramFields(channel),
+    };
+  }
 
   private async ensureExists(id: number): Promise<void> {
     const exists = await this.repo.findOne({ where: { id } });

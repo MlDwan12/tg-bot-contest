@@ -1,4 +1,5 @@
 import { FindOptionsWhere } from 'typeorm';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { Channel } from '../entities';
 import { IChannelReadFilters } from '.';
 
@@ -9,8 +10,14 @@ import { IChannelReadFilters } from '.';
 export interface IChannelRepository {
   // чтение
   findById(id: number): Promise<Channel | null>;
-  findByTelegramId(telegramId: number): Promise<Channel | null>;
-  findByTelegramUsername(username: string): Promise<Channel | null>;
+  findByExternalId(
+    platform: ChannelPlatform,
+    externalId: string,
+  ): Promise<Channel | null>;
+  findByExternalUsername(
+    platform: ChannelPlatform,
+    externalUsername: string,
+  ): Promise<Channel | null>;
   findManyByIds(ids: number[]): Promise<Channel[]>;
   findMany(
     filters?: IChannelReadFilters,
@@ -23,6 +30,9 @@ export interface IChannelRepository {
   create(data: Partial<Channel>): Promise<Channel>;
   update(id: number, data: Partial<Channel>): Promise<Channel>;
   delete(id: number): Promise<void>;
-  deleteByTelegramId(telegramId: number): Promise<void>;
+  deleteByExternalId(
+    platform: ChannelPlatform,
+    externalId: string,
+  ): Promise<void>;
   setActive(id: number, isActive: boolean): Promise<void>;
 }

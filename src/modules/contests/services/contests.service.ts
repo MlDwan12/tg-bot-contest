@@ -12,6 +12,7 @@ import {
 } from 'src/modules/contests/types';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
@@ -82,8 +83,8 @@ export class ContestsService {
         {
           error,
           creatorId: dto.creatorId,
-          publishChannelIds: dto.publishChannelIds,
-          requiredChannelIds: dto.requiredChannelIds,
+          publishChannelExternalIds: dto.publishChannelExternalIds,
+          requiredChannelExternalIds: dto.requiredChannelExternalIds,
         },
         'Ошибка при создании конкурса',
       );
@@ -151,17 +152,19 @@ export class ContestsService {
     let contestUpdated = false;
     try {
       const publishChannels =
-        dto.publishChannelIds !== undefined
-          ? await this.getChannelsByTelegramIds(
-              dto.publishChannelIds,
+        dto.publishChannelExternalIds !== undefined
+          ? await this.getChannelsByExternalIds(
+              ChannelPlatform.TELEGRAM,
+              dto.publishChannelExternalIds,
               'Один или несколько каналов публикации не найдены',
             )
           : null;
 
       const requiredChannels =
-        dto.requiredChannelIds !== undefined
-          ? await this.getChannelsByTelegramIds(
-              dto.requiredChannelIds,
+        dto.requiredChannelExternalIds !== undefined
+          ? await this.getChannelsByExternalIds(
+              ChannelPlatform.TELEGRAM,
+              dto.requiredChannelExternalIds,
               'Один или несколько обязательных каналов не найдены',
             )
           : null;
@@ -248,7 +251,7 @@ export class ContestsService {
 
       const shouldRefreshPendingPublications =
         contest.status === ContestStatus.PENDING &&
-        (dto.publishChannelIds !== undefined ||
+        (dto.publishChannelExternalIds !== undefined ||
           dto.name !== undefined ||
           dto.description !== undefined ||
           dto.buttonText !== undefined ||
@@ -259,10 +262,13 @@ export class ContestsService {
           publishChannels ??
           (Array.isArray(updatedContest.publishChannels) &&
           updatedContest.publishChannels.length
-            ? await this.getChannelsByTelegramIds(
-                updatedContest.publishChannels.map((channel) =>
-                  Number(channel.telegramId),
-                ),
+            ? await this.getChannelsByExternalIds(
+                ChannelPlatform.TELEGRAM,
+                updatedContest.publishChannels
+                  .map((channel) => channel.externalId)
+                  .filter((externalId): externalId is string =>
+                    Boolean(externalId),
+                  ),
                 'Один или несколько каналов публикации не найдены',
               )
             : []);
@@ -465,13 +471,15 @@ export class ContestsService {
       throw new NotFoundException('Creator not found');
     }
 
-    const publishChannels = await this.getChannelsByTelegramIds(
-      dto.publishChannelIds,
+    const publishChannels = await this.getChannelsByExternalIds(
+      ChannelPlatform.TELEGRAM,
+      dto.publishChannelExternalIds,
       'Один или несколько каналов публикации не найдены',
     );
 
-    const requiredChannels = await this.getChannelsByTelegramIds(
-      dto.requiredChannelIds,
+    const requiredChannels = await this.getChannelsByExternalIds(
+      ChannelPlatform.TELEGRAM,
+      dto.requiredChannelExternalIds,
       'Один или несколько обязательных каналов не найдены',
     );
 
@@ -781,41 +789,41 @@ export class ContestsService {
     );
   }
 
-  private async getChannelsByTelegramIds(
-    telegramIds?: number[],
+  private async getChannelsByExternalIds(
+    platform: ChannelPlatform,
+    externalIds?: string[],
     errorMessage = 'Один или несколько каналов не найдены',
   ): Promise<Channel[]> {
-    if (!telegramIds?.length) {
+    if (!externalIds?.length) {
       return [];
     }
 
-    const uniqueTelegramIds = [...new Set(telegramIds)];
+    const uniqueExternalIds = [...new Set(externalIds)];
 
-    if (uniqueTelegramIds.length !== telegramIds.length) {
+    if (uniqueExternalIds.length !== externalIds.length) {
       throw new BadRequestException(
-        'Список каналов содержит дублирующиеся telegramId',
+        'Список каналов содержит дублирующиеся идентификаторы',
       );
     }
 
     const channels = await this.channelService.getChannelsByParameters({
-      telegramId: In(uniqueTelegramIds),
+      platform,
+      externalId: In(uniqueExternalIds),
     });
 
-    if (channels.length !== uniqueTelegramIds.length) {
+    if (channels.length !== uniqueExternalIds.length) {
       throw new NotFoundException(errorMessage);
     }
 
     const channelsMap = new Map(
-      channels.map((channel) => [String(channel.telegramId), channel]),
+      channels.map((channel) => [channel.externalId, channel]),
     );
 
-    return uniqueTelegramIds.map((telegramId) => {
-      const channel = channelsMap.get(String(telegramId));
+    return uniqueExternalIds.map((externalId) => {
+      const channel = channelsMap.get(externalId);
 
       if (!channel) {
-        throw new NotFoundException(
-          `Канал с telegramId ${telegramId} не найден`,
-        );
+        throw new NotFoundException(`Канал с id ${externalId} не найден`);
       }
 
       return channel;

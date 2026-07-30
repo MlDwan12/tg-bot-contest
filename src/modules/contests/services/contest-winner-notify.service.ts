@@ -470,7 +470,7 @@ export class ContestWinnerNotifyService {
     return publications.map((publication) => ({
       chatId: publication.chatId,
       telegramMessageId: publication.telegramMessageId ?? null,
-      channelUsername: publication.channel?.telegramUsername ?? null,
+      channelUsername: publication.channel?.externalUsername ?? null,
     }));
   }
 

@@ -3,6 +3,7 @@ import {
   WinnerStrategy,
   ContestWinnerStatus,
 } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 
 /**
  * Обогащённый DTO-подобный результат `findByIdWithRelations` — НЕ entity, а
@@ -10,8 +11,13 @@ import {
  * которую строит репозиторий. Раньше метод возвращал `any`; тип фиксирует форму.
  */
 export type ContestChannelInfo = {
-  telegramId?: number;
-  telegramUsername?: string;
+  platform: ChannelPlatform;
+  externalId: string | null;
+  externalUsername: string | null;
+  /** @deprecated переходный период — используй externalId. Заполнено только для platform=telegram. */
+  telegramId: number | null;
+  /** @deprecated переходный период — используй externalUsername. */
+  telegramUsername: string | null;
 };
 
 export type ContestUserInfo = {

@@ -1,5 +1,6 @@
 import { ContestSubscriptionRecheckService } from './contest-subscription-recheck.service';
 import { ParticipationSubscriptionStatus } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 
 type MarkCall = {
   updates: Array<{
@@ -24,7 +25,9 @@ function build(options: {
             id: 1,
             recheckSubscriptionOnFinish: true,
             subscriptionsCheckedAt: null,
-            requiredChannels: [{ telegramId: 100 }],
+            requiredChannels: [
+              { platform: ChannelPlatform.TELEGRAM, externalId: '100' },
+            ],
           }
         : options.contest,
     update: async (_id: number, data: Record<string, unknown>) => {

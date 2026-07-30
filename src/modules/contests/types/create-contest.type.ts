@@ -30,7 +30,7 @@ export type CreateContest = {
   /** Срок подтверждения в часах. Не задано → 24. */
   confirmationHours?: number;
 
-  // Каналы
-  publishChannelIds?: number[];
-  requiredChannelIds?: number[];
+  // Каналы — ищем по Channel.externalId (у Telegram это chat id)
+  publishChannelExternalIds?: string[];
+  requiredChannelExternalIds?: string[];
 };
