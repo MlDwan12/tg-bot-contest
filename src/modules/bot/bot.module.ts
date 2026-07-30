@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
+import { session } from 'telegraf';
 import { BotUpdate } from './bot.update';
 import { validationSchema } from 'src/config';
 import { TelegramService } from './bot.service';
@@ -19,7 +20,7 @@ import { TelegramService } from './bot.service';
         if (!token) {
           throw new Error('TELEGRAM_BOT_TOKEN is not defined in .env');
         }
-        return { token };
+        return { token, middlewares: [session()] };
       },
     }),
     // bot — ЛИСТ графа: не импортирует ни contests, ни channels.

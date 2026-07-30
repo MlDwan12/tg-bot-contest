@@ -3,20 +3,57 @@ import { buildWinnerNotificationText } from './contest-winner-message.util';
 describe('buildWinnerNotificationText', () => {
   it('первое место получает медаль', () => {
     expect(
-      buildWinnerNotificationText({ contestName: 'Розыгрыш', place: 1 }),
+      buildWinnerNotificationText({
+        contestName: 'Розыгрыш',
+        place: 1,
+        prizePlaces: 3,
+      }),
     ).toBe('🥇 Поздравляем! Вы заняли 1 место в конкурсе «Розыгрыш».');
   });
 
   it('места с четвёртого идут без медали', () => {
     expect(
-      buildWinnerNotificationText({ contestName: 'Розыгрыш', place: 4 }),
+      buildWinnerNotificationText({
+        contestName: 'Розыгрыш',
+        place: 4,
+        prizePlaces: 5,
+      }),
     ).toBe('Поздравляем! Вы заняли 4 место в конкурсе «Розыгрыш».');
   });
 
   it('HTML в названии конкурса экранируется — иначе ломается всё сообщение', () => {
     expect(
-      buildWinnerNotificationText({ contestName: 'Приз <b>1', place: 2 }),
+      buildWinnerNotificationText({
+        contestName: 'Приз <b>1',
+        place: 2,
+        prizePlaces: 3,
+      }),
     ).toBe('🥈 Поздравляем! Вы заняли 2 место в конкурсе «Приз &lt;b&gt;1».');
+  });
+
+  describe('единственное призовое место', () => {
+    it('не пишем «заняли 1 место» — это звучит странно, когда мест всего одно', () => {
+      expect(
+        buildWinnerNotificationText({
+          contestName: 'Розыгрыш',
+          place: 1,
+          prizePlaces: 1,
+        }),
+      ).toBe('🥇 Поздравляем! Вы победили в конкурсе «Розыгрыш».');
+    });
+
+    it('и с дедлайном подтверждения — тоже «победили», а не «заняли место»', () => {
+      const text = buildWinnerNotificationText({
+        contestName: 'Розыгрыш',
+        place: 1,
+        prizePlaces: 1,
+        confirmationDeadline: new Date('2026-07-30T12:00:00Z'),
+        confirmationHours: 24,
+      });
+
+      expect(text).toContain('Вы победили в конкурсе «Розыгрыш»');
+      expect(text).not.toContain('заняли');
+    });
   });
 
   describe('срок подтверждения', () => {
@@ -26,6 +63,7 @@ describe('buildWinnerNotificationText', () => {
       const text = buildWinnerNotificationText({
         contestName: 'Розыгрыш',
         place: 1,
+        prizePlaces: 3,
         confirmationDeadline: null,
         confirmationHours: 24,
       });
@@ -39,6 +77,7 @@ describe('buildWinnerNotificationText', () => {
       const text = buildWinnerNotificationText({
         contestName: 'Розыгрыш',
         place: 1,
+        prizePlaces: 3,
         confirmationDeadline: deadline,
         confirmationHours: 24,
       });
@@ -56,6 +95,7 @@ describe('buildWinnerNotificationText', () => {
       const text = buildWinnerNotificationText({
         contestName: 'Розыгрыш',
         place: 1,
+        prizePlaces: 3,
         confirmationDeadline: deadline,
         confirmationHours: 1,
       });
@@ -68,6 +108,7 @@ describe('buildWinnerNotificationText', () => {
         buildWinnerNotificationText({
           contestName: 'Розыгрыш',
           place: 1,
+          prizePlaces: 3,
           confirmationDeadline: deadline,
           confirmationHours: hours,
         });

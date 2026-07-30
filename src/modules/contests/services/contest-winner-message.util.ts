@@ -14,6 +14,9 @@ import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 export function buildWinnerNotificationText(params: {
   contestName: string;
   place: number;
+  /** Всего призовых мест в конкурсе — если оно одно, «заняли 1 место» звучит
+   * странно (единственный победитель — не первое место среди прочих). */
+  prizePlaces: number;
   /** Задан — к тексту добавляется просьба подтвердить приз до этого момента. */
   confirmationDeadline?: Date | null;
   /** Срок в часах — показываем рядом с датой, чтобы не зависеть от пояса. */
@@ -34,8 +37,10 @@ export function buildWinnerNotificationText(params: {
     : '';
 
   const base =
-    `${medal}Поздравляем! Вы заняли ${params.place} место ` +
-    `в конкурсе «${escapeHtml(params.contestName)}».`;
+    params.prizePlaces <= 1
+      ? `${medal}Поздравляем! Вы победили в конкурсе «${escapeHtml(params.contestName)}».`
+      : `${medal}Поздравляем! Вы заняли ${params.place} место ` +
+        `в конкурсе «${escapeHtml(params.contestName)}».`;
 
   if (!params.confirmationDeadline) return base + post;
 

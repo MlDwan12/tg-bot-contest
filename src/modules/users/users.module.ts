@@ -43,6 +43,11 @@ import { MailingJobEntity } from './entities/mailing-jobs.entity';
     MailingProcessor,
     MailingCleanupService,
   ],
-  exports: [UsersService, AdminService, TelegramUserService],
+  exports: [
+    UsersService,
+    AdminService,
+    TelegramUserService,
+    UsersMailingService,
+  ],
 })
 export class UsersModule {}

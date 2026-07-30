@@ -1,6 +1,11 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ContestsController } from './contests.controller';
 import { ContestWinnerConfirmUpdate } from './contest-winner-confirm.update';
+import { ContestCreateWizard } from './wizards/contest-create.wizard';
+import { ContestCreateEntryUpdate } from './wizards/contest-create-entry.update';
+import { ContestMenuUpdate } from './wizards/contest-menu.update';
+import { MailingCreateWizard } from './wizards/mailing-create.wizard';
+import { MailingCreateEntryUpdate } from './wizards/mailing-create-entry.update';
 import { ContestsService } from './services/contests.service';
 import { ContestPublicationService } from './services/contest-publication.service';
 import { ContestLifecycleService } from './services/contest-lifecycle.service';
@@ -77,6 +82,11 @@ import {
     ContestWinnerConfirmationService,
     ContestWinnerReplacementService,
     ContestWinnerConfirmUpdate,
+    ContestCreateWizard,
+    ContestCreateEntryUpdate,
+    ContestMenuUpdate,
+    MailingCreateWizard,
+    MailingCreateEntryUpdate,
     ContestSubscriptionRecheckService,
     ContestStatsService,
     ContestExportService,

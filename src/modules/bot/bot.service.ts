@@ -22,6 +22,22 @@ export class TelegramService {
     private readonly logger: Logger,
   ) {}
 
+  /** В отличие от checkBotAdmin (права самого бота) — статус ПРОИЗВОЛЬНОГО
+   * пользователя в канале. Используется для «Мои каналы» в меню бота: реально
+   * администрирует ли этот telegramId данный чат, а не просто зарегистрирован
+   * ли канал в системе. */
+  async isUserChannelAdmin(
+    chatId: number,
+    telegramId: number,
+  ): Promise<boolean> {
+    try {
+      const member = await this.bot.telegram.getChatMember(chatId, telegramId);
+      return member.status === 'administrator' || member.status === 'creator';
+    } catch {
+      return false;
+    }
+  }
+
   async checkBotAdmin(chatId: number): Promise<{
     exists: boolean;
     isAdmin: boolean;

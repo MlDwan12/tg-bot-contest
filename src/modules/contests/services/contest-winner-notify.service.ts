@@ -156,6 +156,7 @@ export class ContestWinnerNotifyService {
           text: buildWinnerNotificationText({
             contestName: contest.name,
             place: winner.place,
+            prizePlaces: contest.prizePlaces,
             confirmationDeadline: awaitsConfirmation
               ? winner.confirmationDeadline
               : null,
@@ -235,6 +236,7 @@ export class ContestWinnerNotifyService {
         text: buildWinnerNotificationText({
           contestName: contest.name,
           place: winner.place,
+          prizePlaces: contest.prizePlaces,
           confirmationDeadline: awaitsConfirmation
             ? winner.confirmationDeadline
             : null,
