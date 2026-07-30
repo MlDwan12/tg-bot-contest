@@ -9,10 +9,12 @@ import {
 import { TypeOrmHealthIndicator } from '@nestjs/terminus';
 import { BullMQHealthIndicator } from './bullmq.health';
 import { RedisHealthIndicator } from './redis.health';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 // Load balancers, k8s liveness probes и мониторинг пингуют /health
 // каждые 10-30 секунд — без SkipThrottle они получат 429 и вызовут
 // ложные алерты "сервис недоступен".
+@ApiTags('health')
 @SkipThrottle()
 @Controller('health')
 export class HealthController {
@@ -23,6 +25,15 @@ export class HealthController {
     private bullmqIndicator: BullMQHealthIndicator,
   ) {}
 
+  @ApiOperation({
+    summary: 'Проверка живости',
+    description:
+      'Postgres + Redis + очереди BullMQ. 200 — всё живо, 503 — что-то из ' +
+      'трёх недоступно (тело ответа — стандартный формат @nestjs/terminus, ' +
+      'но тоже обёрнут в {success,status,data} общим ResponseInterceptor).',
+  })
+  @ApiResponse({ status: 200, description: 'Все проверки прошли' })
+  @ApiResponse({ status: 503, description: 'Одна из зависимостей недоступна' })
   @Get()
   @HealthCheck()
   check(): Promise<HealthCheckResult> {

@@ -16,6 +16,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { AllExceptionsFilter } from './common/filters/allExceptionsFilter';
 import * as jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -130,6 +131,38 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Swagger/OpenAPI: единая живая документация для фронта, генерируется из
+  // реального кода (DTO + декораторы на контроллерах), а не пишется руками
+  // отдельно — расхождения с реальным API невозможны, пока не забывают
+  // проставлять декораторы на новых ручках.
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Contest Bot API')
+    .setDescription(
+      'HTTP API конкурсного бота: конкурсы, участники, каналы, рассылки, ' +
+        'администрирование. Авторизация — httpOnly cookie `accessToken` ' +
+        '(выдаётся `POST /auth/login`), не Bearer-заголовок.',
+    )
+    .setVersion('1.0')
+    .addCookieAuth('accessToken', {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'accessToken',
+      description:
+        'JWT из httpOnly cookie, выставляется POST /auth/login. Swagger UI ' +
+        'не может прочитать httpOnly cookie сам — авторизуйтесь через ' +
+        '/auth/login в отдельной вкладке того же домена, затем запросы ' +
+        '"Try it out" в браузере уйдут с этой cookie автоматически.',
+    })
+    .addTag('auth', 'Вход/выход администратора')
+    .addTag('users', 'Пользователи бота и рассылки')
+    .addTag('contests', 'Конкурсы: CRUD, участие, статистика, CSV')
+    .addTag('channels', 'Telegram-каналы, привязанные к конкурсам')
+    .addTag('health', 'Проверка живости сервиса')
+    .build();
+
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api-docs', app, swaggerDocument);
+
   app.enableShutdownHooks();
 
   app.useLogger(app.get(Logger));
@@ -147,6 +180,7 @@ async function bootstrap() {
   const logger = app.get(Logger);
 
   logger.log('Health endpoint доступен: http://localhost:3000/health');
+  logger.log(`Swagger доступен: http://localhost:${port}/api-docs`);
 
   logger.log(
     `Application is running on: http://localhost:${port}`,
