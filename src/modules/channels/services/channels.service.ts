@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { CHANNEL_REPOSITORY } from 'src/common/constants';
 
-import { ChannelType } from 'src/common/enums/channel';
+import { ChannelPlatform, ChannelType } from 'src/common/enums/channel';
 import { Channel } from '../entities';
 import type { IChannelRepository } from '../interfaces';
 import { TelegramService } from 'src/modules/bot/bot.service';
@@ -28,41 +28,95 @@ export class ChannelsService {
     private readonly logger: Logger,
   ) {}
 
-  async createChannel(data: {
-    telegramId: number;
+  /**
+   * Переходный период: админ-панель пока шлёт telegramId/telegramUsername
+   * без явного platform. Нормализуем legacy-вход в один канонический вид,
+   * дальше по коду platform/externalId используются как единственный источник истины.
+   */
+  private resolveExternalIdentity(data: {
+    telegramId?: number;
     telegramUsername?: string;
+    platform?: ChannelPlatform;
+    externalId?: string;
+    externalUsername?: string;
+  }): {
+    platform: ChannelPlatform;
+    externalId?: string;
+    externalUsername?: string;
+  } {
+    if (data.platform) {
+      return {
+        platform: data.platform,
+        externalId: data.externalId,
+        externalUsername: data.externalUsername,
+      };
+    }
+
+    return {
+      platform: ChannelPlatform.TELEGRAM,
+      externalId:
+        data.externalId ??
+        (data.telegramId !== undefined ? String(data.telegramId) : undefined),
+      externalUsername: data.externalUsername ?? data.telegramUsername,
+    };
+  }
+
+  async createChannel(data: {
+    telegramId?: number;
+    telegramUsername?: string;
+    platform?: ChannelPlatform;
+    externalId?: string;
+    externalUsername?: string;
     name?: string;
     type?: ChannelType;
   }): Promise<Channel> {
     try {
       this.logger.debug({ data }, 'createChannel: start');
 
-      if (!data.telegramId && !data.telegramUsername) {
+      const identity = this.resolveExternalIdentity(data);
+
+      if (!identity.externalId && !identity.externalUsername) {
         throw new BadRequestException(
-          'telegramId or telegramUsername is required',
+          'externalId or externalUsername is required',
         );
       }
 
-      if (data.telegramId) {
-        const exists = await this.channelRepo.findByTelegramId(data.telegramId);
+      if (identity.platform !== ChannelPlatform.TELEGRAM) {
+        throw new BadRequestException(
+          `Платформа ${String(identity.platform)} пока не поддерживается`,
+        );
+      }
+
+      if (identity.externalId) {
+        const exists = await this.channelRepo.findByExternalId(
+          identity.platform,
+          identity.externalId,
+        );
 
         if (exists) {
           throw new BadRequestException(
-            'Channel with this telegramId already exists',
+            'Channel with this externalId already exists',
           );
         }
       }
-      const chatId =
-        data.telegramId ??
-        (data.telegramUsername
-          ? `@${data.telegramUsername.replace('@', '')}`
-          : undefined);
+
+      const chatId: number | string | undefined =
+        identity.externalId !== undefined
+          ? Number(identity.externalId)
+          : identity.externalUsername
+            ? `@${identity.externalUsername.replace('@', '')}`
+            : undefined;
 
       if (!chatId) {
         throw new BadRequestException('Invalid telegram chat id');
       }
 
-      const tgCheck = await this.telegramService.checkBotAdmin(chatId);
+      // checkBotAdmin принимает и username вида "@chat" через Telegraf, хотя
+      // его сигнатура сужена до number — то же самое допущение было и в коде
+      // до миграции на externalId.
+      const tgCheck = await this.telegramService.checkBotAdmin(
+        chatId as number,
+      );
 
       if (!tgCheck.exists) {
         throw new BadRequestException(
@@ -76,8 +130,10 @@ export class ChannelsService {
         );
       }
       const channel = await this.channelRepo.create({
-        telegramId: tgCheck.chat?.id,
-        telegramUsername: tgCheck.chat?.username,
+        platform: ChannelPlatform.TELEGRAM,
+        externalId:
+          tgCheck.chat?.id !== undefined ? String(tgCheck.chat.id) : undefined,
+        externalUsername: tgCheck.chat?.username,
         name: tgCheck.chat?.title ?? data.name,
         type: data.type ?? ChannelType.OTHER,
         isActive: true,
@@ -170,7 +226,7 @@ export class ChannelsService {
     id: number,
     data: {
       name?: string;
-      telegramUsername?: string;
+      externalUsername?: string;
       isActive?: boolean;
       type?: ChannelType;
     },
@@ -203,8 +259,14 @@ export class ChannelsService {
     }
   }
 
-  async deleteChannelByTelegramId(telegramId: number): Promise<void> {
-    await this.channelRepo.deleteByTelegramId(telegramId);
-    this.logger.log({ telegramId }, 'deleteChannelByTelegramId: done');
+  async deleteChannelByExternalId(
+    platform: ChannelPlatform,
+    externalId: string,
+  ): Promise<void> {
+    await this.channelRepo.deleteByExternalId(platform, externalId);
+    this.logger.log(
+      { platform, externalId },
+      'deleteChannelByExternalId: done',
+    );
   }
 }

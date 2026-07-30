@@ -33,6 +33,8 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
+    volumes:
+      - contest_uploads:/app/uploads
 
   node-exporter:
     image: prom/node-exporter:v1.8.1
@@ -108,3 +110,4 @@ volumes:
   loki_data:
   grafana_data:
   prometheus_data:
+  contest_uploads:

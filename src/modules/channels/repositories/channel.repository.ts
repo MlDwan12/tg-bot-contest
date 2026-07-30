@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { Channel } from '../entities/channel.entity';
 import { IChannelReadFilters, IChannelRepository } from '../interfaces';
 
@@ -21,15 +22,21 @@ export class ChannelRepository implements IChannelRepository {
     return this.repo.findOne({ where: { id } });
   }
 
-  findByTelegramId(telegramId: number): Promise<Channel | null> {
+  findByExternalId(
+    platform: ChannelPlatform,
+    externalId: string,
+  ): Promise<Channel | null> {
     return this.repo.findOne({
-      where: { telegramId },
+      where: { platform, externalId },
     });
   }
 
-  findByTelegramUsername(telegramUsername: string): Promise<Channel | null> {
+  findByExternalUsername(
+    platform: ChannelPlatform,
+    externalUsername: string,
+  ): Promise<Channel | null> {
     return this.repo.findOne({
-      where: { telegramUsername },
+      where: { platform, externalUsername },
     });
   }
 
@@ -95,12 +102,15 @@ export class ChannelRepository implements IChannelRepository {
     await this.repo.delete(id);
   }
 
-  async deleteByTelegramId(telegramId: number): Promise<void> {
-    const channel = await this.repo.findOneBy({ telegramId });
+  async deleteByExternalId(
+    platform: ChannelPlatform,
+    externalId: string,
+  ): Promise<void> {
+    const channel = await this.repo.findOneBy({ platform, externalId });
 
     if (!channel) {
       throw new NotFoundException(
-        `Channel with telegramId=${telegramId} not found`,
+        `Channel with platform=${platform} externalId=${externalId} not found`,
       );
     }
 

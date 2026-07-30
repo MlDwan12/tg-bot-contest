@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Logger } from 'nestjs-pino';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { Channel } from '../entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
 
@@ -27,17 +28,25 @@ export class ChannelHealthService {
     }
 
     for (const channel of channels) {
-      if (!channel.telegramId) {
+      if (channel.platform !== ChannelPlatform.TELEGRAM) {
+        this.logger.debug(
+          { channelId: channel.id, platform: channel.platform },
+          'checkChannelsHealth: платформа пока не поддерживается проверкой, пропущен',
+        );
+        continue;
+      }
+
+      if (!channel.externalId) {
         this.logger.warn(
           { channelId: channel.id },
-          'checkChannelsHealth: канал без telegramId, пропущен',
+          'checkChannelsHealth: канал без externalId, пропущен',
         );
         continue;
       }
 
       try {
         const check = await this.telegramService.checkBotChannelPermissions(
-          Number(channel.telegramId),
+          Number(channel.externalId),
         );
 
         const isValid =
@@ -49,18 +58,26 @@ export class ChannelHealthService {
           });
 
           this.logger.warn(
-            { channelId: channel.id, telegramId: channel.telegramId, isActive: isValid },
+            {
+              channelId: channel.id,
+              externalId: channel.externalId,
+              isActive: isValid,
+            },
             'checkChannelsHealth: статус канала обновлён',
           );
         } else {
           this.logger.debug(
-            { channelId: channel.id, telegramId: channel.telegramId, isActive: isValid },
+            {
+              channelId: channel.id,
+              externalId: channel.externalId,
+              isActive: isValid,
+            },
             'checkChannelsHealth: статус без изменений',
           );
         }
       } catch (error: any) {
         this.logger.error(
-          { err: error, channelId: channel.id, telegramId: channel.telegramId },
+          { err: error, channelId: channel.id, externalId: channel.externalId },
           'checkChannelsHealth: ошибка проверки канала',
         );
 
@@ -70,7 +87,7 @@ export class ChannelHealthService {
           });
 
           this.logger.warn(
-            { channelId: channel.id, telegramId: channel.telegramId },
+            { channelId: channel.id, externalId: channel.externalId },
             'checkChannelsHealth: канал помечен неактивным из-за ошибки',
           );
         }

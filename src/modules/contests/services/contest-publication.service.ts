@@ -19,8 +19,13 @@ import type {
 } from '../interfaces';
 import { ContestPublication } from '../entities';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { Channel } from 'src/modules/channels/entities';
 import { TelegramService } from 'src/modules/bot/bot.service';
+import {
+  buildContestPostPayload,
+  ContestPostPayload,
+} from './contest-post-payload.util';
 
 /**
  * Минимальный контекст для синхронизации опубликованных постов — только поля,
@@ -129,6 +134,52 @@ export class ContestPublicationService {
     'id' | 'contestId' | 'chatId' | 'telegramMessageId'
   > | null> {
     return this.contestRepo.findPublicationForButtonUpdate(publicationId);
+  }
+
+  /**
+   * Превью поста без публикации: что именно уйдёт в каждый канал.
+   *
+   * Собирается тем же buildContestPostPayload, что и реальная публикация, —
+   * иначе превью со временем разойдётся с фактом. Отдаём по элементу на канал:
+   * ссылка кнопки содержит chatId канала и у каждого своя.
+   *
+   * Счётчика участников в тексте кнопки нет намеренно: при публикации он тоже
+   * не проставляется, его дописывает отдельный джоб уже по ходу конкурса.
+   */
+  async buildContestPreview(contestId: number): Promise<
+    Array<{
+      channelTelegramId: string;
+      channelUsername: string | null;
+      payload: ContestPostPayload;
+    }>
+  > {
+    const contest = await this.contestRepo.findByIdWithRelations(contestId);
+
+    if (!contest) {
+      throw new NotFoundException('Конкурс не найден');
+    }
+
+    const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
+
+    return (contest.publishChannels ?? [])
+      .filter(
+        (channel) =>
+          channel.platform === ChannelPlatform.TELEGRAM &&
+          channel.externalId != null,
+      )
+      .map((channel) => ({
+        channelTelegramId: channel.externalId as string,
+        channelUsername: channel.externalUsername ?? null,
+        payload: buildContestPostPayload({
+          contestId,
+          channelTelegramId: channel.externalId as string,
+          name: contest.name,
+          description: contest.description,
+          buttonText: contest.buttonText,
+          imagePath: contest.imagePath,
+          miniAppUrl,
+        }),
+      }));
   }
 
   async recreatePendingPublications(params: {
@@ -265,7 +316,8 @@ export class ContestPublicationService {
           photoUrl?: string;
         };
 
-        const chatId = publication.chatId ?? publication.channel?.telegramId;
+        const chatId =
+          publication.chatId ?? Number(publication.channel?.externalId);
         const messageId = publication.telegramMessageId;
 
         if (!chatId || !messageId || !payload.buttonUrl) {
@@ -307,19 +359,26 @@ export class ContestPublicationService {
     const errors: string[] = [];
 
     for (const channel of channels) {
-      if (!channel.telegramId) {
+      if (channel.platform !== ChannelPlatform.TELEGRAM) {
         errors.push(
-          `У канала "${channel.name ?? channel.id}" отсутствует telegramId`,
+          `Платформа "${String(channel.platform)}" пока не поддерживается публикацией`,
+        );
+        continue;
+      }
+
+      if (!channel.externalId) {
+        errors.push(
+          `У канала "${channel.name ?? channel.id}" отсутствует externalId`,
         );
         continue;
       }
 
       const check = await this.telegramService.checkBotChannelPermissions(
-        Number(channel.telegramId),
+        Number(channel.externalId),
       );
 
       const channelLabel =
-        channel.name ?? channel.telegramUsername ?? channel.telegramId;
+        channel.name ?? channel.externalUsername ?? channel.externalId;
 
       if (!check.exists) {
         errors.push(`Бот не найден в канале "${channelLabel}"`);
@@ -357,17 +416,23 @@ export class ContestPublicationService {
     const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
 
     return channels.map((channel) => {
-      if (!channel.telegramId) {
+      if (channel.platform !== ChannelPlatform.TELEGRAM) {
         throw new BadRequestException(
-          `У канала ${channel.id} отсутствует telegramId`,
+          `Платформа "${String(channel.platform)}" пока не поддерживается публикацией`,
         );
       }
 
-      const chatId = Number(channel.telegramId);
+      if (!channel.externalId) {
+        throw new BadRequestException(
+          `У канала ${channel.id} отсутствует externalId`,
+        );
+      }
+
+      const chatId = Number(channel.externalId);
 
       if (Number.isNaN(chatId)) {
         throw new BadRequestException(
-          `У канала ${channel.id} некорректный telegramId`,
+          `У канала ${channel.id} некорректный externalId`,
         );
       }
 
@@ -376,12 +441,15 @@ export class ContestPublicationService {
         channelId: channel.id,
         chatId,
         status: PublicationStatus.PENDING,
-        payload: {
-          text: `${name}\n\n${description || ''}`,
-          buttonText: buttonText || 'Участвовать',
-          buttonUrl: `${miniAppUrl}?startapp=${channel.telegramId}_${contestId}`,
-          photoUrl: imagePath,
-        },
+        payload: buildContestPostPayload({
+          contestId,
+          channelTelegramId: channel.externalId,
+          name,
+          description,
+          buttonText,
+          imagePath,
+          miniAppUrl,
+        }),
       };
     });
   }

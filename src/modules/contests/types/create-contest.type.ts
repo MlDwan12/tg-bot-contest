@@ -14,7 +14,23 @@ export type CreateContest = {
   endDate: Date;
   creatorId: number;
 
-  // Каналы
-  publishChannelIds?: number[];
-  requiredChannelIds?: number[];
+  /**
+   * Перепроверять ли подписку на обязательные каналы перед розыгрышем.
+   * Не задано → true: отписавшийся после участия не должен выигрывать.
+   */
+  recheckSubscriptionOnFinish?: boolean;
+
+  /**
+   * Требовать ли подтверждение приза победителем. Не задано → false: конкурс
+   * идёт как до Ш10. Включение — единственный способ освободить место, без
+   * него автодобор не срабатывает никогда.
+   */
+  requireWinnerConfirmation?: boolean;
+
+  /** Срок подтверждения в часах. Не задано → 24. */
+  confirmationHours?: number;
+
+  // Каналы — ищем по Channel.externalId (у Telegram это chat id)
+  publishChannelExternalIds?: string[];
+  requiredChannelExternalIds?: string[];
 };

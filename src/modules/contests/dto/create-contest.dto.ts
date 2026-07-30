@@ -1,15 +1,17 @@
-import { Transform, Type } from 'class-transformer';
+import { Expose, Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsOptional,
   IsEnum,
   IsInt,
   Min,
+  Max,
   IsDate,
   IsArray,
   IsNotEmpty,
   ArrayUnique,
   MaxLength,
+  IsBoolean,
 } from 'class-validator';
 import { WinnerStrategy } from 'src/common/enums/contest';
 import { CreateContest } from 'src/modules/contests/types';
@@ -133,21 +135,72 @@ export class CreateContestDto implements Omit<CreateContest, 'creatorId'> {
   @IsFutureDate({ message: 'endDate must not be in the past' })
   endDate: Date;
 
-  // ВАЖНО:
-  // если реально ищешь по telegramId, лучше переименовать поле.
+  // Перепроверка подписки перед розыгрышем. По умолчанию включена — выключать
+  // осознанно. Строковые 'true'/'false' принимаем: форма шлётся multipart.
   @IsOptional()
-  @Transform(({ value }) => toNumberArray(value))
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return value;
+  })
+  @IsBoolean()
+  recheckSubscriptionOnFinish?: boolean;
+
+  // Требовать ли от победителя подтверждения приза. Выключено по умолчанию:
+  // с выключенным конкурс идёт как раньше (CONFIRMED сразу, без кнопки и
+  // дедлайна). Строковые 'true'/'false' — как выше, форма шлётся multipart.
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+    return value;
+  })
+  @IsBoolean()
+  requireWinnerConfirmation?: boolean;
+
+  // Срок подтверждения в часах. Учитывается только при включённом
+  // requireWinnerConfirmation. Потолок в неделю — защита от опечатки вроде
+  // 2400 часов, из-за которой место зависло бы на месяцы.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  confirmationHours?: number;
+
+  /** @deprecated переходный период — используй publishChannelExternalIds. */
+  @IsOptional()
+  publishChannelIds?: unknown;
+
+  /** @deprecated переходный период — используй requiredChannelExternalIds. */
+  @IsOptional()
+  requiredChannelIds?: unknown;
+
+  // Ищет каналы по Channel.externalId (у Telegram это chat id), а не по
+  // внутреннему Channel.id — раньше поле называлось "...Ids", что вводило в
+  // заблуждение (баг в имени, а не в поведении).
+  // @Expose() обязателен: без него class-transformer не вызовет @Transform,
+  // если в запросе прислали только legacy publishChannelIds — ключа
+  // publishChannelExternalIds в исходном объекте тогда просто нет.
+  @IsOptional()
+  @Expose()
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
+      toNumberArray(value ?? obj.publishChannelIds)?.map(String),
+  )
   @IsArray()
   @ArrayUnique()
-  @IsInt({ each: true })
-  publishChannelIds?: number[];
+  @IsString({ each: true })
+  publishChannelExternalIds?: string[];
 
   @IsOptional()
-  @Transform(({ value }) => toNumberArray(value))
+  @Expose()
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
+      toNumberArray(value ?? obj.requiredChannelIds)?.map(String),
+  )
   @IsArray()
   @ArrayUnique()
-  @IsInt({ each: true })
-  requiredChannelIds?: number[];
+  @IsString({ each: true })
+  requiredChannelExternalIds?: string[];
 
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

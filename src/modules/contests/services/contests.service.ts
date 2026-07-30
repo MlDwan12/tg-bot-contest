@@ -12,6 +12,7 @@ import {
 } from 'src/modules/contests/types';
 import { Contest } from '../entities';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
@@ -25,6 +26,7 @@ import { UsersService } from '../../users/services/users.service';
 import { User } from 'src/modules/users/entities';
 import { Channel } from 'src/modules/channels/entities';
 import { fromZonedTime } from 'date-fns-tz';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.helper';
 import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
 import { ContestPublicationService } from './contest-publication.service';
@@ -32,7 +34,7 @@ import { ContestWinnerService } from './contest-winner.service';
 
 @Injectable()
 export class ContestsService {
-  private readonly APP_TIME_ZONE = 'Europe/Moscow';
+  private readonly APP_TIME_ZONE = getAppTimeZone();
 
   constructor(
     @Inject(CONTEST_REPOSITORY)
@@ -60,6 +62,11 @@ export class ContestsService {
     const buttonText = dto.buttonText?.trim() || 'Участвовать';
 
     await this.assertCreatableContestDates(startDate, endDate, now, image);
+    await this.assertConfirmationSupported(
+      dto.winnerStrategy,
+      dto.requireWinnerConfirmation ?? false,
+      image,
+    );
 
     try {
       return await this.persistNewContest(
@@ -76,8 +83,8 @@ export class ContestsService {
         {
           error,
           creatorId: dto.creatorId,
-          publishChannelIds: dto.publishChannelIds,
-          requiredChannelIds: dto.requiredChannelIds,
+          publishChannelExternalIds: dto.publishChannelExternalIds,
+          requiredChannelExternalIds: dto.requiredChannelExternalIds,
         },
         'Ошибка при создании конкурса',
       );
@@ -145,17 +152,19 @@ export class ContestsService {
     let contestUpdated = false;
     try {
       const publishChannels =
-        dto.publishChannelIds !== undefined
-          ? await this.getChannelsByTelegramIds(
-              dto.publishChannelIds,
+        dto.publishChannelExternalIds !== undefined
+          ? await this.getChannelsByExternalIds(
+              ChannelPlatform.TELEGRAM,
+              dto.publishChannelExternalIds,
               'Один или несколько каналов публикации не найдены',
             )
           : null;
 
       const requiredChannels =
-        dto.requiredChannelIds !== undefined
-          ? await this.getChannelsByTelegramIds(
-              dto.requiredChannelIds,
+        dto.requiredChannelExternalIds !== undefined
+          ? await this.getChannelsByExternalIds(
+              ChannelPlatform.TELEGRAM,
+              dto.requiredChannelExternalIds,
               'Один или несколько обязательных каналов не найдены',
             )
           : null;
@@ -179,6 +188,12 @@ export class ContestsService {
         status: dto.status ?? contest.status,
         imagePath,
         buttonText: nextButtonText,
+        recheckSubscriptionOnFinish:
+          dto.recheckSubscriptionOnFinish ??
+          contest.recheckSubscriptionOnFinish,
+        requireWinnerConfirmation:
+          dto.requireWinnerConfirmation ?? contest.requireWinnerConfirmation,
+        confirmationHours: dto.confirmationHours ?? contest.confirmationHours,
       });
       contestUpdated = true;
 
@@ -236,7 +251,7 @@ export class ContestsService {
 
       const shouldRefreshPendingPublications =
         contest.status === ContestStatus.PENDING &&
-        (dto.publishChannelIds !== undefined ||
+        (dto.publishChannelExternalIds !== undefined ||
           dto.name !== undefined ||
           dto.description !== undefined ||
           dto.buttonText !== undefined ||
@@ -247,10 +262,13 @@ export class ContestsService {
           publishChannels ??
           (Array.isArray(updatedContest.publishChannels) &&
           updatedContest.publishChannels.length
-            ? await this.getChannelsByTelegramIds(
-                updatedContest.publishChannels.map((channel) =>
-                  Number(channel.telegramId),
-                ),
+            ? await this.getChannelsByExternalIds(
+                ChannelPlatform.TELEGRAM,
+                updatedContest.publishChannels
+                  .map((channel) => channel.externalId)
+                  .filter((externalId): externalId is string =>
+                    Boolean(externalId),
+                  ),
                 'Один или несколько каналов публикации не найдены',
               )
             : []);
@@ -420,6 +438,25 @@ export class ContestsService {
     }
   }
 
+  /**
+   * Подтверждение приза поддерживаем только для RANDOM: у MANUAL победителей
+   * назначает оператор, порядка жеребьёвки не существует, и заменить
+   * отказавшегося автоматически нечем. Молча игнорировать галку нельзя —
+   * оператор считал бы, что подтверждение работает, а оно бы не работало.
+   */
+  private async assertConfirmationSupported(
+    winnerStrategy: WinnerStrategy,
+    requireWinnerConfirmation: boolean,
+    image?: Express.Multer.File,
+  ): Promise<void> {
+    if (requireWinnerConfirmation && winnerStrategy !== WinnerStrategy.RANDOM) {
+      await deleteUploadedContestImage(image);
+      throw new BadRequestException(
+        'Подтверждение приза победителем доступно только для случайного розыгрыша',
+      );
+    }
+  }
+
   /** Создание конкурса + каналы + публикации + джобы. Тело прежнего try 1:1. */
   private async persistNewContest(
     dto: CreateContest,
@@ -434,13 +471,15 @@ export class ContestsService {
       throw new NotFoundException('Creator not found');
     }
 
-    const publishChannels = await this.getChannelsByTelegramIds(
-      dto.publishChannelIds,
+    const publishChannels = await this.getChannelsByExternalIds(
+      ChannelPlatform.TELEGRAM,
+      dto.publishChannelExternalIds,
       'Один или несколько каналов публикации не найдены',
     );
 
-    const requiredChannels = await this.getChannelsByTelegramIds(
-      dto.requiredChannelIds,
+    const requiredChannels = await this.getChannelsByExternalIds(
+      ChannelPlatform.TELEGRAM,
+      dto.requiredChannelExternalIds,
       'Один или несколько обязательных каналов не найдены',
     );
 
@@ -461,6 +500,11 @@ export class ContestsService {
       creatorId: dto.creatorId,
       imagePath,
       buttonText,
+      recheckSubscriptionOnFinish: dto.recheckSubscriptionOnFinish ?? true,
+      // Не заданы — не передаём вовсе: сработают DEFAULT'ы колонок (false и 24),
+      // и дефолт не придётся держать в двух местах.
+      requireWinnerConfirmation: dto.requireWinnerConfirmation,
+      confirmationHours: dto.confirmationHours,
     });
 
     await this.contestRepo.setPublishChannels(
@@ -557,6 +601,14 @@ export class ContestsService {
         'Нельзя менять каналы публикации после запуска конкурса',
       );
     }
+
+    // Проверяем ИТОГОВУЮ пару: сменить можно как стратегию, так и галку — в
+    // том числе по отдельности, оставив вторую часть от прежнего состояния.
+    await this.assertConfirmationSupported(
+      dto.winnerStrategy ?? contest.winnerStrategy,
+      dto.requireWinnerConfirmation ?? contest.requireWinnerConfirmation,
+      image,
+    );
   }
 
   /**
@@ -737,41 +789,41 @@ export class ContestsService {
     );
   }
 
-  private async getChannelsByTelegramIds(
-    telegramIds?: number[],
+  private async getChannelsByExternalIds(
+    platform: ChannelPlatform,
+    externalIds?: string[],
     errorMessage = 'Один или несколько каналов не найдены',
   ): Promise<Channel[]> {
-    if (!telegramIds?.length) {
+    if (!externalIds?.length) {
       return [];
     }
 
-    const uniqueTelegramIds = [...new Set(telegramIds)];
+    const uniqueExternalIds = [...new Set(externalIds)];
 
-    if (uniqueTelegramIds.length !== telegramIds.length) {
+    if (uniqueExternalIds.length !== externalIds.length) {
       throw new BadRequestException(
-        'Список каналов содержит дублирующиеся telegramId',
+        'Список каналов содержит дублирующиеся идентификаторы',
       );
     }
 
     const channels = await this.channelService.getChannelsByParameters({
-      telegramId: In(uniqueTelegramIds),
+      platform,
+      externalId: In(uniqueExternalIds),
     });
 
-    if (channels.length !== uniqueTelegramIds.length) {
+    if (channels.length !== uniqueExternalIds.length) {
       throw new NotFoundException(errorMessage);
     }
 
     const channelsMap = new Map(
-      channels.map((channel) => [String(channel.telegramId), channel]),
+      channels.map((channel) => [channel.externalId, channel]),
     );
 
-    return uniqueTelegramIds.map((telegramId) => {
-      const channel = channelsMap.get(String(telegramId));
+    return uniqueExternalIds.map((externalId) => {
+      const channel = channelsMap.get(externalId);
 
       if (!channel) {
-        throw new NotFoundException(
-          `Канал с telegramId ${telegramId} не найден`,
-        );
+        throw new NotFoundException(`Канал с id ${externalId} не найден`);
       }
 
       return channel;

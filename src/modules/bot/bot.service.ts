@@ -12,7 +12,7 @@ import { Telegraf } from 'telegraf';
 interface DeletablePublication {
   id: number;
   telegramMessageId?: number | null;
-  channel?: { telegramId?: number | null } | null;
+  channel?: { externalId?: string | null } | null;
 }
 
 @Injectable()
@@ -21,6 +21,22 @@ export class TelegramService {
     @InjectBot() private readonly bot: Telegraf,
     private readonly logger: Logger,
   ) {}
+
+  /** В отличие от checkBotAdmin (права самого бота) — статус ПРОИЗВОЛЬНОГО
+   * пользователя в канале. Используется для «Мои каналы» в меню бота: реально
+   * администрирует ли этот telegramId данный чат, а не просто зарегистрирован
+   * ли канал в системе. */
+  async isUserChannelAdmin(
+    chatId: number,
+    telegramId: number,
+  ): Promise<boolean> {
+    try {
+      const member = await this.bot.telegram.getChatMember(chatId, telegramId);
+      return member.status === 'administrator' || member.status === 'creator';
+    } catch {
+      return false;
+    }
+  }
 
   async checkBotAdmin(chatId: number): Promise<{
     exists: boolean;
@@ -237,6 +253,12 @@ export class TelegramService {
     imagePath?: string;
     buttonText?: string;
     buttonUrl?: string;
+    /**
+     * Инлайн-кнопки, возвращающие нажатие боту (подтверждение приза), в отличие
+     * от buttonUrl, который просто ведёт по ссылке. Заданы — имеют приоритет:
+     * в одном ряду вперемешку url и callback не нужны никому из вызывающих.
+     */
+    callbackButtons?: Array<{ text: string; callbackData: string }>;
   }): Promise<{ messageId: number; chatId: string }> {
     this.logger.debug(
       {
@@ -247,8 +269,16 @@ export class TelegramService {
       'sendMailingMessage: start',
     );
 
-    const replyMarkup =
-      dto.buttonText && dto.buttonUrl
+    const replyMarkup = dto.callbackButtons?.length
+      ? {
+          inline_keyboard: [
+            dto.callbackButtons.map((button) => ({
+              text: button.text,
+              callback_data: button.callbackData,
+            })),
+          ],
+        }
+      : dto.buttonText && dto.buttonUrl
         ? {
             inline_keyboard: [[{ text: dto.buttonText, url: dto.buttonUrl }]],
           }
@@ -364,7 +394,9 @@ export class TelegramService {
     publications: DeletablePublication[],
   ): Promise<void> {
     for (const pub of publications) {
-      const chatId = pub.channel?.telegramId;
+      const chatId = pub.channel?.externalId
+        ? Number(pub.channel.externalId)
+        : undefined;
       const messageId = pub.telegramMessageId;
       if (!messageId || !chatId) continue;
 
@@ -498,6 +530,39 @@ export class TelegramService {
       languageCode: member.user.language_code,
       status: member.status,
     };
+  }
+
+  /**
+   * Снимает inline-кнопки у отправленного сообщения, оставляя текст.
+   *
+   * Нужно, когда решение принимать поздно: срок подтверждения истёк, приз ушёл
+   * следующему. Живые кнопки под таким сообщением вводят в заблуждение —
+   * человек жмёт и не понимает, почему ничего не происходит.
+   *
+   * Сообщение могло быть удалено получателем, поэтому ошибку Telegram здесь
+   * считаем нормальным исходом: сняли — хорошо, не смогли — не беда.
+   */
+  async removeInlineKeyboard(
+    chatId: string,
+    messageId: number,
+  ): Promise<boolean> {
+    try {
+      await this.bot.telegram.editMessageReplyMarkup(
+        chatId,
+        messageId,
+        undefined,
+        undefined,
+      );
+
+      return true;
+    } catch (error: any) {
+      this.logger.debug(
+        { chatId, messageId, tg: error?.response?.description },
+        'removeInlineKeyboard: не удалось снять кнопки',
+      );
+
+      return false;
+    }
   }
 
   async deleteMessage(chatId: string, messageId: number): Promise<void> {

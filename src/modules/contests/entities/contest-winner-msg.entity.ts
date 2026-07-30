@@ -18,9 +18,13 @@ export class BotMessage {
   @PrimaryGeneratedColumn()
   id: number;
 
-  /** Telegram message_id */
-  @Column()
-  telegramMessageId: number;
+  /**
+   * Telegram message_id. У неудачной отправки (status=FAILED) сообщения не
+   * существует — здесь null. Тип колонки задан явно: при union-типе TypeORM
+   * не выводит его из метаданных.
+   */
+  @Column({ type: 'int', nullable: true })
+  telegramMessageId: number | null;
 
   /** Telegram chat_id (нужно для удаления) */
   @Column({ type: 'bigint' })
@@ -62,13 +66,14 @@ export class BotMessage {
   })
   status: BotMessageStatus;
 
-  /** данные сообщения */
+  /** данные сообщения; у FAILED сюда же кладётся текст ошибки отправки */
   @Column({ type: 'jsonb', nullable: true })
   payload?: {
     text?: string;
     photoUrl?: string;
     buttonText?: string;
     buttonUrl?: string;
+    error?: string;
   };
 
   @CreateDateColumn()

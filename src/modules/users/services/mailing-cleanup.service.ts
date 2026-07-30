@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -25,7 +26,7 @@ export class MailingCleanupService {
   ) {}
 
   @Cron('0 14 * * *', {
-    timeZone: 'Europe/Moscow',
+    timeZone: getAppTimeZone(),
   })
   async deleteExpiredMessages(): Promise<void> {
     if (this.isCleanupRunning) {
@@ -72,7 +73,12 @@ export class MailingCleanupService {
 
         if (totalLeft === 0) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -99,7 +105,12 @@ export class MailingCleanupService {
 
         if (!messages.length) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -154,7 +165,12 @@ export class MailingCleanupService {
 
         if (messages.length < batchSize) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -176,7 +192,7 @@ export class MailingCleanupService {
   }
 
   @Cron('0 3 * * 5', {
-    timeZone: 'Europe/Moscow',
+    timeZone: getAppTimeZone(),
   })
   async cleanupFailedMessages(): Promise<void> {
     const cleanupStart = Date.now();
@@ -221,7 +237,10 @@ export class MailingCleanupService {
     }
 
     this.logger.log(
-      { totalDeleted, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+      {
+        totalDeleted,
+        durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+      },
       'cleanup:cleanupFailedMessages: done',
     );
   }

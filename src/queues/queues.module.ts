@@ -62,6 +62,30 @@ import { QueuesMonitoringModule } from './monitoring/queues-monitoring.module';
         },
       },
       {
+        // Личные уведомления победителей. attempts=3: 403 «бот не может писать
+        // первым» — перманентный отказ, процессор такие не ретраит и сразу
+        // пишет FAILED; ретраи нужны только под сетевые сбои и 429.
+        name: 'contest-winner-notify',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: 1000,
+          removeOnFail: 10000,
+        },
+      },
+      {
+        // Дедлайны подтверждения приза. attempts=3: джоб только читает статус и
+        // при необходимости запускает автодобор — временный сбой БД/Telegram
+        // стоит переждать, а не терять место незакрытым.
+        name: 'contest-winner-confirm',
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: 1000,
+          removeOnFail: 10000,
+        },
+      },
+      {
         name: 'user-mailing',
         defaultJobOptions: {
           attempts: 3,

@@ -12,6 +12,7 @@ import {
 import { Contest } from '../entities/contest.entity';
 import { ContestStatus, PublicationStatus } from 'src/common/enums/contest';
 import { Channel } from 'src/modules/channels/entities';
+import { toLegacyTelegramFields } from 'src/modules/channels/utils/channel-legacy.util';
 import { IContestReadFilters, IContestRepository } from '../interfaces';
 import { ContestWithRelations } from '../types';
 import { ContestPublication, ContestWinner } from '../entities';
@@ -119,6 +120,7 @@ export class ContestRepository implements IContestRepository {
         'winners.displayUsername',
         'winnerUser.id',
         'winners.place',
+        'winners.status',
         'winnerUser.telegramId',
         'winnerUser.username',
       ])
@@ -131,15 +133,13 @@ export class ContestRepository implements IContestRepository {
     return {
       id: contest.id,
       publishChannels:
-        contest.publishChannels?.map((channel) => ({
-          telegramId: channel.telegramId,
-          telegramUsername: channel.telegramUsername,
-        })) ?? [],
+        contest.publishChannels?.map((channel) =>
+          this.toContestChannelInfo(channel),
+        ) ?? [],
       requiredChannels:
-        contest.requiredChannels?.map((channel) => ({
-          telegramId: channel.telegramId,
-          telegramUsername: channel.telegramUsername,
-        })) ?? [],
+        contest.requiredChannels?.map((channel) =>
+          this.toContestChannelInfo(channel),
+        ) ?? [],
       creator: contest.creator ? contest.creator.username : null,
       name: contest.name,
       description: contest.description ?? null,
@@ -177,6 +177,7 @@ export class ContestRepository implements IContestRepository {
           id: winner.id,
           userId: winner.userId,
           place: winner.place,
+          status: winner.status,
           // Реальный победитель — реальный user. Фиктивный (ник без TG) не имеет
           // user, поэтому отдаём синтетический с ником в username: фронт рисует
           // его тем же кодом (winner.user.username), telegramId = null.
@@ -198,6 +199,10 @@ export class ContestRepository implements IContestRepository {
       startDate: contest.startDate,
       endDate: contest.endDate,
       status: contest.status,
+      recheckSubscriptionOnFinish: contest.recheckSubscriptionOnFinish,
+      subscriptionsCheckedAt: contest.subscriptionsCheckedAt ?? null,
+      requireWinnerConfirmation: contest.requireWinnerConfirmation,
+      confirmationHours: contest.confirmationHours,
     };
   }
 
@@ -619,6 +624,17 @@ export class ContestRepository implements IContestRepository {
   }
 
   // ── приватное ───────────────────────────────────────────────────────────────
+
+  private toContestChannelInfo(
+    channel: Channel,
+  ): ContestWithRelations['publishChannels'][number] {
+    return {
+      platform: channel.platform,
+      externalId: channel.externalId ?? null,
+      externalUsername: channel.externalUsername ?? null,
+      ...toLegacyTelegramFields(channel),
+    };
+  }
 
   private async ensureExists(id: number): Promise<void> {
     const exists = await this.repo.findOne({ where: { id } });

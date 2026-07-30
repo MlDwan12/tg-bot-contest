@@ -1,4 +1,9 @@
-import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import {
+  ContestStatus,
+  WinnerStrategy,
+  ContestWinnerStatus,
+} from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 
 /**
  * Обогащённый DTO-подобный результат `findByIdWithRelations` — НЕ entity, а
@@ -6,8 +11,13 @@ import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
  * которую строит репозиторий. Раньше метод возвращал `any`; тип фиксирует форму.
  */
 export type ContestChannelInfo = {
-  telegramId?: number;
-  telegramUsername?: string;
+  platform: ChannelPlatform;
+  externalId: string | null;
+  externalUsername: string | null;
+  /** @deprecated переходный период — используй externalId. Заполнено только для platform=telegram. */
+  telegramId: number | null;
+  /** @deprecated переходный период — используй externalUsername. */
+  telegramUsername: string | null;
 };
 
 export type ContestUserInfo = {
@@ -46,6 +56,12 @@ export type ContestWinnerInfo = {
   id: number;
   userId: number | null;
   place: number;
+  /**
+   * Состояние выдачи приза. Без него выдача врала бы: после автодобора на одном
+   * месте лежит несколько строк (отказавшийся + занявший место), и отличить их
+   * снаружи было нечем.
+   */
+  status: ContestWinnerStatus;
   user: ContestWinnerUserInfo | null;
 };
 
@@ -68,4 +84,8 @@ export type ContestWithRelations = {
   startDate: Date;
   endDate: Date;
   status: ContestStatus;
+  recheckSubscriptionOnFinish: boolean;
+  subscriptionsCheckedAt: Date | null;
+  requireWinnerConfirmation: boolean;
+  confirmationHours: number;
 };

@@ -1,4 +1,7 @@
-import { PartialType } from '@nestjs/mapped-types';
+// PartialType из @nestjs/swagger (не @nestjs/mapped-types!): переносит и
+// валидацию, и swagger-метаданные CreateContestDto. С mapped-types свагер
+// плагин не умеет разворачивать миксин в схему — тело показывалось бы пустым.
+import { PartialType } from '@nestjs/swagger';
 import { CreateContestDto } from './create-contest.dto';
 import {
   IsOptional,

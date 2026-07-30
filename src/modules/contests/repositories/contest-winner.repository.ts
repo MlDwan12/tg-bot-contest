@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ContestWinner } from '../entities';
-import { IContestWinnerRepository } from '../interfaces';
+import { ContestWinnerRow, IContestWinnerRepository } from '../interfaces';
+import { ContestWinnerStatus } from 'src/common/enums/contest';
 
 /**
  * Единый репозиторий агрегата ContestWinner (Фаза 9 — слиты read+write).
@@ -31,16 +32,40 @@ export class ContestWinnerRepository implements IContestWinnerRepository {
     });
   }
 
+  async findById(id: number): Promise<ContestWinner | null> {
+    return this.repo.findOne({
+      where: { id },
+      relations: { user: true, contest: true },
+    });
+  }
+
   // ── запись ──────────────────────────────────────────────────────────────
 
-  async replace(
-    contestId: number,
-    winners: Array<{
-      contestId: number;
-      userId: number;
-      place: number;
-    }>,
-  ): Promise<void> {
+  /**
+   * Условный UPDATE вместо «прочитали статус → записали»: между чтением и
+   * записью победитель мог успеть нажать вторую кнопку, а джоб дедлайна —
+   * проставить EXPIRED. Условие по status делает переход одноразовым, и
+   * решает тот, кто пришёл первым.
+   */
+  async resolveConfirmation(
+    id: number,
+    status: ContestWinnerStatus,
+    confirmedAt: Date | null,
+  ): Promise<boolean> {
+    const result = await this.repo
+      .createQueryBuilder()
+      .update(ContestWinner)
+      .set({ status, confirmedAt })
+      .where('id = :id', { id })
+      .andWhere('status = :pending', {
+        pending: ContestWinnerStatus.PENDING_CONFIRMATION,
+      })
+      .execute();
+
+    return (result.affected ?? 0) > 0;
+  }
+
+  async replace(contestId: number, winners: ContestWinnerRow[]): Promise<void> {
     await this.repo.manager.transaction(async (manager) => {
       await manager.delete(ContestWinner, { contestId });
 
@@ -50,6 +75,10 @@ export class ContestWinnerRepository implements IContestWinnerRepository {
 
       await manager.insert(ContestWinner, winners);
     });
+  }
+
+  async append(row: ContestWinnerRow): Promise<ContestWinner> {
+    return this.repo.save(this.repo.create(row));
   }
 
   async deleteByContestId(contestId: number): Promise<void> {

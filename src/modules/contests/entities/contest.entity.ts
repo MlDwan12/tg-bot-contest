@@ -55,6 +55,40 @@ export class Contest {
   @Column({ type: 'timestamp' })
   endDate: Date;
 
+  /**
+   * Перепроверять ли подписку на обязательные каналы перед розыгрышем.
+   * Включено по умолчанию: без этого отписавшийся после участия выигрывает
+   * наравне со всеми.
+   */
+  @Column({ default: true })
+  recheckSubscriptionOnFinish: boolean;
+
+  /**
+   * Когда перепроверка отработала. null — ещё не проводилась; именно это
+   * отличает «проверять пора» от «уже проверили» и не даёт гонять проверку
+   * повторно при каждом продлении дедлайна.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionsCheckedAt: Date | null;
+
+  /**
+   * Требовать ли от победителя подтверждения приза. Выключено по умолчанию —
+   * с ним конкурс идёт ровно как до Ш10: статус CONFIRMED сразу, уведомление
+   * без кнопки, джоб дедлайна не ставится.
+   *
+   * Включённое подтверждение — единственный способ освободить место: без него
+   * никто не может «не отозваться», и автодобор не сработал бы ни разу.
+   */
+  @Column({ default: false })
+  requireWinnerConfirmation: boolean;
+
+  /**
+   * Сколько часов даётся на подтверждение. Имеет смысл только при включённом
+   * requireWinnerConfirmation.
+   */
+  @Column({ default: 24 })
+  confirmationHours: number;
+
   @ManyToMany(() => Channel)
   @JoinTable({
     name: 'contest_publish_channels',

@@ -16,9 +16,12 @@ import { ContestWithRelations } from '../types';
 import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import { ContestJobsService } from './contest-jobs.service';
 import { ContestWinnerService } from './contest-winner.service';
+import { ContestWinnerNotifyService } from './contest-winner-notify.service';
+import { ContestSubscriptionRecheckService } from './contest-subscription-recheck.service';
 import { ContestPublicationService } from './contest-publication.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
 
 const WINNER_SELECTION_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000;
 
@@ -36,6 +39,8 @@ export class ContestLifecycleService {
 
     private readonly contestJobsService: ContestJobsService,
     private readonly contestWinnerService: ContestWinnerService,
+    private readonly contestWinnerNotifyService: ContestWinnerNotifyService,
+    private readonly contestSubscriptionRecheckService: ContestSubscriptionRecheckService,
     private readonly contestPublicationService: ContestPublicationService,
     private readonly logger: Logger,
     private readonly dataSource: DataSource,
@@ -98,6 +103,23 @@ export class ContestLifecycleService {
       const now = new Date();
       if (contest.endDate > now) return;
 
+      // Перепроверка подписок — отдельная фаза: она делает запрос в Telegram на
+      // каждого участника и идёт минутами, а мы держим advisory lock. Ставим
+      // джоб и выходим; он по завершении снова позовёт finishContest, и мы
+      // придём сюда уже с проставленными статусами.
+      if (this.contestSubscriptionRecheckService.needsRecheck(contest)) {
+        this.logger.log(
+          { contestId },
+          'finishContestIdempotent: нужна перепроверка подписок, откладываем завершение',
+        );
+        await this.contestJobsService.scheduleSubscriptionRecheck(contestId);
+        return;
+      }
+
+      // Ворота «есть ли кого награждать» считаем по ВСЕМ участникам, а не по
+      // прошедшим перепроверку: отсев подписок касается только автоматического
+      // розыгрыша. У MANUAL победителя выбирает оператор, и его решение не
+      // должно отменяться тем, что участники отписались.
       const participants =
         await this.contestParticipationRepo.findManyByContestId(contest.id);
       const hasParticipants = participants.length > 0;
@@ -127,9 +149,17 @@ export class ContestLifecycleService {
           // окончательно упадёт и конкурс навсегда зависнет в ACTIVE. Вместо клина
           // даём тот же grace-период, что и MANUAL: зовём админа уменьшить число
           // мест (либо за это время подтянутся ещё участники — конкурс всё ещё
-          // ACTIVE). Считаем уникальных так же, как сам розыгрыш: по user.id.
+          // ACTIVE). Считаем уникальных так же, как сам розыгрыш: по user.id и
+          // только по прошедшим перепроверку подписки — отписавшиеся в пул
+          // resolveAutomaticWinners не попадут, значит и здесь их учитывать
+          // нельзя, иначе сверка с числом мест разойдётся с розыгрышем.
+          const eligibleParticipants =
+            await this.contestParticipationRepo.findEligibleByContestId(
+              contest.id,
+            );
+
           const uniqueParticipantCount = new Set(
-            participants
+            eligibleParticipants
               .map((p) => p.user?.id)
               .filter((id): id is number => id != null),
           ).size;
@@ -169,6 +199,8 @@ export class ContestLifecycleService {
           { jobId: `publication:${publicationId}:finish-button` },
         );
       }
+
+      await this.notifyWinners(contestId);
     } finally {
       // Освобождаем лок при любом исходе — в том числе при исключении.
       // Без finally: если resolveAndSaveWinners выбросит ошибку, лок
@@ -247,7 +279,27 @@ export class ContestLifecycleService {
 
     await this.contestPublicationService.syncPublishedPosts(updatedContest);
 
+    await this.notifyWinners(contest.id);
+
     return updatedContest;
+  }
+
+  /**
+   * Ставит личные уведомления победителям. Ошибку глушим намеренно: конкурс уже
+   * завершён и итоги опубликованы — падение постановки уведомлений не должно
+   * откатывать или ронять завершение. Неотправленное видно в bot_messages.
+   */
+  private async notifyWinners(contestId: number): Promise<void> {
+    try {
+      await this.contestWinnerNotifyService.enqueueWinnerNotifications(
+        contestId,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        { err: error, contestId },
+        'notifyWinners: не удалось поставить уведомления победителей в очередь',
+      );
+    }
   }
 
   async cancelContest(id: number): Promise<ContestWithRelations> {
@@ -338,7 +390,7 @@ export class ContestLifecycleService {
       }
 
       const extendedEndDateStr = extendedEndDate.toLocaleString('ru-RU', {
-        timeZone: 'Europe/Moscow',
+        timeZone: getAppTimeZone(),
         dateStyle: 'short',
         timeStyle: 'short',
       });

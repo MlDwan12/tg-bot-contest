@@ -35,6 +35,22 @@ export class UsersMailingService {
     private readonly logger: Logger,
   ) {}
 
+  /**
+   * Сколько реально получат рассылку — без постановки в очередь. Нужен для
+   * подтверждения перед отправкой (у ALL/GROUP получателей может быть очень
+   * много, и сейчас в sendMailing нет предохранителя — отправка уходит сразу).
+   * Параметры совпадают с тем, что читает getRecipients: text/button/image
+   * там не участвуют, поэтому их не требуем.
+   */
+  async previewRecipients(params: {
+    type: UserMailingType;
+    userId?: number;
+    groupId?: string;
+  }): Promise<number> {
+    const users = await this.getRecipients(params as SendUsersMailingDto);
+    return users.length;
+  }
+
   async sendMailing(
     dto: SendUsersMailingDto,
     image?: Express.Multer.File,
@@ -178,9 +194,9 @@ export class UsersMailingService {
       );
 
       const postUrl = this.buildTelegramPostUrl({
-        telegramUsername: publication.channel?.telegramUsername,
+        telegramUsername: publication.channel?.externalUsername,
         telegramId:
-          publication.channel?.telegramId ?? String(publication.chatId),
+          publication.channel?.externalId ?? String(publication.chatId),
         messageId: publication.telegramMessageId!,
       });
 

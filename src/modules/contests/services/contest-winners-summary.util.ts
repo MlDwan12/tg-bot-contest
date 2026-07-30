@@ -1,0 +1,112 @@
+import { formatInTimeZone } from 'date-fns-tz';
+import { getAppTimeZone } from 'src/common/helpers/app-timezone.helper';
+import {
+  escapeHtml,
+  formatWinnerName,
+  ResultsWinner,
+} from './contest-results-text.util';
+
+/**
+ * Сколько имён показываем в каждом списке сводки. Остальные сворачиваются в
+ * «…и ещё N»: у конкурса может быть много призовых мест, а личное сообщение
+ * админу ограничено 4096 символами.
+ */
+const MAX_NAMES_IN_LIST = 20;
+
+function formatNameList(winners: ResultsWinner[]): string {
+  const shown = winners
+    .slice(0, MAX_NAMES_IN_LIST)
+    .map((winner) => `${winner.place}. ${formatWinnerName(winner)}`);
+
+  const hidden = winners.length - shown.length;
+
+  return [...shown, ...(hidden > 0 ? [`…и ещё ${hidden}`] : [])].join('\n');
+}
+
+/**
+ * Сводка администраторам по завершённому конкурсу: кто победил и до кого не
+ * дошло личное уведомление.
+ *
+ * Название конкурса экранируется — оно подставляется в наш шаблон, и незакрытый
+ * оператором тег сломал бы всё сообщение (см. buildWinnerNotificationText).
+ *
+ * undelivered — реальные победители, которым Telegram отказал (чаще всего они
+ * не запускали бота). skipped — те, кому писать некуда в принципе: фиктивные
+ * победители (ник без TG-аккаунта) и записи без telegramId. Разделены, потому
+ * что требуют разных действий: первым можно написать вручную, вторые — норма.
+ */
+export function buildWinnersSummaryText(params: {
+  contestId: number;
+  contestName: string;
+  winners: ResultsWinner[];
+  deliveredCount: number;
+  undelivered: ResultsWinner[];
+  skipped: ResultsWinner[];
+  /**
+   * Сколько победителей ещё думают. Больше нуля — состав не окончателен, и
+   * сводку нельзя подавать как итог: админ работает по ней с людьми.
+   */
+  pendingCount?: number;
+  /** До какого момента идёт подтверждение — чтобы админ знал, когда ждать итог. */
+  pendingDeadline?: Date | null;
+  /** Ссылки на ВСЕ посты конкурса — админ ведёт все площадки сразу. */
+  postUrls?: string[];
+}): string {
+  const isPreliminary = (params.pendingCount ?? 0) > 0;
+
+  const parts: string[] = [
+    isPreliminary
+      ? `⏳ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён, идёт подтверждение призов.`
+      : `✅ Конкурс «${escapeHtml(params.contestName)}» (ID: ${params.contestId}) завершён.`,
+  ];
+
+  parts.push(
+    params.winners.length
+      ? `🏆 Победители:\n${formatNameList(params.winners)}`
+      : 'Победителей нет — конкурс завершён без участников.',
+  );
+
+  if (isPreliminary) {
+    const until = params.pendingDeadline
+      ? ` до ${formatInTimeZone(params.pendingDeadline, getAppTimeZone(), 'dd.MM.yyyy HH:mm (zzz)')}`
+      : '';
+
+    parts.push(
+      `⚠️ Список предварительный: ждём подтверждения${until} ` +
+        `(${params.pendingCount}). Отказавшегося заменит следующий по ` +
+        `жеребьёвке — итоговую сводку пришлём, когда все места закроются.`,
+    );
+  }
+
+  if (params.winners.length) {
+    parts.push(
+      `Уведомлений доставлено: ${params.deliveredCount} из ${params.winners.length}.`,
+    );
+  }
+
+  if (params.undelivered.length) {
+    parts.push(
+      `⚠️ Не доставлено (вероятно, не запускали бота) — напишите вручную:\n` +
+        formatNameList(params.undelivered),
+    );
+  }
+
+  if (params.skipped.length) {
+    parts.push(
+      `ℹ️ Без Telegram-аккаунта, уведомить невозможно:\n` +
+        formatNameList(params.skipped),
+    );
+  }
+
+  if (params.postUrls?.length) {
+    parts.push(
+      params.postUrls.length === 1
+        ? `<a href="${params.postUrls[0]}">Пост конкурса</a>`
+        : `Посты конкурса:\n${params.postUrls
+            .map((url, index) => `<a href="${url}">Площадка ${index + 1}</a>`)
+            .join('\n')}`,
+    );
+  }
+
+  return parts.join('\n\n');
+}

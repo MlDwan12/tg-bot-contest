@@ -8,7 +8,7 @@ import { Channel } from 'src/modules/channels/entities/channel.entity';
 import { ContestRepository } from 'src/modules/contests/repositories/contest.repository';
 import { ContestParticipationRepository } from 'src/modules/contests/repositories/contest-participate.repository';
 import { ContestWinnerRepository } from 'src/modules/contests/repositories/contest-winner.repository';
-import { ContestWinnerAuditWriteRepository } from 'src/modules/contests/repositories/contest-winner-audit-write.repository';
+import { ContestWinnerAuditRepository } from 'src/modules/contests/repositories/contest-winner-audit.repository';
 import { ContestWinnerService } from 'src/modules/contests/services/contest-winner.service';
 import { ContestLifecycleService } from 'src/modules/contests/services/contest-lifecycle.service';
 
@@ -33,7 +33,7 @@ export function buildContestRepos(ds: DataSource) {
     ),
     // Фаза 9: единый репозиторий агрегата ContestWinner (слиты read+write).
     winner: new ContestWinnerRepository(ds.getRepository(ContestWinner)),
-    winnerAudit: new ContestWinnerAuditWriteRepository(
+    winnerAudit: new ContestWinnerAuditRepository(
       ds.getRepository(ContestWinnerAudit),
     ),
   };
@@ -78,6 +78,15 @@ export function buildLifecycleService(ds: DataSource) {
   } as any;
   const fakeLogger = { log() {}, warn() {}, error() {}, debug() {} } as any;
   const fakeTelegram = {} as any;
+  // Уведомления победителей — внешний сайд-эффект (очередь + Telegram),
+  // в путях completeContest проверяется не он, а розыгрыш и статусы.
+  const fakeWinnerNotify = {
+    enqueueWinnerNotifications: async () => ({ queued: 0, skipped: 0 }),
+  } as any;
+  // Перепроверка подписок — отдельная фаза с походами в Telegram. В тестах
+  // завершения её выключаем: needsRecheck=false воспроизводит конкурс без
+  // обязательных каналов, то есть прежний прямой путь к розыгрышу.
+  const fakeSubscriptionRecheck = { needsRecheck: () => false } as any;
 
   const service = new ContestLifecycleService(
     repos.contest,
@@ -85,6 +94,8 @@ export function buildLifecycleService(ds: DataSource) {
     fakeQueue,
     fakeJobs,
     winnerService,
+    fakeWinnerNotify,
+    fakeSubscriptionRecheck,
     fakePublication,
     fakeLogger,
     ds,

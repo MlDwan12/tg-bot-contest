@@ -18,7 +18,8 @@ import type {
 import { TelegramUserService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { Contest, ContestParticipation } from '../entities';
-import { ContestStatus } from 'src/common/enums/contest';
+import { ContestStatus, ContestWinnerStatus } from 'src/common/enums/contest';
+import { ChannelPlatform } from 'src/common/enums/channel';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';
@@ -108,29 +109,62 @@ export class ContestsParticipateService {
     const winners =
       await this.contestWinnerService.getContestWinners(contestId);
 
-    return winners.map((w) => ({
-      place: w.place,
-      telegramId: w.user?.telegramId ?? null,
-      userId: w.userId,
-      // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный ник
-      // в том же поле username, telegramId/userId остаются null.
-      username: w.user?.username ?? w.displayUsername ?? null,
-    }));
+    // Участникам показываем только ЖИВЫХ победителей. После автодобора на одном
+    // месте остаётся несколько строк: отказавшийся (declined/expired) и тот,
+    // кто занял место. Отдать оба — значит показать в мини-аппе двух
+    // победителей одного места, из которых один приз уже не получит.
+    return winners
+      .filter(
+        // Отсеиваем только тех, кто приза уже не получит. Именно «исключаем
+        // отказавшихся», а не «оставляем известные статусы»: при неожиданном
+        // значении победитель должен остаться в выдаче, а не исчезнуть.
+        (w) =>
+          w.status !== ContestWinnerStatus.DECLINED &&
+          w.status !== ContestWinnerStatus.EXPIRED,
+      )
+      .map((w) => {
+        const winner = {
+          place: w.place,
+          telegramId: w.user?.telegramId ?? null,
+          userId: w.userId,
+          // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный
+          // ник в том же поле username, telegramId/userId остаются null.
+          username: w.user?.username ?? w.displayUsername ?? null,
+        };
+
+        // Пока идёт подтверждение — добавляем статус и срок, чтобы возможная
+        // замена не выглядела подлогом: правило видно рядом с именем ДО того,
+        // как победитель сменится. Как только приз принят, отдаём ровно
+        // прежний формат — у конкурсов без подтверждения он не меняется вовсе.
+        if (w.status !== ContestWinnerStatus.PENDING_CONFIRMATION) {
+          return winner;
+        }
+
+        return {
+          ...winner,
+          status: w.status,
+          confirmationDeadline: w.confirmationDeadline,
+        };
+      });
   }
 
   /**
    * Участие запрещено, пока пользователь не подписан на обязательные каналы.
-   * Нет обязательных каналов (или у них нет telegramId) → проверка пропускается.
+   * Нет обязательных каналов (или у них нет externalId) → проверка пропускается.
+   * Проверка подписки пока умеет только Telegram — каналы других платформ
+   * (когда появятся) игнорируются здесь до появления своей реализации.
    */
   private async assertUserSubscribedToRequiredChannels(
     contest: Contest,
     telegramId: string,
   ): Promise<void> {
-    const requiredChannels = contest.requiredChannels ?? [];
+    const requiredChannels = (contest.requiredChannels ?? []).filter(
+      (c) => c.platform === ChannelPlatform.TELEGRAM,
+    );
     if (requiredChannels.length === 0) return;
 
     const channelIds = requiredChannels
-      .map((c) => c.telegramId)
+      .map((c) => (c.externalId != null ? Number(c.externalId) : null))
       .filter((id): id is number => id != null);
     if (channelIds.length === 0) return;
 
@@ -140,10 +174,12 @@ export class ContestsParticipateService {
 
     const usernames = requiredChannels
       .filter(
-        (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
+        (c) =>
+          c.externalId != null &&
+          missingChannels.includes(Number(c.externalId)),
       )
       .map((c) =>
-        c.telegramUsername ? `@${c.telegramUsername}` : `id:${c.telegramId}`,
+        c.externalUsername ? `@${c.externalUsername}` : `id:${c.externalId}`,
       )
       .join(', ');
 

@@ -11,7 +11,7 @@ import { buildContestRepos } from './build-services';
 import { ContestsParticipateService } from 'src/modules/contests/services/contest-participate.service';
 import { Channel } from 'src/modules/channels/entities/channel.entity';
 import { ContestStatus } from 'src/common/enums/contest';
-import { ChannelType } from 'src/common/enums/channel';
+import { ChannelPlatform, ChannelType } from 'src/common/enums/channel';
 
 /**
  * ХАРАКТЕРИЗАЦИЯ (Фаза 10.1) — фиксируем ТЕКУЩЕЕ поведение веток participate()
@@ -214,8 +214,9 @@ describe('характеризация: ветки participate()', () => {
     const channelRepo = ds.getRepository(Channel);
     const channel = await channelRepo.save(
       channelRepo.create({
-        telegramId: 555001,
-        telegramUsername: 'must_join',
+        platform: ChannelPlatform.TELEGRAM,
+        externalId: '555001',
+        externalUsername: 'must_join',
         name: 'Must Join',
         type: ChannelType.OTHER,
         isActive: true,

@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { DEFAULT_APP_TIME_ZONE } from 'src/common/helpers/app-timezone.helper';
 
 export const validationSchema = Joi.object({
   // CORE
@@ -6,6 +7,25 @@ export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
     .default('development'),
+
+  // Часовой пояс приложения: в нём трактуются даты конкурсов с фронта и
+  // считается расписание крон-задач. Проверяем, что зона существует — опечатка
+  // вроде 'Europe/Moskow' иначе всплыла бы не при старте, а кривыми датами
+  // конкурсов, и заметили бы её далеко не сразу.
+  APP_TIME_ZONE: Joi.string()
+    .default(DEFAULT_APP_TIME_ZONE)
+    .custom((value: string, helpers) => {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: value });
+        return value;
+      } catch {
+        return helpers.error('any.invalid');
+      }
+    }, 'IANA time zone')
+    .messages({
+      'any.invalid':
+        'APP_TIME_ZONE должен быть именем зоны IANA, например Europe/Moscow',
+    }),
 
   // TELEGRAM
   TELEGRAM_BOT_TOKEN: Joi.string().required(),

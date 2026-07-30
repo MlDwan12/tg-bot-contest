@@ -1,23 +1,32 @@
-import { ChannelType } from 'src/common/enums/channel';
+import { ChannelPlatform, ChannelType } from 'src/common/enums/channel';
 import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   Entity,
+  Unique,
 } from 'typeorm';
 
 @Entity('channels')
+@Unique(['platform', 'externalId'])
 export class Channel {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // Telegram ID (для интеграции с ботом)
-  @Column({ type: 'bigint', unique: true, nullable: true })
-  telegramId?: number;
+  @Column({
+    type: 'enum',
+    enum: ChannelPlatform,
+    default: ChannelPlatform.TELEGRAM,
+  })
+  platform: ChannelPlatform;
 
-  // Telegram username (может быть пустым)
-  @Column({ type: 'varchar', unique: true, nullable: true })
-  telegramUsername?: string;
+  // id канала на стороне платформы (у Telegram — chat id вида "-100...")
+  @Column({ type: 'varchar', nullable: true })
+  externalId?: string;
+
+  // username канала на платформе (может быть пустым)
+  @Column({ type: 'varchar', nullable: true })
+  externalUsername?: string;
 
   // Человеческое название
   @Column({ type: 'varchar', length: 100, nullable: true })
