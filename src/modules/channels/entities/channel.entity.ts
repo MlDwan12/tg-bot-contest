@@ -23,6 +23,11 @@ export class Channel {
   @Column({ type: 'varchar', length: 100, nullable: true })
   name?: string;
 
+  // Ссылка-приглашение для приватных каналов (без telegramUsername).
+  // Публичные каналы её не используют — ссылка строится как t.me/{telegramUsername}.
+  @Column({ type: 'varchar', nullable: true })
+  inviteLink?: string;
+
   // Есть лт бот в канале
   @Column({ default: true })
   isActive: boolean;

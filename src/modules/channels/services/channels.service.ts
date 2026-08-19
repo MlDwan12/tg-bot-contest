@@ -75,12 +75,22 @@ export class ChannelsService {
           'Bot must be administrator in the channel/group',
         );
       }
+      // Публичный канал (есть username) обходится ссылкой t.me/{username},
+      // строим её на лету — сохранять нечего. Приватному нужен invite-link
+      // от Telegram, генерируем его один раз здесь и сохраняем.
+      const inviteLink = tgCheck.chat?.username
+        ? undefined
+        : ((await this.telegramService.createChannelInviteLink(
+            tgCheck.chat!.id,
+          )) ?? undefined);
+
       const channel = await this.channelRepo.create({
         telegramId: tgCheck.chat?.id,
         telegramUsername: tgCheck.chat?.username,
         name: tgCheck.chat?.title ?? data.name,
         type: data.type ?? ChannelType.OTHER,
         isActive: true,
+        inviteLink,
       });
 
       return channel;
@@ -173,6 +183,7 @@ export class ChannelsService {
       telegramUsername?: string;
       isActive?: boolean;
       type?: ChannelType;
+      inviteLink?: string;
     },
   ): Promise<Channel> {
     this.logger.debug({ id, data }, 'updateChannel: start');

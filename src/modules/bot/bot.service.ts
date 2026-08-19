@@ -483,6 +483,26 @@ export class TelegramService {
       throw error;
     }
   }
+  // Приватные каналы (без telegramUsername) не имеют t.me/{username} ссылки —
+  // приглашение создаёт сам Telegram, мы его только сохраняем. Специально НЕ
+  // используем exportChatInviteLink: он инвалидирует уже выданную основную
+  // ссылку при повторном вызове, ломая ранее показанные пользователю кнопки.
+  async createChannelInviteLink(chatId: number): Promise<string | null> {
+    try {
+      const link = await this.bot.telegram.createChatInviteLink(chatId);
+      return link.invite_link;
+    } catch (error: any) {
+      if (
+        error?.response?.error_code === 403 ||
+        error?.response?.error_code === 400
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
   async getUserFromChatMember(chatId: string | number, telegramId: string) {
     const member = await this.bot.telegram.getChatMember(
       chatId,

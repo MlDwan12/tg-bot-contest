@@ -138,18 +138,27 @@ export class ContestsParticipateService {
       await this.telegramService.checkUserInChannels(telegramId, channelIds);
     if (passed) return;
 
-    const usernames = requiredChannels
-      .filter(
-        (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
-      )
+    const missing = requiredChannels.filter(
+      (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
+    );
+
+    const usernames = missing
       .map((c) =>
         c.telegramUsername ? `@${c.telegramUsername}` : `id:${c.telegramId}`,
       )
       .join(', ');
 
-    throw new ForbiddenException(
-      `Необходимо подписаться на обязательные каналы: ${usernames}`,
-    );
+    // Публичный канал → ссылка строится из username, приватный → берём
+    // invite-link, сохранённый при создании канала (см. ChannelsService).
+    throw new ForbiddenException({
+      message: `Необходимо подписаться на обязательные каналы: ${usernames}`,
+      channels: missing.map((c) => ({
+        name: c.name ?? c.telegramUsername ?? `Канал ${c.telegramId}`,
+        link: c.telegramUsername
+          ? `https://t.me/${c.telegramUsername}`
+          : (c.inviteLink ?? null),
+      })),
+    });
   }
 
   /**
