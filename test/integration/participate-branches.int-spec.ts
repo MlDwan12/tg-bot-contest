@@ -256,7 +256,10 @@ describe('характеризация: ветки participate()', () => {
     );
 
     expect(thrown).toBeInstanceOf(ForbiddenException);
-    expect(thrown.message).toContain('must_join');
+    // Каналы — структурированным полем (не в тексте): фронт рисует кнопки-ссылки.
+    expect(thrown.getResponse().channels).toEqual([
+      expect.objectContaining({ link: 'https://t.me/must_join' }),
+    ]);
     expect(count).toBe(0);
   });
 });

@@ -142,16 +142,10 @@ export class ContestsParticipateService {
       (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
     );
 
-    const usernames = missing
-      .map((c) =>
-        c.telegramUsername ? `@${c.telegramUsername}` : `id:${c.telegramId}`,
-      )
-      .join(', ');
-
     // Публичный канал → ссылка строится из username, приватный → берём
     // invite-link, сохранённый при создании канала (см. ChannelsService).
     throw new ForbiddenException({
-      message: `Необходимо подписаться на обязательные каналы: ${usernames}`,
+      message: `Необходимо подписаться на обязательные каналы`,
       channels: missing.map((c) => ({
         name: c.name ?? c.telegramUsername ?? `Канал ${c.telegramId}`,
         link: c.telegramUsername
