@@ -18,6 +18,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { MailingJobEntity } from '../entities/mailing-jobs.entity';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
+import { getNextDayMoscowDeleteDate } from 'src/common/helpers/mailing-delete-date.helper';
 
 @Injectable()
 export class UsersMailingService {
@@ -81,7 +82,7 @@ export class UsersMailingService {
       failedCount: 0,
       deletedCount: 0,
       deleteFailedCount: 0,
-      deleteAfter: this.getNextDayDeleteDate(),
+      deleteAfter: getNextDayMoscowDeleteDate(),
       deletedAt: null,
       status: 'processing',
       text: text ?? null,
@@ -544,12 +545,4 @@ export class UsersMailingService {
     await this.notifyAdminsAboutMailingFinish(mailingJob);
   }
 
-  private getNextDayDeleteDate(): Date {
-    const deleteAt = new Date();
-
-    deleteAt.setDate(deleteAt.getDate() + 1);
-    deleteAt.setHours(13, 59, 0, 0);
-
-    return deleteAt;
-  }
 }

@@ -7,6 +7,7 @@ import { MailingMessageEntity } from '../entities/mailing-message.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MailingJobEntity } from '../entities/mailing-jobs.entity';
 import { UsersMailingService } from '../services/users-mailing.service';
+import { getNextDayMoscowDeleteDate } from 'src/common/helpers/mailing-delete-date.helper';
 
 export interface MailingJobData {
   jobId: string;
@@ -171,7 +172,7 @@ export class MailingProcessor extends WorkerHost {
           sendStatus: 'sent',
           sendError: null,
           deleteStatus: 'pending',
-          deleteAfter: new Date(Date.now() + 60 * 1000),
+          deleteAfter: getNextDayMoscowDeleteDate(),
           deleteError: null,
           deletedAt: null,
           sentAt: new Date(),

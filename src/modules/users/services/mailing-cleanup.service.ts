@@ -13,6 +13,20 @@ import { Logger } from 'nestjs-pino';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { MailingMessageEntity } from '../entities/mailing-message.entity';
 
+const PERMANENT_DELETE_ERROR_PATTERNS = [
+  /message to delete not found/i,
+  /message can.t be deleted/i,
+  /chat not found/i,
+  /bot was blocked by the user/i,
+  /user is deactivated/i,
+];
+
+function isPermanentDeleteError(errorMessage: string): boolean {
+  return PERMANENT_DELETE_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(errorMessage),
+  );
+}
+
 @Injectable()
 export class MailingCleanupService {
   private isCleanupRunning = false;
@@ -130,6 +144,14 @@ export class MailingCleanupService {
             msg.deleteStatus = 'failed';
             msg.deleteError = errorMessage;
 
+            // Сообщение уже недостижимо для Telegram (юзер сам удалил его/чат,
+            // заблокировал бота и т.п.) — ретраить бессмысленно. Без этого такая
+            // строка навсегда остаётся самой старой по deleteAfter и блокирует
+            // весь цикл: следующая итерация просто выбирает её же снова.
+            if (isPermanentDeleteError(errorMessage)) {
+              msg.deletedAt = new Date();
+            }
+
             await this.mailingMessageRepo.save(msg);
 
             totalFailed++;
@@ -140,6 +162,7 @@ export class MailingCleanupService {
                 chatId: msg.chatId,
                 messageId: msg.messageId,
                 error: msg.deleteError,
+                permanent: !!msg.deletedAt,
               },
               'Ошибка при удалении сообщения',
             );
