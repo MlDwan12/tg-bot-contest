@@ -349,6 +349,21 @@ export class ContestRepository implements IContestRepository {
     await this.repo.delete(id);
   }
 
+  async getDisplayBonus(contestId: number): Promise<number> {
+    const row = await this.repo
+      .createQueryBuilder('contest')
+      .select('contest.displayBonus', 'displayBonus')
+      .where('contest.id = :id', { id: contestId })
+      .getRawOne<{ displayBonus: number }>();
+
+    return Number(row?.displayBonus ?? 0);
+  }
+
+  // Атомарно в SQL (bonus = bonus + by): параллельные boost-tick не теряют инкременты.
+  async incrementDisplayBonus(contestId: number, by: number): Promise<void> {
+    await this.repo.increment({ id: contestId }, 'displayBonus', by);
+  }
+
   async setStatus(id: number, status: ContestStatus): Promise<void> {
     await this.ensureExists(id);
 

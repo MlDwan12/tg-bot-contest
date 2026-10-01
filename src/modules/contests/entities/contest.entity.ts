@@ -55,6 +55,12 @@ export class Contest {
   @Column({ type: 'timestamp' })
   endDate: Date;
 
+  // Надбавка к числу участников ТОЛЬКО на кнопке поста (админская накрутка).
+  // В розыгрыш/статистику не входит. select: false — не утекает в API;
+  // читать через contestRepo.getDisplayBonus.
+  @Column({ type: 'int', default: 0, select: false })
+  displayBonus: number;
+
   @ManyToMany(() => Channel)
   @JoinTable({
     name: 'contest_publish_channels',

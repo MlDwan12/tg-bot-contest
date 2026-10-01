@@ -172,6 +172,9 @@ export class ContestPublicationService {
     }
 
     const miniAppUrl = this.configService.get<string>('MINI_APP_URL');
+    const shownCount =
+      contest.participants.length +
+      (await this.contestRepo.getDisplayBonus(contest.id));
 
     for (const publication of publishedPublications) {
       if (!publication.telegramMessageId) {
@@ -203,8 +206,8 @@ export class ContestPublicationService {
           buttonText:
             contest.status === ContestStatus.COMPLETED
               ? 'Конкурс завершён'
-              : contest.participants.length > 0
-                ? `${contest.buttonText ?? 'Участвовать'} (${contest.participants.length})`
+              : shownCount > 0
+                ? `${contest.buttonText ?? 'Участвовать'} (${shownCount})`
                 : (contest.buttonText ?? 'Участвовать'),
           buttonUrl: `${miniAppUrl}?startapp=${publication.chatId}_${contest.id}`,
           photoUrl,
@@ -236,9 +239,9 @@ export class ContestPublicationService {
     }
 
     const participantsCount =
-      await this.contestParticipationRepo.countUniqueUsersByContestId(
+      (await this.contestParticipationRepo.countUniqueUsersByContestId(
         contestId,
-      );
+      )) + (await this.contestRepo.getDisplayBonus(contestId));
 
     const nextButtonText = this.buildParticipantsButtonText(
       contest.buttonText ?? undefined,

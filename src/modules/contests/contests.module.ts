@@ -34,6 +34,8 @@ import {
 } from './services';
 import { BotModule } from '../bot/bot.module';
 import { ContestCountersProcessor } from './jobs/processors';
+import { ContestBoostService } from './services/contest-boost.service';
+import { ContestBoostUpdate } from './bot/contest-boost.update';
 
 @Module({
   imports: [
@@ -62,6 +64,8 @@ import { ContestCountersProcessor } from './jobs/processors';
     ContestWinnerService,
     ContestJobsService,
     ContestCountersProcessor,
+    ContestBoostService,
+    ContestBoostUpdate,
 
     ContestWinnerAuditWriteRepository,
     {

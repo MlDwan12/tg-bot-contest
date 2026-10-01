@@ -25,6 +25,7 @@ export interface IContestRepository {
   findByStatus(status: ContestStatus): Promise<Contest[]>;
   findActive(): Promise<Contest[]>;
   findFinished(): Promise<Contest[]>;
+  getDisplayBonus(contestId: number): Promise<number>;
 
   // ── чтение: публикации ───────────────────────────────────────────────────
   findPublicationById(id: number): Promise<ContestPublication | null>;
@@ -60,6 +61,7 @@ export interface IContestRepository {
     next: ContestStatus,
   ): Promise<boolean>;
   updateStatusIfNotCompleted(contestId: number): Promise<boolean>;
+  incrementDisplayBonus(contestId: number, by: number): Promise<void>;
   setPublishChannels(contestId: number, channelIds: number[]): Promise<void>;
   setRequiredChannels(contestId: number, channelIds: number[]): Promise<void>;
   replaceWinners(
