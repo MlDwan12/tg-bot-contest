@@ -4,18 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContestParticipation } from '../entities';
+import { Logger } from 'nestjs-pino';
+import { ContestParticipation, ContestWinner } from '../entities';
 import { User } from 'src/modules/users/entities';
-import { WinnerStrategy } from 'src/common/enums/contest';
+import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
 import {
   CONTEST_PARTICIPATE_REPOSITORY,
+  CONTEST_REPOSITORY,
   CONTEST_WINNER_REPOSITORY,
 } from 'src/common/constants';
 import type {
   IContestParticipationRepository,
+  IContestRepository,
   IContestWinnerRepository,
 } from '../interfaces';
 import { ContestWinnerAuditWriteRepository } from '../repositories';
+import { UsersService } from 'src/modules/users/services/users.service';
 import {
   DRAW_ALGORITHM,
   generateSeed,
@@ -33,6 +37,20 @@ export interface WinnerDrawContext {
   winnerStrategy: WinnerStrategy;
 }
 
+/**
+ * Вход для replaceCompletedContestWinner — доменный тип, отдельный от
+ * ReplaceContestWinnerDto (см. dto/replace-contest-winner.dto.ts): DTO живёт
+ * в контроллере, сервис работает со своим типом (см. [[dto-vs-domain-type-boundary]]).
+ * Структурно совпадает с DTO, поэтому контроллер передаёт его как есть.
+ */
+export interface ReplaceCompletedWinnerInput {
+  currentTelegramId?: number;
+  currentUsername?: string;
+  random?: boolean;
+  newTelegramId?: number;
+  newUsername?: string;
+}
+
 @Injectable()
 export class ContestWinnerService {
   constructor(
@@ -42,7 +60,12 @@ export class ContestWinnerService {
     @Inject(CONTEST_PARTICIPATE_REPOSITORY)
     private readonly contestParticipationRepo: IContestParticipationRepository,
 
+    @Inject(CONTEST_REPOSITORY)
+    private readonly contestRepo: IContestRepository,
+
     private readonly contestWinnerAuditWriteRepo: ContestWinnerAuditWriteRepository,
+    private readonly usersService: UsersService,
+    private readonly logger: Logger,
   ) {}
 
   async getContestWinners(contestId: number) {
@@ -327,6 +350,254 @@ export class ContestWinnerService {
     await this.contestParticipationRepo.syncWinnerFlagsInTransaction(
       contestId,
       winners,
+    );
+  }
+
+  /**
+   * Точечная замена ОДНОГО победителя в УЖЕ ЗАВЕРШЁННОМ конкурсе — отдельный
+   * путь от MANUAL-назначения через updateContest (тот блокирует любое
+   * редактирование COMPLETED-конкурса, см. assertContestEditable в
+   * contests.service.ts). Старый победитель ищется по telegramId/username
+   * среди уже сохранённых в contest_winners; новый — либо конкретный (тоже по
+   * telegramId/username, резолвится через UsersService), либо случайный из
+   * оставшихся участников (тем же provably-fair алгоритмом, что и авто-розыгрыш).
+   */
+  async replaceCompletedContestWinner(
+    contestId: number,
+    input: ReplaceCompletedWinnerInput,
+    actorUserId?: number,
+  ): Promise<ContestWinner[]> {
+    const contest = await this.contestRepo.findByParams({ id: contestId });
+
+    if (!contest) {
+      throw new NotFoundException('Конкурс не найден');
+    }
+
+    if (contest.status !== ContestStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Менять победителя можно только в завершённом конкурсе',
+      );
+    }
+
+    const existingWinners =
+      await this.contestWinnerRepo.findByContestId(contestId);
+    const target = this.findWinnerByIdentity(existingWinners, {
+      telegramId: input.currentTelegramId,
+      username: input.currentUsername,
+    });
+
+    const hasNewSpecific =
+      input.newTelegramId !== undefined ||
+      (input.newUsername !== undefined && input.newUsername !== '');
+
+    if (Boolean(input.random) === hasNewSpecific) {
+      throw new BadRequestException(
+        'Нужно указать либо random: true, либо newTelegramId/newUsername — и не оба сразу',
+      );
+    }
+
+    const existingWinnerUserIds = new Set(
+      existingWinners
+        .filter((w) => w.userId != null)
+        .map((w) => w.userId as number),
+    );
+
+    let nextUser: User;
+    let drawSeed: string | null = null;
+    let drawPool: number[] | null = null;
+
+    if (input.random) {
+      const picked = await this.pickRandomReplacement(
+        contestId,
+        existingWinnerUserIds,
+      );
+      nextUser = picked.user;
+      drawSeed = picked.seed;
+      drawPool = picked.pool;
+    } else {
+      nextUser = await this.resolveRealUser({
+        telegramId: input.newTelegramId,
+        username: input.newUsername,
+      });
+
+      if (existingWinnerUserIds.has(nextUser.id)) {
+        throw new BadRequestException(
+          'Этот пользователь уже является победителем на другом месте',
+        );
+      }
+    }
+
+    const updatedRows = existingWinners.map((w) =>
+      w.place === target.place
+        ? {
+            contestId,
+            userId: nextUser.id,
+            place: target.place,
+            displayUsername: null,
+          }
+        : {
+            contestId,
+            userId: w.userId,
+            place: w.place,
+            displayUsername: w.displayUsername,
+          },
+    );
+
+    await this.contestRepo.replaceWinners(contestId, updatedRows);
+    await this.syncParticipantFlagsFromStoredWinners(contestId);
+
+    const describeOld = target.user
+      ? `userId=${target.user.id} (@${target.user.username ?? target.user.telegramId})`
+      : `@${target.displayUsername}`;
+
+    try {
+      await this.contestWinnerAuditWriteRepo.record({
+        contestId,
+        strategy: input.random ? WinnerStrategy.RANDOM : WinnerStrategy.MANUAL,
+        prizePlaces: contest.prizePlaces,
+        winnerUserIds: [nextUser.id],
+        seed: drawSeed,
+        algorithm: drawSeed ? DRAW_ALGORITHM : null,
+        participantUserIds: drawPool,
+        assignedByUserId: actorUserId ?? null,
+        note: `Замена победителя на месте ${target.place}: ${describeOld} → userId=${nextUser.id} (@${nextUser.username ?? nextUser.telegramId})`,
+      });
+    } catch (error) {
+      // Best-effort, как и у recordManualAssignment: замена уже выполнена,
+      // потеря аудита не должна откатывать операцию — только громко логируем.
+      this.logger.error(
+        { err: error, contestId, place: target.place, actorUserId },
+        'Не удалось записать аудит замены победителя',
+      );
+    }
+
+    return this.contestWinnerRepo.findByContestId(contestId);
+  }
+
+  /** Ищет старого победителя среди уже сохранённых — по telegramId или username. */
+  private findWinnerByIdentity(
+    winners: ContestWinner[],
+    identity: { telegramId?: number; username?: string },
+  ): ContestWinner {
+    const hasTelegramId =
+      identity.telegramId !== undefined && identity.telegramId !== null;
+    const hasUsername =
+      identity.username !== undefined &&
+      identity.username !== null &&
+      identity.username !== '';
+
+    if (hasTelegramId === hasUsername) {
+      throw new BadRequestException(
+        'Нужно указать либо currentTelegramId, либо currentUsername текущего победителя — и не оба сразу',
+      );
+    }
+
+    const found = hasTelegramId
+      ? winners.find((w) => w.user?.telegramId === String(identity.telegramId))
+      : winners.find((w) => {
+          const nick = this.normalizeUsername(identity.username as string);
+          return (
+            w.user?.username?.toLowerCase() === nick.toLowerCase() ||
+            w.displayUsername?.toLowerCase() === nick.toLowerCase()
+          );
+        });
+
+    if (!found) {
+      throw new NotFoundException(
+        'Победитель с таким telegramId/username не найден среди победителей этого конкурса',
+      );
+    }
+
+    return found;
+  }
+
+  /** Резолвит конкретного нового победителя — только реальный юзер (не фиктивный). */
+  private async resolveRealUser(input: {
+    telegramId?: number;
+    username?: string;
+  }): Promise<User> {
+    const hasTelegramId =
+      input.telegramId !== undefined && input.telegramId !== null;
+    const hasUsername =
+      input.username !== undefined &&
+      input.username !== null &&
+      input.username !== '';
+
+    if (hasTelegramId === hasUsername) {
+      throw new BadRequestException(
+        'Нужно указать либо newTelegramId, либо newUsername нового победителя — и не оба сразу',
+      );
+    }
+
+    const user = hasTelegramId
+      ? await this.usersService.findByTelegramId(String(input.telegramId))
+      : await this.usersService.findOne({
+          username: this.normalizeUsername(input.username as string),
+        });
+
+    if (!user) {
+      const identity = hasTelegramId
+        ? `telegramId ${input.telegramId}`
+        : `username ${input.username}`;
+      throw new NotFoundException(
+        `Пользователь с ${identity} не найден — он должен хотя бы раз запустить бота`,
+      );
+    }
+
+    return user;
+  }
+
+  /**
+   * Провабли-фейр случайная замена: пул = уникальные участники конкурса за
+   * вычетом ВСЕХ текущих победителей (включая заменяемого — иначе розыгрыш
+   * может «случайно» вернуть того же человека). Тот же generateSeed +
+   * seededShuffle, что и в автоматическом розыгрыше — для одинаковой
+   * проверяемости следа в contest_winner_audit.
+   */
+  private async pickRandomReplacement(
+    contestId: number,
+    excludeUserIds: Set<number>,
+  ): Promise<{ user: User; seed: string; pool: number[] }> {
+    const participants =
+      await this.contestParticipationRepo.findManyByContestId(contestId);
+    const uniqueUsers = this.extractUniqueUsersFromParticipants(participants);
+    const pool = uniqueUsers
+      .filter((user) => !excludeUserIds.has(user.id))
+      .sort((a, b) => a.id - b.id);
+
+    if (!pool.length) {
+      throw new BadRequestException(
+        'Нет доступных участников для случайной замены',
+      );
+    }
+
+    const seed = generateSeed();
+    const [user] = seededShuffle(pool, seed);
+
+    return { user, seed, pool: pool.map((u) => u.id) };
+  }
+
+  private normalizeUsername(username: string): string {
+    return username.trim().replace(/^@+/, '').trim();
+  }
+
+  /**
+   * Синхронизирует isWinner/prizePlace в contest_participants с уже
+   * сохранённой таблицей contest_winners. Фиктивные победители (userId=null)
+   * не имеют строки в contest_participants — синхронизируем только реальных,
+   * как и в короткозамкнутой ветке resolveAndSaveWinners.
+   */
+  private async syncParticipantFlagsFromStoredWinners(
+    contestId: number,
+  ): Promise<void> {
+    const winners = await this.contestWinnerRepo.findByContestId(contestId);
+    const winnerFlags = winners
+      .filter((w) => w.userId != null)
+      .map((w) => ({ userId: w.userId as number, place: w.place }));
+
+    await this.contestParticipationRepo.syncWinnerFlagsInTransaction(
+      contestId,
+      winnerFlags,
     );
   }
 }

@@ -12,7 +12,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Contest } from './entities';
+import { Contest, ContestWinner } from './entities';
 import { ContestWithRelations } from './types';
 import { Logger } from 'nestjs-pino';
 import {
@@ -21,7 +21,11 @@ import {
   ContestsService,
   ContestWinnerService,
 } from './services';
-import { CreateContestDto, UpdateContestDto } from './dto';
+import {
+  CreateContestDto,
+  ReplaceContestWinnerDto,
+  UpdateContestDto,
+} from './dto';
 import { UserId } from 'src/common/decorators';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ParticipateContestDto } from './dto/participate-contest.dto';
@@ -122,5 +126,22 @@ export class ContestsController {
   @UseGuards(JwtAuthGuard)
   async remove(@Param('id', ParseIntPipe) contestId: number): Promise<void> {
     await this.contestsService.removeContest(contestId);
+  }
+
+  // Отдельный от Patch(':id') путь: updateContest блокирует редактирование
+  // COMPLETED-конкурса (см. assertContestEditable), а тут — точечная замена
+  // одного победителя постфактум (конкретного или случайного из оставшихся).
+  @Patch(':id/winner')
+  @UseGuards(JwtAuthGuard)
+  async replaceWinner(
+    @Param('id', ParseIntPipe) contestId: number,
+    @Body() dto: ReplaceContestWinnerDto,
+    @UserId() actorUserId: number,
+  ): Promise<ContestWinner[]> {
+    return this.contestWinnerService.replaceCompletedContestWinner(
+      contestId,
+      dto,
+      actorUserId,
+    );
   }
 }

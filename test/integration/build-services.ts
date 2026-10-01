@@ -40,16 +40,38 @@ export function buildContestRepos(ds: DataSource) {
 }
 
 /**
+ * Фейки для того, что replaceCompletedContestWinner берёт извне БД (резолв
+ * telegramId/username в юзера + логирование best-effort аудита). Ни один из
+ * существующих integration-тестов не бьёт по этому пути — контекст здесь не
+ * важен для их сценариев (розыгрыш/reuse-guard/completeContest).
+ */
+function fakeWinnerServiceExternalDeps() {
+  return {
+    fakeUsersService: {
+      findByTelegramId: async () => null,
+      findOne: async () => null,
+    } as any,
+    fakeLogger: { log() {}, warn() {}, error() {}, debug() {} } as any,
+  };
+}
+
+/**
  * Собирает НАСТОЯЩИЙ ContestWinnerService из тест-DataSource — вручную,
- * тем же конструктором, что и NestJS DI (3 репозитория). Это продовая
- * логика розыгрыша/reuse-guard, подключённая к тест-базе.
+ * тем же конструктором, что и NestJS DI (репозитории + фейки внешнего мира —
+ * UsersService/Logger нужны только для replaceCompletedContestWinner, его эти
+ * тесты не вызывают). Это продовая логика розыгрыша/reuse-guard, подключённая
+ * к тест-базе.
  */
 export function buildWinnerService(ds: DataSource): ContestWinnerService {
   const repos = buildContestRepos(ds);
+  const { fakeUsersService, fakeLogger } = fakeWinnerServiceExternalDeps();
   return new ContestWinnerService(
     repos.winner,
     repos.participation,
+    repos.contest,
     repos.winnerAudit,
+    fakeUsersService,
+    fakeLogger,
   );
 }
 
@@ -63,10 +85,14 @@ export function buildWinnerService(ds: DataSource): ContestWinnerService {
  */
 export function buildLifecycleService(ds: DataSource) {
   const repos = buildContestRepos(ds);
+  const { fakeUsersService, fakeLogger } = fakeWinnerServiceExternalDeps();
   const winnerService = new ContestWinnerService(
     repos.winner,
     repos.participation,
+    repos.contest,
     repos.winnerAudit,
+    fakeUsersService,
+    fakeLogger,
   );
 
   const noop = async () => undefined;
@@ -76,7 +102,6 @@ export function buildLifecycleService(ds: DataSource) {
     syncPublishedPosts: noop,
     getPublishedPublicationIdsForContest: async () => [],
   } as any;
-  const fakeLogger = { log() {}, warn() {}, error() {}, debug() {} } as any;
   const fakeTelegram = {} as any;
 
   const service = new ContestLifecycleService(
