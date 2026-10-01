@@ -1,7 +1,7 @@
 {
   "_type": "export",
   "__export_format": 4,
-  "__export_date": "2026-07-13T00:00:00.000Z",
+  "__export_date": "2026-07-28T00:00:00.000Z",
   "__export_source": "insomnia.desktop.app",
   "resources": [
     {
@@ -23,11 +23,14 @@
       "name": "Base Environment",
       "data": {
         "base_url": "http://localhost:3004",
-        "admin_username": "admin",
+        "admin_username": "admin3",
         "admin_password": "StrongPass123",
         "channel_id": "1",
         "contest_id": "1",
-        "user_id": "1"
+        "user_id": "1",
+        "tg_user_a": "111111111",
+        "tg_user_b": "222222222",
+        "tg_user_c": "333333333"
       },
       "dataPropertyOrder": {
         "&": [
@@ -36,7 +39,10 @@
           "admin_password",
           "channel_id",
           "contest_id",
-          "user_id"
+          "user_id",
+          "tg_user_a",
+          "tg_user_b",
+          "tg_user_c"
         ]
       },
       "color": null,
@@ -1415,6 +1421,877 @@
       ],
       "authentication": {},
       "metaSortKey": -35,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "fld_phase1",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "🆕 Фаза 1 · Прозрачность (Ш1–Ш5)",
+      "description": "Итоги в посте, уведомления победителей, сводка админам, перепроверка подписок, статистика. Порядок P1→P9 важен: каждый шаг опирается на предыдущий. Подробности и ожидаемые результаты — PHASE1_MANUAL_TEST.md.",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 110
+    },
+    {
+      "_id": "req_p1_login",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P0 · POST /auth/login (получить cookie)",
+      "description": "Логин админом. DTO ждёт поле username (не login) — с login придёт 400 «property login should not exist». Cookie лягут в jar Insomnia.",
+      "url": "{{ _.base_url }}/auth/login",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"{{ _.admin_username }}\",\n  \"password\": \"{{ _.admin_password }}\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_create",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P1 · POST создать RANDOM-конкурс с обяз. каналом",
+      "description": "recheckSubscriptionOnFinish=true — включает перепроверку подписок (Ш4).\nrequiredChannelIds — telegramId канала, бот должен быть в нём админом.\nЗапомни id из ответа → положи в переменную contest_id.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Проверка фазы 1\",\n  \"description\": \"Разыгрываем приз\",\n  \"winnerStrategy\": \"random\",\n  \"prizePlaces\": 1,\n  \"startDate\": \"2026-07-28T12:00:00\",\n  \"endDate\": \"2026-07-28T12:10:00\",\n  \"buttonText\": \"Участвовать 🎁\",\n  \"publishChannelIds\": [\n    \"-1001111111111\"\n  ],\n  \"requiredChannelIds\": [\n    \"-1001111111111\"\n  ],\n  \"recheckSubscriptionOnFinish\": true\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -90,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_create_norecheck",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P1b · POST конкурс БЕЗ перепроверки",
+      "description": "Контрольный вариант: recheckSubscriptionOnFinish=false.\nЗавершение должно пройти в одну фазу, без джоба recheckSubscriptions.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Без перепроверки\",\n  \"winnerStrategy\": \"random\",\n  \"prizePlaces\": 1,\n  \"startDate\": \"2026-07-28T12:00:00\",\n  \"endDate\": \"2026-07-28T12:10:00\",\n  \"publishChannelIds\": [\n    \"-1001111111111\"\n  ],\n  \"requiredChannelIds\": [\n    \"-1001111111111\"\n  ],\n  \"recheckSubscriptionOnFinish\": false\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -85,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_get",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P2 · GET конкурс (проверить публикацию)",
+      "description": "publications[].telegramMessageId не null → пост ушёл в канал.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -80,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_participate_a",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P3 · POST участие A (останется подписан)",
+      "description": "telegramId должен быть РЕАЛЬНЫМ: этот аккаунт подписан на канал и запускал бота (/start) — иначе уведомление победителя не дойдёт (Ш2).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_a }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_a\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -70,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_participate_b",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P4 · POST участие B (потом отпишется)",
+      "description": "Второй реальный аккаунт. После успешного участия отпиши его от канала — на финише он должен быть отсеян (Ш4).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_b }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_b\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -60,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_participate_403",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P5 · POST участие ❌ без подписки → 403",
+      "description": "Аккаунт, НЕ подписанный на обязательный канал.\nОжидаемо: 403, «Необходимо подписаться на обязательные каналы: @...».",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_c }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_c\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -50,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_stats_before",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P6 · GET /stats до завершения",
+      "description": "Ожидаемо: participantsTotal=2, participantsValid=2, participantsUnsubscribed=0, subscriptionsCheckedAt=null, winnersTotal=0.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/stats",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -40,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_complete",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P7 · PATCH завершить вручную",
+      "description": "Ручное завершение: итоги в посте появятся сразу (Ш1), уведомления и сводка уйдут (Ш2/Ш3). ВНИМАНИЕ: перепроверку подписок этот путь НЕ запускает — для Ш4 нужно дождаться автозавершения по endDate.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/complete",
+      "method": "PATCH",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -30,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_stats_after",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P8 · GET /stats после завершения",
+      "description": "После автозавершения: participantsUnsubscribed=1, subscriptionsCheckedAt заполнен, winnersTotal=1, notificationsDelivered + notificationsFailed = 1.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/stats",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -20,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_get_after",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P9 · GET конкурс после завершения",
+      "description": "status=completed; winners[] заполнен; победитель — только из тех, кто остался подписан.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -10,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p1_queues",
+      "_type": "request",
+      "parentId": "fld_phase1",
+      "modified": 1722160000000,
+      "created": 1722160000000,
+      "name": "P10 · GET очереди (Bull Board)",
+      "description": "Смотреть contest-finish (recheckSubscriptions) и contest-winner-notify (notify-winner + notify-winners-summary).",
+      "url": "{{ _.base_url }}/admin/queues",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 0,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "fld_phase2",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1722170000000,
+      "created": 1722170000000,
+      "name": "🆕 Фаза 2 · Удобство оператора (Ш6–Ш7)",
+      "description": "Превью поста без публикации и выгрузка участников в CSV.",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 120
+    },
+    {
+      "_id": "req_p2_preview",
+      "_type": "request",
+      "parentId": "fld_phase2",
+      "modified": 1722170000000,
+      "created": 1722170000000,
+      "name": "Ш6 · GET превью поста",
+      "description": "Что уйдёт в каждый канал публикации, без самой публикации.\nОтвет — массив по каналам: buttonUrl содержит chatId канала.\nОжидаемо: 200, payload с text / buttonText / buttonUrl / photoUrl.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/preview",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p2_csv",
+      "_type": "request",
+      "parentId": "fld_phase2",
+      "modified": 1722170000000,
+      "created": 1722170000000,
+      "name": "Ш7 · GET выгрузка участников (CSV)",
+      "description": "Скачивание участников. Ответ — не JSON, а файл: сырой CSV с BOM,\nразделитель ';' (иначе Excel в русской локали склеит колонки).\nОжидаемо: 200, Content-Type text/csv, первая строка — заголовки.\nНесуществующий конкурс → 404 обычным JSON (проверка идёт до заголовков).",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participants.csv",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Accept",
+          "value": "text/csv"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -90,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "fld_phase3",
+      "_type": "request_group",
+      "parentId": "wrk_telegram_bot",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "🆕 Фаза 3 · Подтверждение приза (Ш10)",
+      "description": "Подтверждение приза победителем и автодобор.\n\nГлавное про сроки: confirmationHours минимум 1 час, поэтому ждать дедлайн вживую не нужно — отложенный джоб в очереди contest-winner-confirm продвигается вручную через Bull Board (GET /admin/queues), кнопка Promote.",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 130
+    },
+    {
+      "_id": "req_p3_create",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-1 · POST создать конкурс С подтверждением",
+      "description": "requireWinnerConfirmation=true + confirmationHours=1 (минимум по валидации). Стратегия обязательно random: для manual подтверждение запрещено. Даты поправь на ближайшее будущее — окно участия нужно реальное, минут 10.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "name",
+            "value": "Ш10 · подтверждение приза"
+          },
+          {
+            "name": "description",
+            "value": "Проверка автодобора"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "random"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "1"
+          },
+          {
+            "name": "startDate",
+            "value": "2026-08-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2026-08-01T10:10:00.000Z"
+          },
+          {
+            "name": "publishChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "requiredChannelIds",
+            "value": "[]"
+          },
+          {
+            "name": "buttonText",
+            "value": "Участвовать"
+          },
+          {
+            "name": "requireWinnerConfirmation",
+            "value": "true"
+          },
+          {
+            "name": "confirmationHours",
+            "value": "1"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_create_no_confirm",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-2 · POST конкурс БЕЗ подтверждения (регресс)",
+      "description": "Контрольный случай: старое поведение не изменилось. Победитель сразу confirmed, уведомление без кнопок, джоб дедлайна не ставится.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "name",
+            "value": "Ш10 · без подтверждения"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "random"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "1"
+          },
+          {
+            "name": "startDate",
+            "value": "2026-08-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2026-08-01T10:10:00.000Z"
+          },
+          {
+            "name": "publishChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "requiredChannelIds",
+            "value": "[]"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -95,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_manual_reject",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-3 · POST ❌ подтверждение при MANUAL → 400",
+      "description": "Ожидаем 400 «Подтверждение приза победителем доступно только для случайного розыгрыша». У manual нет жеребьёвки, значит и автозамены быть не может — молча игнорировать галку нельзя.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "name",
+            "value": "Ш10 · manual + подтверждение"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "manual"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "1"
+          },
+          {
+            "name": "startDate",
+            "value": "2026-08-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2026-08-01T10:10:00.000Z"
+          },
+          {
+            "name": "publishChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "requireWinnerConfirmation",
+            "value": "true"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -90,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_hours_reject",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-4 · POST ❌ confirmationHours вне 1..168 → 400",
+      "description": "Потолок в неделю страхует от опечатки вроде 2400 часов, из-за которой место зависло бы на месяцы.",
+      "url": "{{ _.base_url }}/contest",
+      "method": "POST",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "name",
+            "value": "Ш10 · плохой срок"
+          },
+          {
+            "name": "winnerStrategy",
+            "value": "random"
+          },
+          {
+            "name": "prizePlaces",
+            "value": "1"
+          },
+          {
+            "name": "startDate",
+            "value": "2026-08-01T10:00:00.000Z"
+          },
+          {
+            "name": "endDate",
+            "value": "2026-08-01T10:10:00.000Z"
+          },
+          {
+            "name": "publishChannelIds",
+            "value": "[1]"
+          },
+          {
+            "name": "requireWinnerConfirmation",
+            "value": "true"
+          },
+          {
+            "name": "confirmationHours",
+            "value": "2400"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -85,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_patch_toggle",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-5 · PATCH включить подтверждение у существующего",
+      "description": "Проверяется ИТОГОВАЯ пара: менять можно и стратегию, и галку по отдельности. Если у конкурса стратегия manual — ответ 400.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}",
+      "method": "PATCH",
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "requireWinnerConfirmation",
+            "value": "true"
+          },
+          {
+            "name": "confirmationHours",
+            "value": "1"
+          }
+        ]
+      },
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -80,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_participate",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-6 · POST участие A (подтвердит приз)",
+      "description": "Участвовать нужно тремя аккаунтами: A подтвердит, B откажется, C станет заменой при автодоборе. Content-Type обязателен — без него тело не парсится и приходит 400 сразу по всем полям.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_a }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_a\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -75,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_complete",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-7 · PATCH завершить конкурс",
+      "description": "После завершения победитель получает уведомление С кнопками «Подтвердить»/«Отказаться», а в очереди contest-winner-confirm появляется отложенный джоб дедлайна.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/complete",
+      "method": "PATCH",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -70,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_stats",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-8 · GET /stats со статусами призов",
+      "description": "Новые поля: winnersConfirmed / winnersPending / winnersDeclined / winnersExpired, а также placesFilled и prizePlaces. placesFilled < prizePlaces означает, что место осталось без победителя — очередь жеребьёвки исчерпалась.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/stats",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -65,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_csv",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-9 · GET CSV с колонкой winnerStatus",
+      "description": "В конце строки добавлена колонка winnerStatus: confirmed | pending_confirmation | declined | expired. У обычных участников она пустая.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participants.csv",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -60,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_queues",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785316343842,
+      "created": 1785316343842,
+      "name": "Ш10-10 · GET Bull Board (продвинуть дедлайн)",
+      "description": "Открой очередь contest-winner-confirm → вкладка Delayed → Promote у джоба confirmation-deadline. Так проверяется просрочка без ожидания реального часа. Сразу после этого в очереди появится place-vacated (автодобор).",
+      "url": "{{ _.base_url }}/admin/queues",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -55,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_participate_b",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785317488183,
+      "created": 1785317488183,
+      "name": "Ш10-6b · POST участие B (откажется)",
+      "description": "Этим аккаунтом жмём «Отказаться», чтобы проверить автодобор.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_b }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_b\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -74,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_p3_participate_c",
+      "_type": "request",
+      "parentId": "fld_phase3",
+      "modified": 1785317488183,
+      "created": 1785317488183,
+      "name": "Ш10-6c · POST участие C (замена)",
+      "description": "Резерв очереди: именно он должен занять место после отказа. Аккаунт обязан нажать /start боту, иначе уведомление упрётся в 403.",
+      "url": "{{ _.base_url }}/contest/{{ _.contest_id }}/participate",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"telegramId\": \"{{ _.tg_user_c }}\",\n  \"groupId\": \"g1\",\n  \"username\": \"user_c\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -73,
       "isPrivate": false,
       "settingStoreCookies": true,
       "settingSendCookies": true,
