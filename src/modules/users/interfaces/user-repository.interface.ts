@@ -22,6 +22,8 @@ export interface IUserRepository {
     username?: string;
   }): Promise<[UserListItemDto[], number]>;
   findUserDetailsById(id: number): Promise<UserDetailsDto | null>;
+  /** Сколько юзеров с telegramId всего и скольким бот может писать (botStartedAt). */
+  countBotReach(): Promise<{ started: number; total: number }>;
 
   // запись
   create(user: Partial<User>): Promise<User>;

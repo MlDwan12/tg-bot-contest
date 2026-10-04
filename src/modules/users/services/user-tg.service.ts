@@ -71,6 +71,36 @@ export class TelegramUserService {
     return user;
   }
 
+  /**
+   * /start в боте: с этого момента бот может писать юзеру. Данные берём из
+   * апдейта (ctx.from), а не через getChatMember, как ensureUser.
+   */
+  async registerBotStart(from: {
+    id: number;
+    username?: string;
+    first_name: string;
+    last_name?: string;
+  }): Promise<void> {
+    const telegramId = String(from.id);
+    const user = await this.userService.findByTelegramId(telegramId);
+
+    if (!user) {
+      await this.userService.create({
+        telegramId,
+        username: from.username,
+        firstName: from.first_name,
+        lastName: from.last_name,
+        botStartedAt: new Date(),
+      });
+      return;
+    }
+
+    if (!user.botStartedAt) {
+      user.botStartedAt = new Date();
+      await this.userService.save(user);
+    }
+  }
+
   async findByTelegramId(telegramId: string): Promise<User | null> {
     return this.userService.findByTelegramId(telegramId);
   }

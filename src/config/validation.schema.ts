@@ -9,6 +9,11 @@ export const validationSchema = Joi.object({
 
   // TELEGRAM
   TELEGRAM_BOT_TOKEN: Joi.string().required(),
+  // Старый бот на время переезда: шлёт личку (рассылки, уведомления) тем, кто
+  // ещё не нажал /start в новом, и отвечает «мы переехали». Убрать — личка
+  // уйдёт через TELEGRAM_BOT_TOKEN. Перед удалением вычистить его рассылки:
+  // удалить сообщение может только отправивший бот.
+  LEGACY_BOT_TOKEN: Joi.string().optional(),
 
   // DATABASE
   DATABASE_HOST: Joi.string().hostname().default('localhost'),

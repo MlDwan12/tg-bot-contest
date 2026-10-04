@@ -4,7 +4,8 @@ import { Logger } from 'nestjs-pino';
 import { InjectBot } from 'nestjs-telegraf';
 import { InputMediaPhoto } from 'node_modules/telegraf/typings/core/types/typegram';
 import { extname, join } from 'path';
-import { Telegraf } from 'telegraf';
+import { Telegraf, Telegram } from 'telegraf';
+import { LegacyBotService } from './legacy-bot.service';
 /**
  * Минимум, нужный боту для удаления сообщения публикации. Структурно совместим
  * с ContestPublication, но bot НЕ зависит от домена contests (цикл bot↔contests разорван).
@@ -19,8 +20,17 @@ interface DeletablePublication {
 export class TelegramService {
   constructor(
     @InjectBot() private readonly bot: Telegraf,
+    private readonly legacyBot: LegacyBotService,
     private readonly logger: Logger,
   ) {}
+
+  /**
+   * Клиент для лички пользователям: старый бот на время переезда, иначе основной.
+   * Каналы (посты, подписки, инвайты) всегда через основной — this.bot.
+   */
+  private get dm(): Telegram {
+    return (this.legacyBot.bot ?? this.bot).telegram;
+  }
 
   async checkBotAdmin(chatId: number): Promise<{
     exists: boolean;
@@ -276,7 +286,7 @@ export class TelegramService {
             'sendMailingMessage: sending photo',
           );
 
-          const msg = await this.bot.telegram.sendPhoto(
+          const msg = await this.dm.sendPhoto(
             dto.chatId,
             { source: createReadStream(filePath) },
             {
@@ -300,7 +310,7 @@ export class TelegramService {
             'sendMailingMessage: sending video',
           );
 
-          const msg = await this.bot.telegram.sendVideoNote(
+          const msg = await this.dm.sendVideoNote(
             dto.chatId,
             {
               source: createReadStream(filePath),
@@ -333,7 +343,7 @@ export class TelegramService {
         'sendMailingMessage: sending text',
       );
 
-      const msg = await this.bot.telegram.sendMessage(
+      const msg = await this.dm.sendMessage(
         dto.chatId,
         dto.text ?? '',
         {
@@ -520,7 +530,9 @@ export class TelegramService {
     };
   }
 
-  async deleteMessage(chatId: string, messageId: number): Promise<void> {
-    await this.bot.telegram.deleteMessage(Number(chatId), messageId);
+  // Удалить сообщение может только отправивший бот — поэтому тот же dm,
+  // что и в sendMailingMessage.
+  async deleteMailingMessage(chatId: string, messageId: number): Promise<void> {
+    await this.dm.deleteMessage(Number(chatId), messageId);
   }
 }

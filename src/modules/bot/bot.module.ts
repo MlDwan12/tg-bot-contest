@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TelegrafModule } from 'nestjs-telegraf';
-import { BotUpdate } from './bot.update';
+import { LegacyBotService } from './legacy-bot.service';
 import { validationSchema } from 'src/config';
 import { TelegramService } from './bot.service';
 
@@ -27,7 +27,7 @@ import { TelegramService } from './bot.service';
     // deletePublicationMessages принимает данные параметром). Обратные связи
     // *→bot (TelegramService) реальны и односторонни.
   ],
-  providers: [BotUpdate, TelegramService],
-  exports: [BotUpdate, TelegramService],
+  providers: [TelegramService, LegacyBotService],
+  exports: [TelegramService],
 })
 export class BotModule {}

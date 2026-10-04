@@ -39,6 +39,11 @@ export class User {
   @Column({ nullable: true })
   passwordHash?: string;
 
+  // Когда нажал /start в текущем боте. NULL — бот не может ему написать
+  // (Telegram запрещает боту начинать диалог первым).
+  @Column({ type: 'timestamp', nullable: true })
+  botStartedAt?: Date | null;
+
   @OneToMany(() => ContestParticipation, (p) => p.user)
   participations: ContestParticipation[];
 

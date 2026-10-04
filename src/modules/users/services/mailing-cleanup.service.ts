@@ -121,7 +121,7 @@ export class MailingCleanupService {
 
         for (const msg of messages) {
           try {
-            await this.telegramService.deleteMessage(msg.chatId, msg.messageId);
+            await this.telegramService.deleteMailingMessage(msg.chatId, msg.messageId);
 
             // msg.deleteStatus = 'deleted';
             // msg.deletedAt = new Date();

@@ -15,6 +15,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { MailingMessageEntity } from './entities/mailing-message.entity';
 import { MailingCleanupService } from './services/mailing-cleanup.service';
 import { MailingJobEntity } from './entities/mailing-jobs.entity';
+import { UserStartUpdate } from './bot/user-start.update';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { MailingJobEntity } from './entities/mailing-jobs.entity';
     UsersMailingService,
     MailingProcessor,
     MailingCleanupService,
+    UserStartUpdate,
   ],
   exports: [UsersService, AdminService, TelegramUserService],
 })

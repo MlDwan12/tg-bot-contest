@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
 import { User } from '../entities';
 import { UserRole } from 'src/common/enums/user';
 import { UserListItemDto } from '../dto/user-list-item.dto';
@@ -123,6 +123,17 @@ export class UserRepository implements IUserRepository {
 
       throw new Error('Error occurred while fetching user list');
     }
+  }
+
+  async countBotReach(): Promise<{ started: number; total: number }> {
+    const withTelegram = { telegramId: Not(IsNull()) };
+    const [started, total] = await Promise.all([
+      this.repo.count({
+        where: { ...withTelegram, botStartedAt: Not(IsNull()) },
+      }),
+      this.repo.count({ where: withTelegram }),
+    ]);
+    return { started, total };
   }
 
   async findUserDetailsById(id: number): Promise<UserDetailsDto | null> {

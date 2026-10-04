@@ -51,6 +51,10 @@ export class UsersService {
     return this.userRepo.remove(user);
   }
 
+  countBotReach(): Promise<{ started: number; total: number }> {
+    return this.userRepo.countBotReach();
+  }
+
   async findAllUsersWithParticipationCount(query: {
     page?: number;
     limit?: number;
