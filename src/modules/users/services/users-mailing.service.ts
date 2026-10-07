@@ -62,7 +62,10 @@ export class UsersMailingService {
     const finalButtonUrl = this.resolveButtonUrl(dto, publication);
     const text = dto.text || publication?.payload?.text;
     const finalImagePath = imagePath || publication?.payload?.photoUrl;
-    const buttonText = dto.buttonText || publication?.payload?.buttonText;
+    // Кнопка ведёт на пост, а не в мини-апп — «Участвовать» из поста тут
+    // вводило бы в заблуждение (участие засчитывается только из поста).
+    const buttonText =
+      dto.buttonText || (publication ? 'Перейти к конкурсу' : undefined);
 
     const jobId = `mailing-${Date.now()}`;
 
