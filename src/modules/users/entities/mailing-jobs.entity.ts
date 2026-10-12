@@ -42,6 +42,14 @@ export class MailingJobEntity {
   @Column({ type: 'int', default: 0 })
   failedCount: number;
 
+  // Разбивка failedCount: blockedCount + errorCount = failedCount.
+  // blocked — бот заблокирован или аккаунт удалён, errors — всё остальное.
+  @Column({ type: 'int', default: 0 })
+  blockedCount: number;
+
+  @Column({ type: 'int', default: 0 })
+  errorCount: number;
+
   @Column({ type: 'int', default: 0 })
   skippedCount: number;
 
@@ -78,6 +86,10 @@ export class MailingJobEntity {
 
   @Column({ type: 'text', nullable: true })
   error: string | null;
+
+  // Когда статистику отправили во внешний API; null — ещё не отправлена.
+  @Column({ type: 'timestamp', nullable: true })
+  statsReportedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

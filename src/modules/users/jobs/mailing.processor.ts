@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { Job, UnrecoverableError } from 'bullmq';
 import { Logger } from 'nestjs-pino';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { DataSource, Repository } from 'typeorm';
@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MailingJobEntity } from '../entities/mailing-jobs.entity';
 import { UsersMailingService } from '../services/users-mailing.service';
 import { getNextDayMoscowDeleteDate } from 'src/common/helpers/mailing-delete-date.helper';
+import { classifyMailingSendError } from 'src/common/helpers/mailing-send-error.helper';
 
 export interface MailingJobData {
   jobId: string;
@@ -202,6 +203,18 @@ export class MailingProcessor extends WorkerHost {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : JSON.stringify(error);
+      const errorKind = classifyMailingSendError(error);
+
+      // Временная ошибка и попытки ещё есть — ничего не пишем, BullMQ повторит
+      // (backoff из настроек очереди). Провал фиксируется один раз, на последней
+      // попытке, иначе один человек попал бы в failedCount несколько раз.
+      if (errorKind === 'temporary' && attempt < maxAttempts) {
+        this.logger.warn(
+          { jobId, userId, telegramId, attempt, maxAttempts, error: errorMessage },
+          'mailing: временная ошибка, будет повтор',
+        );
+        throw error;
+      }
 
       await this.dataSource.transaction(async (manager) => {
         await manager.getRepository(MailingMessageEntity).save({
@@ -227,6 +240,13 @@ export class MailingProcessor extends WorkerHost {
           'failedCount',
           1,
         );
+
+        await manager.increment(
+          MailingJobEntity,
+          { id: jobId },
+          errorKind === 'blocked' ? 'blockedCount' : 'errorCount',
+          1,
+        );
       });
 
       await this.tryFinalizeJob(jobId);
@@ -238,13 +258,16 @@ export class MailingProcessor extends WorkerHost {
           telegramId,
           attempt,
           maxAttempts,
+          errorKind,
           elapsedMs: Date.now() - sendStart,
           err: error,
         },
         'mailing: failed',
       );
 
-      throw error;
+      // Провал уже записан — без повтора, но job остаётся failed в BullMQ
+      // (видно в Bull Board).
+      throw new UnrecoverableError(errorMessage);
     }
   }
 

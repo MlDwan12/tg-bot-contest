@@ -14,6 +14,7 @@ import { MailingProcessor } from './jobs/mailing.processor';
 import { BullModule } from '@nestjs/bullmq';
 import { MailingMessageEntity } from './entities/mailing-message.entity';
 import { MailingCleanupService } from './services/mailing-cleanup.service';
+import { MailingStatsReporterService } from './services/mailing-stats-reporter.service';
 import { MailingJobEntity } from './entities/mailing-jobs.entity';
 import { UserStartUpdate } from './bot/user-start.update';
 
@@ -43,6 +44,7 @@ import { UserStartUpdate } from './bot/user-start.update';
     UsersMailingService,
     MailingProcessor,
     MailingCleanupService,
+    MailingStatsReporterService,
     UserStartUpdate,
   ],
   exports: [UsersService, AdminService, TelegramUserService],

@@ -12,6 +12,7 @@ import {
 import { Logger } from 'nestjs-pino';
 import { TelegramService } from 'src/modules/bot/bot.service';
 import { MailingMessageEntity } from '../entities/mailing-message.entity';
+import { MailingStatsReporterService } from './mailing-stats-reporter.service';
 
 const PERMANENT_DELETE_ERROR_PATTERNS = [
   /message to delete not found/i,
@@ -35,8 +36,20 @@ export class MailingCleanupService {
     @InjectRepository(MailingMessageEntity)
     private readonly mailingMessageRepo: Repository<MailingMessageEntity>,
     private readonly telegramService: TelegramService,
+    private readonly mailingStatsReporter: MailingStatsReporterService,
     private readonly logger: Logger,
   ) {}
+
+  /**
+   * Ручной запуск того же, что делает крон в 14:00: удаление + отчёт.
+   * Не ждём завершения — на 20к сообщений это минуты, HTTP отвалится по
+   * таймауту. false — очистка уже идёт, второй запуск не нужен.
+   */
+  runNow(): boolean {
+    if (this.isCleanupRunning) return false;
+    void this.deleteExpiredMessages();
+    return true;
+  }
 
   @Cron('0 14 * * *', {
     timeZone: 'Europe/Moscow',
@@ -194,6 +207,9 @@ export class MailingCleanupService {
         'Ошибка во время очистки сообщений',
       );
     } finally {
+      // Отчёт — после прохода удаления, даже если удаление упало: цифры берутся
+      // из счётчиков mailing_jobs, а не из удалённых сообщений. Сам не бросает.
+      await this.mailingStatsReporter.reportPending();
       this.isCleanupRunning = false;
     }
   }

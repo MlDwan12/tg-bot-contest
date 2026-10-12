@@ -20,6 +20,7 @@ import { Paginated } from 'src/common/response/paginated.type';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { SendUsersMailingDto } from './dto/send-users-mailing.dto';
 import { UsersMailingService } from './services/users-mailing.service';
+import { MailingCleanupService } from './services/mailing-cleanup.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -36,6 +37,7 @@ export class UsersController {
     private readonly userTgService: TelegramUserService,
     private readonly usersService: UsersService,
     private readonly usersMailingService: UsersMailingService,
+    private readonly mailingCleanupService: MailingCleanupService,
     private readonly logger: Logger,
   ) {}
 
@@ -73,6 +75,14 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<UserDetailsDto> {
     return this.usersService.findUserDetailsById(id);
+  }
+
+  // Ручной запуск крона удаления рассылок (вместе с отчётом во внешний API) —
+  // повторить отчёт сразу, не дожидаясь 14:00. Работает в фоне.
+  @Post('mailing/cleanup/run')
+  @UseGuards(JwtAuthGuard)
+  runMailingCleanup(): { started: boolean } {
+    return { started: this.mailingCleanupService.runNow() };
   }
 
   @Post('broadcast')

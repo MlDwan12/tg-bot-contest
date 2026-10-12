@@ -36,6 +36,13 @@ export const validationSchema = Joi.object({
   REDIS_PASSWORD: Joi.string().allow('').optional(),
   REDIS_DB: Joi.number().integer().min(0).max(15).default(0),
 
+  // ОТЧЁТ ПО РАССЫЛКАМ — после крона удаления статистика уходит во внешний
+  // API. URL или ключ не заданы — отправка выключена, остальное работает.
+  MAILING_STATS_URL: Joi.string().uri().optional(),
+  MAILING_STATS_API_KEY: Joi.string().optional(),
+  // Типы рассылок для отчёта, через запятую (USER, GROUP, ALL).
+  MAILING_STATS_TYPES: Joi.string().default('ALL'),
+
   // JWT — объявляем явно чтобы приложение падало при старте
   // если секреты не заданы, а не в рантайме при первом запросе.
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
