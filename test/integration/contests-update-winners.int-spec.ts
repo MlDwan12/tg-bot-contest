@@ -34,9 +34,7 @@ describe('характеризация: updateContest — MANUAL-победит�
     await truncateAll(ds);
   });
 
-  function makeService(fakes: {
-    findByTelegramId?: (...args: any[]) => any;
-  }) {
+  function makeService(fakes: { findByTelegramId?: (...args: any[]) => any }) {
     const repos = buildContestRepos(ds);
 
     const fakeLogger = {

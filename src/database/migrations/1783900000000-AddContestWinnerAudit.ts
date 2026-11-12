@@ -25,9 +25,7 @@ export class AddContestWinnerAudit1783900000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX "IDX_contest_winner_audit_contestId"`,
-    );
+    await queryRunner.query(`DROP INDEX "IDX_contest_winner_audit_contestId"`);
     await queryRunner.query(`DROP TABLE "contest_winner_audit"`);
   }
 }

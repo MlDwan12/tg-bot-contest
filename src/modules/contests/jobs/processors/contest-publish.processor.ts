@@ -43,7 +43,9 @@ export class ContestPublishProcessor extends WorkerHost {
       await this.contestLifecycleService.activateContestIfDue(contestId);
 
       const publicationIds =
-        await this.contestPublicationService.getPendingPublicationIds(contestId);
+        await this.contestPublicationService.getPendingPublicationIds(
+          contestId,
+        );
 
       this.logger.debug(
         {

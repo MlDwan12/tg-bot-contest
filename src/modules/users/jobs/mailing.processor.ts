@@ -151,7 +151,10 @@ export class MailingProcessor extends WorkerHost {
     const sendStart = Date.now();
 
     try {
-      this.logger.debug({ jobId, userId, telegramId, attempt, maxAttempts }, 'mailing: sending');
+      this.logger.debug(
+        { jobId, userId, telegramId, attempt, maxAttempts },
+        'mailing: sending',
+      );
 
       const sentMessage = await this.telegramService.sendMailingMessage({
         chatId: telegramId,
@@ -299,7 +302,9 @@ export class MailingProcessor extends WorkerHost {
 
     if (!result.affected) return;
 
-    const mailingJob = await this.mailingJobRepo.findOne({ where: { id: jobId } });
+    const mailingJob = await this.mailingJobRepo.findOne({
+      where: { id: jobId },
+    });
     if (mailingJob) {
       const durationMs = mailingJob.startedAt
         ? Date.now() - new Date(mailingJob.startedAt).getTime()
@@ -312,7 +317,8 @@ export class MailingProcessor extends WorkerHost {
           failed: mailingJob.failedCount,
           skipped: mailingJob.skippedCount,
           total: mailingJob.queuedCount,
-          durationSec: durationMs !== null ? Math.round(durationMs / 1000) : null,
+          durationSec:
+            durationMs !== null ? Math.round(durationMs / 1000) : null,
         },
         'mailing: job completed',
       );

@@ -48,7 +48,12 @@ describe('характеризация: MANUAL-аудит назначения �
     const auditRepo = ds.getRepository(ContestWinnerAudit);
 
     // Первое назначение.
-    await service.recordManualAssignment(contest.id, [w1.id, w2.id], 2, admin.id);
+    await service.recordManualAssignment(
+      contest.id,
+      [w1.id, w2.id],
+      2,
+      admin.id,
+    );
 
     let audits = await auditRepo.find({
       where: { contestId: contest.id },
@@ -73,7 +78,12 @@ describe('характеризация: MANUAL-аудит назначения �
     expect(first.participantUserIds).toBeNull();
 
     // Повторное назначение (заменили 2-го победителя) — НОВАЯ запись.
-    await service.recordManualAssignment(contest.id, [w1.id, w3.id], 2, admin.id);
+    await service.recordManualAssignment(
+      contest.id,
+      [w1.id, w3.id],
+      2,
+      admin.id,
+    );
 
     audits = await auditRepo.find({
       where: { contestId: contest.id },

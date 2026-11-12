@@ -19,7 +19,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       Sentry.captureException(exception);
       this.logger.error(
         {
-          error: exception instanceof Error ? exception.message : String(exception),
+          error:
+            exception instanceof Error ? exception.message : String(exception),
           stack: exception instanceof Error ? exception.stack : undefined,
         },
         'Unhandled exception (non-HTTP context)',
@@ -49,7 +50,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
           method: request.method,
           url: request.url,
           status,
-          error: exception instanceof Error ? exception.message : String(exception),
+          error:
+            exception instanceof Error ? exception.message : String(exception),
           stack: exception instanceof Error ? exception.stack : undefined,
         },
         `Unhandled exception: ${request.method} ${request.url}`,

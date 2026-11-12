@@ -9,9 +9,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * FK и UNIQUE(contestId, userId) не трогаем: nullable-FK допускает NULL, а два
  * NULL Postgres считает разными — дубли фиктивных отсекаем в коде по нику.
  */
-export class AllowFictitiousContestWinner1784073600000
-  implements MigrationInterface
-{
+export class AllowFictitiousContestWinner1784073600000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `ALTER TABLE "contest_winners" ALTER COLUMN "userId" DROP NOT NULL`,

@@ -53,7 +53,7 @@ describe('характеризация: идемпотентность participa
       fakeLogger,
     );
 
-    const tgData = { telegramId: user.telegramId as string, groupId: '100' };
+    const tgData = { telegramId: user.telegramId, groupId: '100' };
 
     const first: any = await service.participate(contest.id, tgData);
     const second: any = await service.participate(contest.id, tgData); // дубль

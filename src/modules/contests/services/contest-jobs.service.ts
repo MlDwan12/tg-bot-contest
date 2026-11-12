@@ -100,9 +100,7 @@ export class ContestJobsService implements OnModuleInit {
     );
   }
   private async rescheduleFromDb() {
-    const pending = await this.contestRepo.findByStatus(
-      ContestStatus.PENDING,
-    );
+    const pending = await this.contestRepo.findByStatus(ContestStatus.PENDING);
 
     for (const c of pending) {
       const publishJobId = `contest:${c.id}:publish`;
@@ -128,9 +126,7 @@ export class ContestJobsService implements OnModuleInit {
       }
     }
 
-    const active = await this.contestRepo.findByStatus(
-      ContestStatus.ACTIVE,
-    );
+    const active = await this.contestRepo.findByStatus(ContestStatus.ACTIVE);
 
     for (const c of active) {
       const finishJobId = `contest:${c.id}:finish`;

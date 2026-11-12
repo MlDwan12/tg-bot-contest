@@ -86,8 +86,11 @@ describe('F1 (закрыт): ворота completeContest — розыгрыш �
     }
 
     // Реальный lifecycle + winner-сервис + репозитории (одни инстанции).
-    const { service: lifecycle, repos, winnerService } =
-      buildLifecycleService(ds);
+    const {
+      service: lifecycle,
+      repos,
+      winnerService,
+    } = buildLifecycleService(ds);
 
     // Барьер форсирует worst-case порядок: оба завершения читают «победителей
     // нет» ДО того, как любой из них запишет. Подменяем только тайминг чтения.

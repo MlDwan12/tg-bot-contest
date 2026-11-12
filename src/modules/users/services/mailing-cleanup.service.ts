@@ -99,7 +99,12 @@ export class MailingCleanupService {
 
         if (totalLeft === 0) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -126,7 +131,12 @@ export class MailingCleanupService {
 
         if (!messages.length) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -134,7 +144,10 @@ export class MailingCleanupService {
 
         for (const msg of messages) {
           try {
-            await this.telegramService.deleteMailingMessage(msg.chatId, msg.messageId);
+            await this.telegramService.deleteMailingMessage(
+              msg.chatId,
+              msg.messageId,
+            );
 
             // msg.deleteStatus = 'deleted';
             // msg.deletedAt = new Date();
@@ -190,7 +203,12 @@ export class MailingCleanupService {
 
         if (messages.length < batchSize) {
           this.logger.log(
-            { totalProcessed, totalDeleted, totalFailed, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+            {
+              totalProcessed,
+              totalDeleted,
+              totalFailed,
+              durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+            },
             'cleanup:deleteExpiredMessages: done',
           );
           break;
@@ -260,7 +278,10 @@ export class MailingCleanupService {
     }
 
     this.logger.log(
-      { totalDeleted, durationSec: Math.round((Date.now() - cleanupStart) / 1000) },
+      {
+        totalDeleted,
+        durationSec: Math.round((Date.now() - cleanupStart) / 1000),
+      },
       'cleanup:cleanupFailedMessages: done',
     );
   }

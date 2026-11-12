@@ -50,8 +50,9 @@ describe('bootstrap-smoke: DI-граф AppModule собирается (сеть 
     // require (не import()) — ts-jest компилит в CommonJS, где настоящий
     // динамический import() падает без --experimental-vm-modules. require
     // выполняется В МОМЕНТ ВЫЗОВА (после NODE_ENV='test' выше) — то, что нужно.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { AppModule } = require('src/app.module') as typeof import('src/app.module');
+
+    const { AppModule } =
+      require('src/app.module') as typeof import('src/app.module');
 
     // Если хоть один forwardRef-цикл перевязан неверно — здесь будет throw.
     moduleRef = await Test.createTestingModule({
@@ -63,8 +64,9 @@ describe('bootstrap-smoke: DI-граф AppModule собирается (сеть 
     expect(moduleRef.get(ConfigService)).toBeDefined();
 
     // Провайдер из ЯДРА цикла bot↔contests реально инстанцирован (а не лениво пропущен).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TelegramService } = require('src/modules/bot/bot.service') as typeof import('src/modules/bot/bot.service');
+
+    const { TelegramService } =
+      require('src/modules/bot/bot.service') as typeof import('src/modules/bot/bot.service');
     const telegram = moduleRef.get(TelegramService, { strict: false });
 
     console.log(

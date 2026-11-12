@@ -33,7 +33,8 @@ import { LoggerModule } from 'nestjs-pino';
 
             genReqId(req: IncomingMessage, res: ServerResponse) {
               const existing = req.headers['x-request-id'];
-              if (existing) return Array.isArray(existing) ? existing[0] : existing;
+              if (existing)
+                return Array.isArray(existing) ? existing[0] : existing;
               const id = randomUUID();
               res.setHeader('x-request-id', id);
               return id;

@@ -24,11 +24,7 @@ export interface IContestParticipationRepository {
     groupId: string;
   }): Promise<ContestParticipation>;
   resetWinnerFlags(contestId: number): Promise<void>;
-  markAsWinner(
-    contestId: number,
-    userId: number,
-    place: number,
-  ): Promise<void>;
+  markAsWinner(contestId: number, userId: number, place: number): Promise<void>;
   syncWinnerFlagsInTransaction(
     contestId: number,
     winners: Array<{ userId: number; place: number }>,

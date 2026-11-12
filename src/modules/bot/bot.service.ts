@@ -343,14 +343,10 @@ export class TelegramService {
         'sendMailingMessage: sending text',
       );
 
-      const msg = await this.dm.sendMessage(
-        dto.chatId,
-        dto.text ?? '',
-        {
-          reply_markup: replyMarkup,
-          parse_mode: 'HTML',
-        },
-      );
+      const msg = await this.dm.sendMessage(dto.chatId, dto.text ?? '', {
+        reply_markup: replyMarkup,
+        parse_mode: 'HTML',
+      });
 
       this.logger.debug(
         { chatId: dto.chatId, messageId: msg.message_id },

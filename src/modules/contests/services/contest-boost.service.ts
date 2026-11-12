@@ -133,8 +133,7 @@ export class ContestBoostService {
   private async findPendingTicks(contestId: number) {
     const delayed = await this.countersQueue.getDelayed();
     return delayed.filter(
-      (job) =>
-        job.name === BOOST_TICK_JOB && job.data?.contestId === contestId,
+      (job) => job.name === BOOST_TICK_JOB && job.data?.contestId === contestId,
     );
   }
 

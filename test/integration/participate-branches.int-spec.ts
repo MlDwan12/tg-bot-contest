@@ -240,7 +240,7 @@ describe('характеризация: ветки participate()', () => {
     });
     await repos.contest.setRequiredChannels(contest.id, [channel.id]);
 
-    const tgData = { telegramId: user.telegramId as string, groupId: '100' };
+    const tgData = { telegramId: user.telegramId, groupId: '100' };
 
     let thrown: any;
     try {

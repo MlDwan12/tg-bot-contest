@@ -29,7 +29,9 @@ export class ContestCountersProcessor extends WorkerHost {
     );
     switch (job.name) {
       case 'sync-participants-counter':
-        await this.contestPublicationService.syncParticipantsCounter(job.data.contestId);
+        await this.contestPublicationService.syncParticipantsCounter(
+          job.data.contestId,
+        );
         return;
 
       case BOOST_TICK_JOB:

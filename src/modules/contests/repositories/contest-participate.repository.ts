@@ -10,9 +10,7 @@ import { IContestParticipationRepository } from '../interfaces';
  * от IContestParticipationRepository.
  */
 @Injectable()
-export class ContestParticipationRepository
-  implements IContestParticipationRepository
-{
+export class ContestParticipationRepository implements IContestParticipationRepository {
   constructor(
     @InjectRepository(ContestParticipation)
     private readonly repo: Repository<ContestParticipation>,
@@ -75,7 +73,10 @@ export class ContestParticipationRepository
   }
 
   async resetWinnerFlags(contestId: number): Promise<void> {
-    await this.repo.update({ contestId }, { isWinner: false, prizePlace: null });
+    await this.repo.update(
+      { contestId },
+      { isWinner: false, prizePlace: null },
+    );
   }
 
   async markAsWinner(

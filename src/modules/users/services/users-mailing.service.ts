@@ -547,5 +547,4 @@ export class UsersMailingService {
 
     await this.notifyAdminsAboutMailingFinish(mailingJob);
   }
-
 }
