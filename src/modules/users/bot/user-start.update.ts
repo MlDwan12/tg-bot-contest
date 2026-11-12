@@ -1,6 +1,6 @@
 import { UseFilters, UseGuards } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import { Command, Ctx, Start, Update } from 'nestjs-telegraf';
+import { Command, Ctx, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import {
   BotAdminExceptionFilter,
@@ -38,6 +38,24 @@ export class UserStartUpdate {
       );
     }
     await ctx.reply(GREETING);
+  }
+
+  /**
+   * Юзер разрешил боту писать, не нажимая /start: окно requestWriteAccess()
+   * в мини-аппе или галочка при запуске мини-аппа по ссылке. Telegram
+   * присылает об этом служебное сообщение — записываем как /start, но молча.
+   */
+  @On('write_access_allowed')
+  async writeAccessAllowed(@Ctx() ctx: Context) {
+    if (ctx.chat?.type !== 'private' || !ctx.from) return;
+    try {
+      await this.telegramUserService.registerBotStart(ctx.from);
+    } catch (err: unknown) {
+      this.logger.error(
+        { err, from: ctx.from.id },
+        'write_access_allowed: не записали юзера',
+      );
+    }
   }
 
   /** Сколько юзеров уже доступны этому боту — чтобы решить, когда гасить старый. */
