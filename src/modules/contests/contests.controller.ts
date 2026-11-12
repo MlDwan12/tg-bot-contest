@@ -8,12 +8,14 @@ import {
   Patch,
   Post,
   Query,
+  UnauthorizedException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Contest, ContestWinner } from './entities';
 import { ContestWithRelations } from './types';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import {
   ContestLifecycleService,
@@ -34,6 +36,7 @@ import { Paginated } from 'src/common/response/paginated.type';
 import { ContestShortInfoDto } from './dto/contest-short-info.dto';
 import { contestImageUploadOptions } from './interceptors/contest-image.interceptor';
 import { JwtAuthGuard } from '../auth/guards';
+import { verifyTelegramInitData } from 'src/common/helpers/telegram-init-data.helper';
 
 @Controller('contest')
 export class ContestsController {
@@ -43,6 +46,7 @@ export class ContestsController {
     private readonly contestsParticipateService: ContestsParticipateService,
     private readonly contestWinnerService: ContestWinnerService,
     private readonly logger: Logger,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get()
@@ -95,7 +99,46 @@ export class ContestsController {
     @Param('contestId', ParseIntPipe) contestId: number,
     @Body() dto: ParticipateContestDto,
   ) {
-    return this.contestsParticipateService.participate(contestId, dto);
+    return this.contestsParticipateService.participate(
+      contestId,
+      this.trustedParticipant(dto),
+    );
+  }
+
+  /**
+   * Кто участвует. С initData (подпись Telegram Mini App) — пользователь
+   * берётся ТОЛЬКО из проверенных данных, поля тела игнорируются. Без неё —
+   * как раньше, из тела (его можно подделать): пока фронт не шлёт initData.
+   * REQUIRE_TELEGRAM_INIT_DATA=true — запросы без подписи отклоняются.
+   */
+  private trustedParticipant(dto: ParticipateContestDto) {
+    const { initData, ...body } = dto;
+    if (!initData) {
+      if (this.configService.get<boolean>('REQUIRE_TELEGRAM_INIT_DATA')) {
+        throw new UnauthorizedException('Нужна подпись Telegram (initData)');
+      }
+      return body;
+    }
+
+    // Мини-апп подписывает тот бот, через которого её открыли. На время
+    // переезда это может быть и старый (посты и MINI_APP_URL на нём).
+    const tokens = [
+      this.configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN'),
+      this.configService.get<string>('LEGACY_BOT_TOKEN'),
+    ].filter((token): token is string => !!token);
+    const user = tokens
+      .map((token) => verifyTelegramInitData(initData, token))
+      .find(Boolean);
+    if (!user) {
+      throw new UnauthorizedException('Подпись Telegram не прошла проверку');
+    }
+    return {
+      groupId: body.groupId,
+      telegramId: String(user.id),
+      username: user.username,
+      firstName: user.first_name,
+      lastName: user.last_name,
+    };
   }
 
   @Get(':id')

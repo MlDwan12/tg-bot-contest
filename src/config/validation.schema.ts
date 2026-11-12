@@ -14,6 +14,9 @@ export const validationSchema = Joi.object({
   // уйдёт через TELEGRAM_BOT_TOKEN. Перед удалением вычистить его рассылки:
   // удалить сообщение может только отправивший бот.
   LEGACY_BOT_TOKEN: Joi.string().optional(),
+  // true — участие только с подписью Mini App (initData). Включать, когда фронт
+  // начнёт её слать; до этого запросы без подписи проходят как раньше.
+  REQUIRE_TELEGRAM_INIT_DATA: Joi.boolean().default(false),
 
   // DATABASE
   DATABASE_HOST: Joi.string().hostname().default('localhost'),
