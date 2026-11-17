@@ -14,6 +14,7 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { AllExceptionsFilter } from './common/filters/allExceptionsFilter';
+import { originCheck } from './common/middleware/origin-check.middleware';
 import * as jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -25,6 +26,26 @@ async function bootstrap() {
   // cookieParser должен быть зарегистрирован ДО любого middleware,
   // которому нужны куки — иначе req.cookies будет undefined.
   app.use(cookieParser());
+
+  // Разрешённые origin'ы — из env (CORS_ORIGINS, список через запятую).
+  // Фолбэк на прежний захардкоженный список, чтобы поведение не менялось,
+  // если переменная не задана.
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [
+        'https://rollcu.ru',
+        'https://rollcu.online',
+        'https://www.rollcu.ru',
+        'https://www.rollcu.online',
+      ];
+
+  // CSRF: изменяющие запросы с чужим Origin — 403. Стоит до всех маршрутов,
+  // включая Bull Board (его кнопки retry/clean — тоже POST с куками админа).
+  // Свой домен (админка rollcu.ru, мини-апп rollcube.ru → /api того же хоста)
+  // проходит по совпадению с X-Forwarded-Host, даже если его нет в списке.
+  app.use(originCheck(corsOrigins));
 
   // Отключаем ETag — иначе Express отвечает 304 Not Modified на повторные
   // запросы с одинаковым телом, что сбивает клиентов и замусоривает логи.
@@ -111,20 +132,6 @@ async function bootstrap() {
   // + отправка 5xx/необработанных в Sentry (см. сам фильтр).
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Разрешённые origin'ы — из env (CORS_ORIGINS, список через запятую).
-  // Фолбэк на прежний захардкоженный список, чтобы поведение не менялось,
-  // если переменная не задана.
-  const corsOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean)
-    : [
-        'https://rollcu.ru',
-        'https://rollcu.online',
-        'https://www.rollcu.ru',
-        'https://www.rollcu.online',
-      ];
-
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
@@ -146,7 +153,7 @@ async function bootstrap() {
 
   const logger = app.get(Logger);
 
-  logger.log('Health endpoint доступен: http://localhost:3000/health');
+  logger.log(`Health endpoint доступен: http://localhost:${port}/health`);
 
   logger.log(
     `Application is running on: http://localhost:${port}`,

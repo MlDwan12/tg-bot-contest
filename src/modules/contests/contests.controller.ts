@@ -141,7 +141,9 @@ export class ContestsController {
     };
   }
 
+  // Только админке: в ответе все участники с telegramId. Мини-апп сюда не ходит.
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   async getContestById(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ContestWithRelations> {

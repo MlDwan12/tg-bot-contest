@@ -25,7 +25,9 @@ export class ChannelsController {
     return this.channelsService.createChannel(data);
   }
 
+  // Только админке: в ответе invite-ссылки приватных каналов.
   @Get()
+  @UseGuards(JwtAuthGuard)
   getAllChannels(
     @Query() query: GetChannelsQueryDto,
   ): Promise<Paginated<Channel>> {
@@ -33,6 +35,7 @@ export class ChannelsController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   getChannelById(@Param('id', ParseIntPipe) id: number): Promise<Channel> {
     return this.channelsService.getChannelById(id);
   }

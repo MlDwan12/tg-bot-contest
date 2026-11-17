@@ -48,7 +48,9 @@ export class UsersController {
     return user;
   }
 
+  // Списки и карточки юзеров — только админке (была выгрузка всей базы без логина).
   @Get()
+  @UseGuards(JwtAuthGuard)
   async getAllUsers(
     @Query() query: GetUsersQueryDto,
   ): Promise<Paginated<UserListItemDto>> {
@@ -64,6 +66,7 @@ export class UsersController {
   }
 
   @Get('user/:id')
+  @UseGuards(JwtAuthGuard)
   async getUserById(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<User | null> {
@@ -71,6 +74,7 @@ export class UsersController {
   }
 
   @Get(':id/details')
+  @UseGuards(JwtAuthGuard)
   async getUserDetails(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<UserDetailsDto> {
