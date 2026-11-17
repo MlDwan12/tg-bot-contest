@@ -101,6 +101,17 @@ export class TelegramUserService {
     }
   }
 
+  /**
+   * Юзер заблокировал бота: писать ему больше нельзя → сбрасываем botStartedAt,
+   * иначе /migration считает его перешедшим. Разблокирует — registerBotStart.
+   */
+  async registerBotBlocked(telegramId: number): Promise<void> {
+    const user = await this.userService.findByTelegramId(String(telegramId));
+    if (!user?.botStartedAt) return;
+    user.botStartedAt = null;
+    await this.userService.save(user);
+  }
+
   async findByTelegramId(telegramId: string): Promise<User | null> {
     return this.userService.findByTelegramId(telegramId);
   }

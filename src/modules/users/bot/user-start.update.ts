@@ -58,6 +58,31 @@ export class UserStartUpdate {
     }
   }
 
+  /**
+   * Статус бота в личке юзера поменялся: kicked — заблокировал (писать нельзя),
+   * member — разблокировал / впервые запустил. Группы и каналы сюда тоже
+   * приходят (бота добавили админом) — их пропускаем.
+   */
+  @On('my_chat_member')
+  async myChatMember(@Ctx() ctx: Context) {
+    const update = ctx.myChatMember;
+    if (update?.chat.type !== 'private') return;
+
+    const status = update.new_chat_member.status;
+    try {
+      if (status === 'kicked') {
+        await this.telegramUserService.registerBotBlocked(update.from.id);
+      } else if (status === 'member') {
+        await this.telegramUserService.registerBotStart(update.from);
+      }
+    } catch (err: unknown) {
+      this.logger.error(
+        { err, from: update.from.id, status },
+        'my_chat_member: не обновили botStartedAt',
+      );
+    }
+  }
+
   /** Сколько юзеров уже доступны этому боту — чтобы решить, когда гасить старый. */
   @Command('migration')
   @UseGuards(BotAdminGuard)
