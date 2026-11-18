@@ -73,6 +73,15 @@ export class UsersController {
     return this.userTgService.findById(id);
   }
 
+  // Карточка юзера в админке зовёт GET /users/:id — отдаём то же, что /details.
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getUserCard(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<UserDetailsDto> {
+    return this.usersService.findUserDetailsById(id);
+  }
+
   @Get(':id/details')
   @UseGuards(JwtAuthGuard)
   async getUserDetails(

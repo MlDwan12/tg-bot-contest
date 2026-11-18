@@ -173,6 +173,10 @@ export class UserRepository implements IUserRepository {
     }
 
     return {
+      id: user.id,
+      telegramId: user.telegramId ?? null,
+      username: user.username ?? null,
+      totalParticipations: user.participations?.length ?? 0,
       groups: uniqueGroups,
       contests: Array.from(uniqueContestsMap.values()),
     };
