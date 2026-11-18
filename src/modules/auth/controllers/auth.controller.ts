@@ -48,11 +48,19 @@ export class AuthController {
     return { message: 'Успешный вход' };
   }
 
-  @Get('logout')
+  // Правильный метод — POST (GET-выход можно дёрнуть картинкой с чужой страницы).
+  @Post('logout')
   @HttpCode(HttpStatus.OK)
   logout(@Res({ passthrough: true }) res: Response) {
     this.authService.clearAuthCookies(res);
     return { message: 'Вы успешно вышли из системы' };
+  }
+
+  // ponytail: GET оставлен, пока админка не перешла на POST — потом удалить.
+  @Get('logout')
+  @HttpCode(HttpStatus.OK)
+  logoutLegacyGet(@Res({ passthrough: true }) res: Response) {
+    return this.logout(res);
   }
 
   @Get('me')
