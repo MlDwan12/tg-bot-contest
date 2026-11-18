@@ -169,7 +169,16 @@ export class TelegramService {
       await this.bot.telegram.sendPhoto(
         dto.chatId,
         { source: createReadStream(dto.photoPath) },
-        { ...extra, caption: dto.text },
+        {
+          ...extra,
+          caption: dto.text,
+          // telegraf 4.16 в multipart сериализует в JSON только reply_markup и
+          // ещё пару полей — объект reply_parameters терялся, фото уходило
+          // не ответом. Отдаём строкой сами.
+          reply_parameters: JSON.stringify(
+            extra.reply_parameters,
+          ) as unknown as typeof extra.reply_parameters,
+        },
       );
       return;
     }
