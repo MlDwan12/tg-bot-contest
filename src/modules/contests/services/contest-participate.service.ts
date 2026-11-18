@@ -5,6 +5,7 @@ import {
   ConflictException,
   NotFoundException,
   ForbiddenException,
+  ServiceUnavailableException,
   forwardRef,
 } from '@nestjs/common';
 import {
@@ -134,12 +135,42 @@ export class ContestsParticipateService {
       .filter((id): id is number => id != null);
     if (channelIds.length === 0) return;
 
-    const { passed, missingChannels } =
-      await this.telegramService.checkUserInChannels(telegramId, channelIds);
+    const {
+      passed,
+      missingChannels,
+      failedChannels = [],
+    } = await this.telegramService.checkUserInChannels(telegramId, channelIds);
     if (passed) return;
 
     const missing = requiredChannels.filter(
       (c) => c.telegramId != null && missingChannels.includes(c.telegramId),
+    );
+
+    if (failedChannels.length > 0 || missing.length === 0) {
+      // Реальная ошибка Telegram — в лог (раньше глоталась молча).
+      // Чаще всего: бота убрали из админов канала (403 / chat not found).
+      this.logger.error(
+        { contestId: contest.id, telegramId, failedChannels, missingChannels },
+        'participate: не удалось проверить подписку на каналы',
+      );
+    }
+
+    // Где проверка прошла и юзер не подписан — просим подписаться (даже если
+    // по другим каналам был сбой: подписаться всё равно придётся). Иначе —
+    // 503: «не подписан» мы не знаем, а ложное «подпишитесь» сбивает с толку.
+    if (missing.length === 0) {
+      throw new ServiceUnavailableException(
+        'Не удалось проверить подписку на каналы. Попробуйте через пару минут',
+      );
+    }
+
+    this.logger.warn(
+      {
+        contestId: contest.id,
+        telegramId,
+        missingChannels: missing.map((c) => c.telegramId),
+      },
+      'participate: не подписан на обязательные каналы',
     );
 
     // Публичный канал → ссылка строится из username, приватный → берём

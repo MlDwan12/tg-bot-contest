@@ -16,6 +16,15 @@ interface DeletablePublication {
   channel?: { telegramId?: number | null } | null;
 }
 
+export interface ChannelCheckFailure {
+  channelId: number;
+  code?: number;
+  description: string;
+}
+
+const USER_NOT_IN_CHAT_RE =
+  /user not found|member not found|PARTICIPANT_ID_INVALID|USER_ID_INVALID/i;
+
 @Injectable()
 export class TelegramService {
   constructor(
@@ -388,8 +397,13 @@ export class TelegramService {
   async checkUserInChannels(
     telegramId: string,
     channelTelegramIds: number[],
-  ): Promise<{ passed: boolean; missingChannels: number[] }> {
+  ): Promise<{
+    passed: boolean;
+    missingChannels: number[];
+    failedChannels: ChannelCheckFailure[];
+  }> {
     const missingChannels: number[] = [];
+    const failedChannels: ChannelCheckFailure[] = [];
 
     await Promise.all(
       channelTelegramIds.map(async (channelId) => {
@@ -398,17 +412,33 @@ export class TelegramService {
             channelId,
             Number(telegramId),
           );
-          const isSubscribed = ['member', 'administrator', 'creator'].includes(
-            member.status,
-          );
+          const isSubscribed =
+            ['member', 'administrator', 'creator'].includes(member.status) ||
+            (member.status === 'restricted' && member.is_member);
           if (!isSubscribed) missingChannels.push(channelId);
-        } catch {
-          missingChannels.push(channelId);
+        } catch (error: unknown) {
+          const tg = error as {
+            response?: { error_code?: number; description?: string };
+            message?: string;
+          };
+          const code = tg?.response?.error_code;
+          const description = String(
+            tg?.response?.description ?? tg?.message ?? error,
+          );
+          if (code === 400 && USER_NOT_IN_CHAT_RE.test(description)) {
+            missingChannels.push(channelId);
+          } else {
+            failedChannels.push({ channelId, code, description });
+          }
         }
       }),
     );
 
-    return { passed: missingChannels.length === 0, missingChannels };
+    return {
+      passed: missingChannels.length === 0 && failedChannels.length === 0,
+      missingChannels,
+      failedChannels,
+    };
   }
 
   async checkBotChannelPermissions(chatId: number): Promise<{
