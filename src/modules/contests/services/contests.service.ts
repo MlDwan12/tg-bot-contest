@@ -11,7 +11,12 @@ import {
   ContestWithRelations,
 } from 'src/modules/contests/types';
 import { Contest } from '../entities';
-import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import {
+  ContestStatus,
+  ResultsImageMode,
+  WinnerStrategy,
+} from 'src/common/enums/contest';
+import { RESULTS_TEXT_MAX_WITH_IMAGE } from 'src/common/helpers/contest-results.helper';
 import { AdminService } from 'src/modules/users/services';
 import { Logger } from 'nestjs-pino';
 import { ChannelsService } from 'src/modules/channels/services';
@@ -29,6 +34,16 @@ import { deleteUploadedContestImage } from 'src/common/helpers/remove-image.help
 import { deleteContestImageByPath } from 'src/common/helpers/deleteContestImageByPath.helper';
 import { ContestPublicationService } from './contest-publication.service';
 import { ContestWinnerService } from './contest-winner.service';
+
+/** Настройки поста с итогами, как они ложатся в БД. */
+type ResultsSettings = {
+  resultsText: string | null;
+  resultsImageMode: ResultsImageMode;
+  resultsImagePath: string | null;
+};
+
+// Поля запроса, правка которых не трогает опубликованный пост конкурса
+const RESULTS_DTO_FIELDS = ['resultsText', 'resultsImageMode'];
 
 @Injectable()
 export class ContestsService {
@@ -50,6 +65,7 @@ export class ContestsService {
   async createContest(
     dto: CreateContest,
     image?: Express.Multer.File,
+    resultsImage?: Express.Multer.File,
   ): Promise<ContestWithRelations> {
     this.logger.debug('createContest: start');
 
@@ -59,7 +75,19 @@ export class ContestsService {
 
     const buttonText = dto.buttonText?.trim() || 'Участвовать';
 
-    await this.assertCreatableContestDates(startDate, endDate, now, image);
+    await this.assertCreatableContestDates(
+      startDate,
+      endDate,
+      now,
+      image,
+      resultsImage,
+    );
+    const results = await this.resolveResultsSettings(
+      dto,
+      null,
+      image,
+      resultsImage,
+    );
 
     try {
       return await this.persistNewContest(
@@ -68,9 +96,10 @@ export class ContestsService {
         startDate,
         endDate,
         buttonText,
+        results,
       );
     } catch (error) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
 
       this.logger.error(
         {
@@ -91,13 +120,14 @@ export class ContestsService {
     dto: UpdateContestDto,
     image?: Express.Multer.File,
     actorUserId?: number,
+    resultsImage?: Express.Multer.File,
   ): Promise<ContestWithRelations> {
     const contest = await this.contestRepo.findByIdWithRelations(contestId);
 
     this.logger.debug({ contestId, dto }, 'Запрос на обновление конкурса');
 
     if (!contest) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new NotFoundException('Конкурс не найден');
     }
 
@@ -118,6 +148,14 @@ export class ContestsService {
       nextEndDate,
       now,
       image,
+      resultsImage,
+    );
+
+    const results = await this.resolveResultsSettings(
+      dto,
+      contest,
+      image,
+      resultsImage,
     );
 
     const datesChanged =
@@ -179,6 +217,9 @@ export class ContestsService {
         status: dto.status ?? contest.status,
         imagePath,
         buttonText: nextButtonText,
+        resultsText: results.resultsText,
+        resultsImageMode: results.resultsImageMode,
+        resultsImagePath: results.resultsImagePath,
       });
       contestUpdated = true;
 
@@ -225,8 +266,21 @@ export class ContestsService {
         }
       }
 
+      // Поменяли только настройки итогов — пост конкурса не трогаем
+      // (синхронизация перезаливает картинку поста).
+      const onlyResultsChanged =
+        !image &&
+        Object.entries(dto).every(
+          ([key, value]) =>
+            value === undefined || RESULTS_DTO_FIELDS.includes(key),
+        );
+
       try {
-        await this.contestPublicationService.syncPublishedPosts(updatedContest);
+        if (!onlyResultsChanged) {
+          await this.contestPublicationService.syncPublishedPosts(
+            updatedContest,
+          );
+        }
       } catch (error) {
         this.logger.error(
           { err: error, contestId: updatedContest.id },
@@ -286,10 +340,18 @@ export class ContestsService {
         await deleteContestImageByPath(oldImagePath);
       }
 
+      // Своя картинка итогов заменена или больше не нужна (сменили режим)
+      if (
+        contest.resultsImagePath &&
+        contest.resultsImagePath !== results.resultsImagePath
+      ) {
+        await deleteContestImageByPath(contest.resultsImagePath);
+      }
+
       return updatedContest;
     } catch (error) {
       if (!contestUpdated) {
-        await deleteUploadedContestImage(image);
+        await deleteUploadedContestImage(image, resultsImage);
       }
 
       this.logger.error(
@@ -395,6 +457,10 @@ export class ContestsService {
     }
 
     await this.contestRepo.delete(contestId);
+
+    // Картинки конкурса и итогов больше никому не нужны
+    await deleteContestImageByPath(contest.imagePath ?? undefined);
+    await deleteContestImageByPath(contest.resultsImagePath ?? undefined);
   }
 
   /** Валидация дат нового конкурса (до старта транзакции). Очистка картинки 1:1. */
@@ -403,19 +469,20 @@ export class ContestsService {
     endDate: Date,
     now: Date,
     image?: Express.Multer.File,
+    resultsImage?: Express.Multer.File,
   ): Promise<void> {
     if (startDate >= endDate) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('startDate must be before endDate');
     }
 
     if (startDate <= now) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('startDate must be in the future');
     }
 
     if (endDate <= now) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('endDate must be in the future');
     }
   }
@@ -427,6 +494,7 @@ export class ContestsService {
     startDate: Date,
     endDate: Date,
     buttonText: string,
+    results: ResultsSettings,
   ): Promise<ContestWithRelations> {
     const creator = await this.adminService.findById(dto.creatorId);
 
@@ -461,6 +529,9 @@ export class ContestsService {
       creatorId: dto.creatorId,
       imagePath,
       buttonText,
+      resultsText: results.resultsText,
+      resultsImageMode: results.resultsImageMode,
+      resultsImagePath: results.resultsImagePath,
     });
 
     await this.contestRepo.setPublishChannels(
@@ -512,14 +583,15 @@ export class ContestsService {
     nextEndDate: Date,
     now: Date,
     image?: Express.Multer.File,
+    resultsImage?: Express.Multer.File,
   ): Promise<void> {
     if (contest.status === ContestStatus.COMPLETED) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('Нельзя редактировать завершённый конкурс');
     }
 
     if (contest.status === ContestStatus.CANCELLED) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('Нельзя редактировать отменённый конкурс');
     }
 
@@ -527,24 +599,24 @@ export class ContestsService {
       dto.startDate !== undefined &&
       contest.status === ContestStatus.ACTIVE
     ) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException(
         'Нельзя изменить дату начала активного конкурса',
       );
     }
 
     if (dto.endDate !== undefined && nextEndDate <= now) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('endDate must be in the future');
     }
 
     if (dto.startDate !== undefined && nextStartDate <= now) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('startDate must be in the future');
     }
 
     if (nextStartDate >= nextEndDate) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException('startDate must be before endDate');
     }
 
@@ -552,7 +624,7 @@ export class ContestsService {
       dto.publishChannelIds !== undefined &&
       contest.status !== ContestStatus.PENDING
     ) {
-      await deleteUploadedContestImage(image);
+      await deleteUploadedContestImage(image, resultsImage);
       throw new BadRequestException(
         'Нельзя менять каналы публикации после запуска конкурса',
       );
@@ -776,6 +848,64 @@ export class ContestsService {
 
       return channel;
     });
+  }
+
+  /**
+   * Итоговые настройки поста с итогами после create/update. Не указано в
+   * запросе — берём текущее. Загрузили картинку итогов без режима → custom.
+   * Ошибка → 400 и чистка загруженных файлов.
+   */
+  private async resolveResultsSettings(
+    dto: Pick<CreateContest, 'resultsText' | 'resultsImageMode'>,
+    current: Pick<
+      Contest,
+      'resultsText' | 'resultsImageMode' | 'resultsImagePath'
+    > | null,
+    image?: Express.Multer.File,
+    resultsImage?: Express.Multer.File,
+  ): Promise<ResultsSettings> {
+    const fail = async (message: string): Promise<never> => {
+      await deleteUploadedContestImage(image, resultsImage);
+      throw new BadRequestException(message);
+    };
+
+    const mode =
+      dto.resultsImageMode ??
+      (resultsImage ? ResultsImageMode.CUSTOM : undefined) ??
+      current?.resultsImageMode ??
+      ResultsImageMode.NONE;
+
+    const text =
+      dto.resultsText !== undefined
+        ? dto.resultsText.trim() || null
+        : (current?.resultsText ?? null);
+
+    if (
+      mode !== ResultsImageMode.NONE &&
+      text &&
+      text.length > RESULTS_TEXT_MAX_WITH_IMAGE
+    ) {
+      await fail(
+        `Текст итогов с картинкой — до ${RESULTS_TEXT_MAX_WITH_IMAGE} символов (подпись к фото в Telegram ограничена)`,
+      );
+    }
+
+    let imagePath: string | null = null;
+    if (mode === ResultsImageMode.CUSTOM) {
+      imagePath = resultsImage
+        ? this.resolveContestImagePath(resultsImage)!
+        : (current?.resultsImagePath ?? null);
+      if (!imagePath) await fail('Загрузите картинку итогов');
+    } else if (resultsImage) {
+      // Файл прислали, но режим не «своя» — он не нужен
+      await deleteUploadedContestImage(resultsImage);
+    }
+
+    return {
+      resultsText: text,
+      resultsImageMode: mode,
+      resultsImagePath: imagePath,
+    };
   }
 
   private resolveContestImagePath(

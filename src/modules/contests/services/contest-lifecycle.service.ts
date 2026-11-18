@@ -169,11 +169,27 @@ export class ContestLifecycleService {
           { jobId: `publication:${publicationId}:finish-button` },
         );
       }
+
+      if (hasParticipants) await this.enqueueResultsPosts(publicationIds);
     } finally {
       // Освобождаем лок при любом исходе — в том числе при исключении.
       // Без finally: если resolveAndSaveWinners выбросит ошибку, лок
       // останется висеть до закрытия соединения (может быть долго).
       await this.dataSource.query('SELECT pg_advisory_unlock($1)', [contestId]);
+    }
+  }
+
+  /**
+   * Пост с итогами в каждый канал публикации. jobId из трёх сегментов
+   * (четыре роняют addBulk); повтор с тем же jobId BullMQ игнорирует → без дублей.
+   */
+  private async enqueueResultsPosts(publicationIds: number[]): Promise<void> {
+    for (const publicationId of publicationIds) {
+      await this.publicationQueue.add(
+        'postResults',
+        { publicationId },
+        { jobId: `publication:${publicationId}:results` },
+      );
     }
   }
 
@@ -246,6 +262,14 @@ export class ContestLifecycleService {
     }
 
     await this.contestPublicationService.syncPublishedPosts(updatedContest);
+
+    if (hasParticipants) {
+      await this.enqueueResultsPosts(
+        await this.contestPublicationService.getPublishedPublicationIdsForContest(
+          contest.id,
+        ),
+      );
+    }
 
     return updatedContest;
   }

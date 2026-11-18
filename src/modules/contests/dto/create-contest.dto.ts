@@ -11,7 +11,8 @@ import {
   ArrayUnique,
   MaxLength,
 } from 'class-validator';
-import { WinnerStrategy } from 'src/common/enums/contest';
+import { ResultsImageMode, WinnerStrategy } from 'src/common/enums/contest';
+import { RESULTS_TEXT_MAX } from 'src/common/helpers/contest-results.helper';
 import { CreateContest } from 'src/modules/contests/types';
 import { IsFutureDate } from 'src/common/validators/is-future-date.validator';
 import { BadRequestException } from '@nestjs/common';
@@ -161,4 +162,16 @@ export class CreateContestDto implements Omit<CreateContest, 'creatorId'> {
   @IsNotEmpty()
   @MaxLength(100)
   buttonText?: string;
+
+  // Шапка поста с итогами (HTML). Лимит с картинкой (700) проверяет сервис —
+  // он зависит от итогового режима картинки. Пустая строка — сброс к стандартной.
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(RESULTS_TEXT_MAX)
+  resultsText?: string;
+
+  @IsOptional()
+  @IsEnum(ResultsImageMode)
+  resultsImageMode?: ResultsImageMode;
 }

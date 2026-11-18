@@ -238,6 +238,16 @@ export class ContestPublicationService {
       return;
     }
 
+    // Отложенный job счётчика может сработать уже после завершения — тогда
+    // к «Конкурс завершён» дописалось бы «(N)». Счётчик только у активного.
+    if (contest.status !== ContestStatus.ACTIVE) {
+      this.logger.debug(
+        { contestId, status: contest.status },
+        'Счётчик участников: конкурс не активен -> skip',
+      );
+      return;
+    }
+
     const participantsCount =
       (await this.contestParticipationRepo.countUniqueUsersByContestId(
         contestId,

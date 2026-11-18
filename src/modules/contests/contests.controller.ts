@@ -9,7 +9,7 @@ import {
   Post,
   Query,
   UnauthorizedException,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -29,7 +29,7 @@ import {
   UpdateContestDto,
 } from './dto';
 import { UserId } from 'src/common/decorators';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ParticipateContestDto } from './dto/participate-contest.dto';
 import { GetContestsQueryDto } from './dto/get-contests-query.dto';
 import { Paginated } from 'src/common/response/paginated.type';
@@ -37,6 +37,19 @@ import { ContestShortInfoDto } from './dto/contest-short-info.dto';
 import { contestImageUploadOptions } from './interceptors/contest-image.interceptor';
 import { JwtAuthGuard } from '../auth/guards';
 import { verifyTelegramInitData } from 'src/common/helpers/telegram-init-data.helper';
+
+// media — картинка конкурса, resultsMedia — своя картинка поста с итогами
+type ContestFiles = {
+  media?: Express.Multer.File[];
+  resultsMedia?: Express.Multer.File[];
+};
+const CONTEST_FILES_INTERCEPTOR = FileFieldsInterceptor(
+  [
+    { name: 'media', maxCount: 1 },
+    { name: 'resultsMedia', maxCount: 1 },
+  ],
+  contestImageUploadOptions,
+);
 
 @Controller('contest')
 export class ContestsController {
@@ -68,30 +81,37 @@ export class ContestsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('media', contestImageUploadOptions))
+  @UseInterceptors(CONTEST_FILES_INTERCEPTOR)
   create(
     @UserId()
     userId: number,
     @Body() dto: CreateContestDto,
-    @UploadedFile() image?: Express.Multer.File,
+    @UploadedFiles() files?: ContestFiles,
   ): Promise<ContestWithRelations> {
     this.logger.log({ userId }, 'createContest');
     return this.contestsService.createContest(
       { ...dto, creatorId: userId },
-      image,
+      files?.media?.[0],
+      files?.resultsMedia?.[0],
     );
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('media', contestImageUploadOptions))
+  @UseInterceptors(CONTEST_FILES_INTERCEPTOR)
   updateContest(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateContestDto,
     @UserId() actorUserId: number,
-    @UploadedFile() image?: Express.Multer.File,
+    @UploadedFiles() files?: ContestFiles,
   ): Promise<ContestWithRelations> {
-    return this.contestsService.updateContest(id, dto, image, actorUserId);
+    return this.contestsService.updateContest(
+      id,
+      dto,
+      files?.media?.[0],
+      actorUserId,
+      files?.resultsMedia?.[0],
+    );
   }
 
   @Post(':contestId/participate')

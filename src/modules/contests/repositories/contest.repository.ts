@@ -145,6 +145,9 @@ export class ContestRepository implements IContestRepository {
       description: contest.description ?? null,
       imagePath: contest.imagePath ?? null,
       buttonText: contest.buttonText ?? null,
+      resultsText: contest.resultsText ?? null,
+      resultsImageMode: contest.resultsImageMode,
+      resultsImagePath: contest.resultsImagePath ?? null,
       participants:
         contest.participants?.map((participant) => ({
           id: participant.id,

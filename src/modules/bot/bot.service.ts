@@ -128,6 +128,55 @@ export class TelegramService {
     return { messageId: msg.message_id };
   }
 
+  /**
+   * Пост с итогами — ответом на пост конкурса. Пост удалили → уходит просто
+   * в канал (allow_sending_without_reply). buttonEmojiId — иконка на кнопке,
+   * работает только при Premium у владельца бота (Bot API 9.4).
+   */
+  async sendContestResults(dto: {
+    chatId: string;
+    replyToMessageId: number;
+    text: string;
+    buttonText: string;
+    buttonUrl: string;
+    buttonEmojiId?: string;
+    // Абсолютный путь к картинке на диске — тогда фото с подписью (≤1024)
+    photoPath?: string;
+  }): Promise<void> {
+    const extra = {
+      parse_mode: 'HTML' as const,
+      reply_parameters: {
+        message_id: dto.replyToMessageId,
+        allow_sending_without_reply: true,
+      },
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: dto.buttonText,
+              url: dto.buttonUrl,
+              // telegraf 4.16 не знает поле из Bot API 9.4
+              ...(dto.buttonEmojiId
+                ? { icon_custom_emoji_id: dto.buttonEmojiId }
+                : {}),
+            } as { text: string; url: string },
+          ],
+        ],
+      },
+    };
+
+    if (dto.photoPath) {
+      await this.bot.telegram.sendPhoto(
+        dto.chatId,
+        { source: createReadStream(dto.photoPath) },
+        { ...extra, caption: dto.text },
+      );
+      return;
+    }
+
+    await this.bot.telegram.sendMessage(dto.chatId, dto.text, extra);
+  }
+
   async updateContestPublishedMessage(dto: {
     chatId: string;
     messageId: number;

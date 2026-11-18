@@ -24,6 +24,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ContestWinnerService } from './contest-winner.service';
 import { TelegramService } from 'src/modules/bot/bot.service';
+import { maskUsername } from 'src/common/helpers/contest-results.helper';
 
 type ParticipateInput = {
   telegramId: string;
@@ -115,7 +116,8 @@ export class ContestsParticipateService {
       userId: w.userId,
       // Фиктивный победитель (ник без TG) не имеет user — отдаём вписанный ник
       // в том же поле username, telegramId/userId остаются null.
-      username: w.user?.username ?? w.displayUsername ?? null,
+      // Цензура на бэке: раньше полный ник уходил в ответе и прятался только во фронте.
+      username: maskUsername(w.user?.username ?? w.displayUsername),
     }));
   }
 

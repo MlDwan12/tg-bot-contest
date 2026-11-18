@@ -1,19 +1,15 @@
 import * as fs from 'fs/promises';
-import { Logger } from '@nestjs/common';
 
+/** Удаляет только что загруженные файлы (multer), если запрос не удался. */
 export async function deleteUploadedContestImage(
-  image?: Express.Multer.File,
-  logger?: Logger,
+  ...files: (Express.Multer.File | undefined)[]
 ): Promise<void> {
-  if (!image?.path) {
-    return;
-  }
-
-  try {
-    await fs.unlink(image.path);
-  } catch (error) {
-    logger?.warn(
-      `Не удалось удалить загруженный файл "${image.path}" после ошибки`,
-    );
+  for (const file of files) {
+    if (!file?.path) continue;
+    try {
+      await fs.unlink(file.path);
+    } catch {
+      // файла уже нет — не страшно
+    }
   }
 }

@@ -1,4 +1,8 @@
-import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import {
+  ContestStatus,
+  WinnerStrategy,
+  ResultsImageMode,
+} from 'src/common/enums/contest';
 
 /**
  * Обогащённый DTO-подобный результат `findByIdWithRelations` — НЕ entity, а
@@ -59,6 +63,10 @@ export type ContestWithRelations = {
   description: string | null;
   imagePath: string | null;
   buttonText: string | null;
+  // Пост с итогами
+  resultsText: string | null;
+  resultsImageMode: ResultsImageMode;
+  resultsImagePath: string | null;
   participants: ContestParticipantInfo[];
   publications: ContestPublicationInfo[];
   winnerStrategy: WinnerStrategy;

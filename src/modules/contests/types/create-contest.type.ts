@@ -1,4 +1,4 @@
-import { WinnerStrategy } from 'src/common/enums/contest';
+import { ResultsImageMode, WinnerStrategy } from 'src/common/enums/contest';
 
 export type CreateContest = {
   // Контент для Telegram
@@ -13,6 +13,10 @@ export type CreateContest = {
   startDate: Date;
   endDate: Date;
   creatorId: number;
+
+  // Пост с итогами
+  resultsText?: string;
+  resultsImageMode?: ResultsImageMode;
 
   // Каналы
   publishChannelIds?: number[];

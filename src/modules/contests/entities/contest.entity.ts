@@ -11,7 +11,11 @@ import {
 } from 'typeorm';
 import { ContestParticipation } from './contest-participation.entity';
 import { User } from 'src/modules/users/entities';
-import { ContestStatus, WinnerStrategy } from 'src/common/enums/contest';
+import {
+  ContestStatus,
+  ResultsImageMode,
+  WinnerStrategy,
+} from 'src/common/enums/contest';
 import { ContestWinner } from '.';
 import { Channel } from 'src/modules/channels/entities';
 import { ContestPublication } from './contest-publications.entity';
@@ -32,6 +36,17 @@ export class Contest {
 
   @Column({ nullable: true })
   buttonText?: string;
+
+  // Пост с итогами: шапка над списком победителей (HTML). Пусто — стандартная.
+  @Column({ type: 'text', nullable: true })
+  resultsText?: string | null;
+
+  @Column({ type: 'varchar', length: 16, default: ResultsImageMode.NONE })
+  resultsImageMode: ResultsImageMode;
+
+  // Своя картинка итогов (resultsImageMode = custom), /uploads/contests/...
+  @Column({ type: 'varchar', nullable: true })
+  resultsImagePath?: string | null;
 
   @Column({ type: 'enum', enum: ContestStatus })
   status: ContestStatus;

@@ -85,6 +85,7 @@ import { ContestBoostUpdate } from './bot/contest-boost.update';
     ContestsService,
     ContestPublicationService,
     ContestLifecycleService,
+    ContestWinnerService, // победители для поста с итогами (ContestPublicationProcessor)
     CONTEST_REPOSITORY,
     CONTEST_PARTICIPATE_REPOSITORY,
   ],
