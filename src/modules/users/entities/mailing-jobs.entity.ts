@@ -91,6 +91,10 @@ export class MailingJobEntity {
   @Column({ type: 'timestamp', nullable: true })
   statsReportedAt: Date | null;
 
+  // Общий виджет прогресса у админов (Bot API 10.4); null — шли текстом.
+  @Column({ type: 'varchar', nullable: true })
+  progressWidgetId: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

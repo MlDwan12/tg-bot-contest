@@ -191,6 +191,7 @@ export class MailingProcessor extends WorkerHost {
       });
 
       await this.tryFinalizeJob(jobId);
+      void this.usersMailingService.touchProgress(jobId); // виджет админам, не ждём
 
       this.logger.debug(
         {
@@ -213,7 +214,14 @@ export class MailingProcessor extends WorkerHost {
       // попытке, иначе один человек попал бы в failedCount несколько раз.
       if (errorKind === 'temporary' && attempt < maxAttempts) {
         this.logger.warn(
-          { jobId, userId, telegramId, attempt, maxAttempts, error: errorMessage },
+          {
+            jobId,
+            userId,
+            telegramId,
+            attempt,
+            maxAttempts,
+            error: errorMessage,
+          },
           'mailing: временная ошибка, будет повтор',
         );
         throw error;
@@ -253,6 +261,7 @@ export class MailingProcessor extends WorkerHost {
       });
 
       await this.tryFinalizeJob(jobId);
+      void this.usersMailingService.touchProgress(jobId); // виджет админам, не ждём
 
       this.logger.error(
         {

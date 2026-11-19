@@ -19,6 +19,14 @@ import { Queue } from 'bullmq';
 import { MailingJobEntity } from '../entities/mailing-jobs.entity';
 import { getAdminTelegramIdsFromEnv } from 'src/common/helpers/admin-ids.helper';
 import { getNextDayMoscowDeleteDate } from 'src/common/helpers/mailing-delete-date.helper';
+import {
+  MAILING_PROGRESS_WIDGET_HTML,
+  MailingProgressData,
+} from '../widgets/mailing-progress.widget';
+
+// Не чаще раза в 5 с: клиенты всё равно опрашивают виджет не чаще (cache_time ≥ 5),
+// а Telegram пускает правку общего виджета не чаще раза в секунду.
+const PROGRESS_THROTTLE_MS = 5000;
 
 @Injectable()
 export class UsersMailingService {
@@ -55,8 +63,6 @@ export class UsersMailingService {
       : undefined;
 
     this.logger.log(`Получено пользователей для рассылки: ${users.length}`);
-
-    await this.notifyAdminsAboutMailingStart(dto, image, users.length);
 
     const imagePath = image ? `/uploads/mailings/${image.filename}` : undefined;
     const finalButtonUrl = this.resolveButtonUrl(dto, publication);
@@ -95,6 +101,12 @@ export class UsersMailingService {
       startedAt: new Date(),
       finishedAt: null,
       error: null,
+    });
+
+    await this.notifyAdminsAboutMailingStart(dto, image, users.length, {
+      id: jobId,
+      queuedCount: recipientsWithTelegram.length,
+      skippedCount,
     });
 
     try {
@@ -369,7 +381,8 @@ export class UsersMailingService {
   private async notifyAdminsAboutMailingStart(
     dto: SendUsersMailingDto,
     image: Express.Multer.File | undefined,
-    recipientsCount?: number,
+    recipientsCount: number,
+    job: { id: string; queuedCount: number; skippedCount: number },
   ): Promise<void> {
     try {
       // const admins = await this.getAdminRecipients();
@@ -383,6 +396,9 @@ export class UsersMailingService {
       }
 
       const text = this.buildMailingStartMessage(dto, image, recipientsCount);
+
+      // Живой виджет прогресса; не вышло (старый клиент API, сбой) — текстом
+      if (await this.startProgressWidget(admins, text, job)) return;
 
       for (const admin of admins) {
         try {
@@ -421,7 +437,9 @@ export class UsersMailingService {
         return;
       }
 
-      const text = this.buildMailingFinishMessage(mailingJob);
+      const text = mailingJob.progressWidgetId
+        ? await this.finishProgressWidget(mailingJob)
+        : this.buildMailingFinishMessage(mailingJob);
 
       for (const admin of admins) {
         try {
@@ -513,6 +531,133 @@ export class UsersMailingService {
             `Critical error: ${extra.fatalError?.message ?? 'Unknown error'}`,
           ]
         : []),
+    ].join('\n');
+  }
+
+  // ponytail: замок прогресса в памяти процесса — API один. Несколько
+  // экземпляров API → перенести в Redis (SET NX EX 5).
+  private readonly progressTouchedAt = new Map<string, number>();
+
+  private progressData(job: MailingJobEntity): string {
+    const data: MailingProgressData = {
+      q: job.queuedCount,
+      s: job.sentCount,
+      b: job.blockedCount,
+      e: job.errorCount,
+      k: job.skippedCount,
+      st: job.status,
+      r: Date.now(),
+    };
+    return JSON.stringify(data);
+  }
+
+  /** Общий виджет первому админу, остальным — его копия. false — не вышло. */
+  private async startProgressWidget(
+    admins: string[],
+    caption: string,
+    job: { id: string; queuedCount: number; skippedCount: number },
+  ): Promise<boolean> {
+    // Подпись видят клиенты без поддержки виджетов; лимит 1024
+    const shortCaption =
+      caption.length > 1000 ? `${caption.slice(0, 1000)}…` : caption;
+    let widgetId: string;
+    try {
+      widgetId = await this.telegramService.sendSharedWidget({
+        chatId: admins[0],
+        html: MAILING_PROGRESS_WIDGET_HTML,
+        publicData: JSON.stringify({
+          q: job.queuedCount,
+          s: 0,
+          b: 0,
+          e: 0,
+          k: job.skippedCount,
+          st: 'processing',
+          r: Date.now(),
+        } satisfies MailingProgressData),
+        caption: shortCaption,
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, jobId: job.id },
+        'mailing widget: sendWidget не удался -> уведомление текстом',
+      );
+      return false;
+    }
+
+    await this.mailingJobRepo.update(
+      { id: job.id },
+      { progressWidgetId: widgetId },
+    );
+
+    for (const admin of admins.slice(1)) {
+      try {
+        await this.telegramService.resendSharedWidget({
+          chatId: admin,
+          widgetId,
+          caption: shortCaption,
+        });
+      } catch (error) {
+        this.logger.error(
+          { err: error, adminTelegramId: admin, jobId: job.id },
+          'mailing widget: не удалось отправить виджет админу',
+        );
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Обновить виджет прогресса — не чаще раза в 5 с на рассылку. Зовётся из
+   * обработчика после каждой отправки; никогда не бросает — рассылку не трогаем.
+   */
+  async touchProgress(jobId: string): Promise<void> {
+    const now = Date.now();
+    if (now - (this.progressTouchedAt.get(jobId) ?? 0) < PROGRESS_THROTTLE_MS) {
+      return;
+    }
+    this.progressTouchedAt.set(jobId, now);
+    try {
+      const job = await this.mailingJobRepo.findOne({ where: { id: jobId } });
+      if (!job?.progressWidgetId || job.status !== 'processing') return;
+      await this.telegramService.editSharedWidgetData(
+        job.progressWidgetId,
+        this.progressData(job),
+      );
+    } catch (error) {
+      this.logger.warn(
+        { err: error, jobId },
+        'mailing widget: не удалось обновить прогресс',
+      );
+    }
+  }
+
+  /** Финальные цифры в виджет; вернёт короткий текст для пинга админам. */
+  private async finishProgressWidget(job: MailingJobEntity): Promise<string> {
+    this.progressTouchedAt.delete(job.id);
+    const edit = () =>
+      this.telegramService.editSharedWidgetData(
+        job.progressWidgetId!,
+        this.progressData(job),
+      );
+    try {
+      await edit();
+    } catch {
+      // Лимит «раз в секунду» мог совпасть с последним промежуточным обновлением
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      await edit().catch((error: unknown) =>
+        this.logger.warn(
+          { err: error, jobId: job.id },
+          'mailing widget: финальное обновление не удалось',
+        ),
+      );
+    }
+    // Правка виджета не присылает уведомление — короткий текст, чтобы админ узнал
+    return [
+      job.status === 'completed'
+        ? '✅ Рассылка завершена'
+        : '⚠️ Рассылка завершена с ошибками',
+      `Доставлено: ${job.sentCount} · заблокировали: ${job.blockedCount} · ошибки: ${job.errorCount}`,
+      'Подробности — в виджете выше.',
     ].join('\n');
   }
 

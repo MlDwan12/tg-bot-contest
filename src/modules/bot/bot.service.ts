@@ -41,6 +41,55 @@ export class TelegramService {
     return (this.legacyBot.bot ?? this.bot).telegram;
   }
 
+  // Виджеты (Bot API 10.4) — telegraf 4.16 их не знает, зовём сырым callApi.
+  // Тем же ботом, что пишет админам (dm): править виджет может только отправитель.
+  private callDm<T>(method: string, payload: object): Promise<T> {
+    const call = this.dm.callApi.bind(this.dm) as unknown as (
+      m: string,
+      p: object,
+    ) => Promise<T>;
+    return call(method, payload);
+  }
+
+  /** Общий виджет; вернёт его id для sendSharedWidget/editSharedWidgetData. */
+  async sendSharedWidget(dto: {
+    chatId: string;
+    html: string;
+    publicData: string;
+    caption: string;
+  }): Promise<string> {
+    const msg = await this.callDm<{ widget?: { id?: string } }>('sendWidget', {
+      chat_id: dto.chatId,
+      html: dto.html,
+      public_data: dto.publicData,
+      caption: dto.caption,
+      is_shared: true,
+    });
+    if (!msg.widget?.id) throw new Error('sendWidget: в ответе нет widget.id');
+    return msg.widget.id;
+  }
+
+  async resendSharedWidget(dto: {
+    chatId: string;
+    widgetId: string;
+    caption: string;
+  }): Promise<void> {
+    await this.callDm('sendSharedWidget', {
+      chat_id: dto.chatId,
+      widget_id: dto.widgetId,
+      caption: dto.caption,
+    });
+  }
+
+  /** Не чаще раза в секунду на виджет (лимит Telegram). */
+  async editSharedWidgetData(widgetId: string, publicData: string) {
+    await this.callDm('editSharedWidgetData', {
+      widget_id: widgetId,
+      public_data: publicData,
+      cache_time: 5,
+    });
+  }
+
   async checkBotAdmin(chatId: number): Promise<{
     exists: boolean;
     isAdmin: boolean;
